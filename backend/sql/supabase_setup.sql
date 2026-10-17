@@ -33,6 +33,9 @@ VALUES
      'image/jpeg']),
   ('resumes', 'resumes', false, 5242880, ARRAY[
      'application/pdf',
+     'application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  ('project-docs', 'project-docs', false, 10485760, ARRAY[
+     'application/pdf',
      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
 ON CONFLICT (id) DO UPDATE
   SET public = false,

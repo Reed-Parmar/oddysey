@@ -86,6 +86,21 @@ Config validation: the API refuses to boot if a required variable is missing (py
 2. Put the Render URL into `VITE_API_BASE_URL` on Vercel, then redeploy.
 3. Update the Supabase Site URL and Redirect URLs with the final domains.
 
+### 3.5 Background automation (ADR-017)
+
+- The worker processes projects, allocates every `ALLOCATION_INTERVAL_MINUTES` (15) and on events, analyses
+  reports, sends notifications and archives cycles at `archive_at`. Run it **either** inside the API
+  (`RUN_WORKER_IN_API=true`, the Render default in `render.yaml`) **or** as `uv run python -m app.worker`
+  (a Render Background Worker; then set `RUN_WORKER_IN_API=false`). Several workers are safe (SKIP LOCKED + leases).
+- A sleeping free-tier web service pauses automation while asleep; jobs resume on wake (nothing is lost).
+- Supabase: re-run `backend/sql/supabase_setup.sql` to create the private bucket `project-docs`.
+- Migration: `uv run alembic upgrade head` applies `0003_automation`.
+- Email: `EMAIL_BACKEND=disabled` (default) keeps notifications in-app with status `not_configured`; set
+  `smtp` + `SMTP_*` to send. Invitation links are always shown once to the admin.
+- New variables: `PROJECT_DOC_BUCKET`, `RUN_WORKER_IN_API`, `ALLOCATION_INTERVAL_MINUTES`, `ARCHIVE_GRACE_DAYS`,
+  `JOB_LEASE_SECONDS`, `REPORT_URL_FETCH_ENABLED`, `MAX_REPORT_FETCH_BYTES`, `ORIGINALITY_MEDIUM_AT`,
+  `ORIGINALITY_HIGH_AT`, `EMAIL_BACKEND`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`.
+
 ## 4. Seed and demo setup
 - Dev: `uv run python -m scripts.seed --scenario published` (or `empty`/`imported`/`recommended`/`demo`) against `spa-dev`. Each scenario is idempotent and creates `*@demo.spa.test` accounts with `SEED_DEMO_PASSWORD`.
 - Prod demo: the night before judging, `APP_ENV=production uv run python -m scripts.seed --scenario demo --demo`. Record demo credentials outside the repo.

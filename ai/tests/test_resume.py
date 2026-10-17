@@ -121,3 +121,24 @@ def test_relevant_sections_drops_personal_details():
     text = "Personal Details\nAddress: 12 Main Road\nSkills\nWelding\nDeclaration\nI hereby declare"
     assert relevant_sections(text) == "Skills\nWelding"
     assert relevant_sections("no headings here\nwelding") == "no headings here\nwelding"
+
+
+def test_assessment_marks_are_extracted_only_when_explicit():
+    from spa_ai.resume.extract import assessment_marks
+
+    text = "Trade Theory Score: 82%\nWorkshop Practical Score (%) 88"
+    marks = {m["field"]: m for m in assessment_marks(text)}
+    assert marks["theory"]["value"] == 82.0 and "Theory Score: 82" in marks["theory"]["excerpt"]
+    assert marks["practical"]["value"] == 88.0
+    assert marks["safety"] == {"field": "safety", "value": None, "unit": "%", "excerpt": None, "status": "not_found"}
+    amb = {m["field"]: m for m in assessment_marks("Practical: 70% (mid-term). Practical: 90% (final)")}
+    assert amb["practical"]["value"] is None and amb["practical"]["status"] == "ambiguous"
+    # skills or prose never become marks
+    none = assessment_marks("Strong practical skills and safety awareness")
+    assert all(m["value"] is None for m in none)
+
+
+def test_extraction_includes_reported_marks_in_both_paths():
+    lines = SAMPLE_RESUME + ["Trade Theory Score: 76%"]
+    r = extract(make_pdf(lines), PDF_MIME, KNOWN, TERMS, None)
+    assert {m["field"]: m["value"] for m in r.extracted["assessment_marks"]}["theory"] == 76.0

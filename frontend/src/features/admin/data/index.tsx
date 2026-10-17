@@ -1,6 +1,4 @@
-/** Admin data pages (C): overview, trainees, projects, cycles, users & invites. Wired in `features/admin/routes.tsx`. */
-export { CycleDetailPage, CyclesPage } from "./CyclesPages";
+/** Admin data pages: overview (cycles), projects, staff & invitations. Wired in `features/admin/routes.tsx`. */
 export { AdminOverview } from "./OverviewPage";
 export { ProjectDetailPage, ProjectNewPage, ProjectsPage } from "./ProjectsPages";
-export { TraineeDetailPage, TraineesPage } from "./TraineesPages";
-export { UsersPage } from "./UsersPage";
+export { StaffPage } from "./StaffPage";

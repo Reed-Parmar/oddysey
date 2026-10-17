@@ -1,5 +1,14 @@
 # Frontend Conventions
 
+> **ADR-017 (rev 3, binding — supersedes the route map below where they differ).** Student: `/student` (Dashboard),
+> `/student/project` (My Project), `/student/onboarding` (outside the StudentGate), `/student/submissions/:id`; old student
+> URLs redirect. Admin: `/admin`, `/admin/projects`, `/admin/projects/new`, `/admin/projects/:id`, `/admin/tracking`,
+> `/admin/staff`, `/admin/submissions/:id`; `/admin/cycles*`, `/admin/recommendations`, `/admin/allocations`,
+> `/admin/progress`, `/admin/trainees*` redirect to Overview/Tracking, `/admin/users` to Staff. Shared views
+> (`features/shared/views.tsx`) add ProjectGuide, MatchExplanation, AnalysisReport, ReviewActions, ExportReportButton,
+> ReportScore, ProjectDocumentButton. New query keys: `qk.onboarding`, `qk.notifications`, `qk.allocationHistory`,
+> `qk.automation`, `qk.submissions.analysis(id)`; recommendation keys are removed.
+
 **Status:** Proposed (Phase 1, rev 2: official brief). Shared by all three role modules. The foundation owner builds §2–§6 before the split. Role teammates consume it and don't fork it.
 
 ---

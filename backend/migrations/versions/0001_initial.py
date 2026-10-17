@@ -13,14 +13,34 @@ branch_labels = None
 depends_on = None
 
 TABLES = [
-    "users", "trades", "skills", "cycles", "trainees", "trainee_skills", "projects",
-    "project_skills", "recommendation_runs", "recommendations", "allocations", "submissions",
-    "evaluations", "invitations", "audit_events",
+    "users",
+    "trades",
+    "skills",
+    "cycles",
+    "trainees",
+    "trainee_skills",
+    "projects",
+    "project_skills",
+    "recommendation_runs",
+    "recommendations",
+    "allocations",
+    "submissions",
+    "evaluations",
+    "invitations",
+    "audit_events",
 ]
 UPDATED_AT_TABLES = ["users", "cycles", "trainees", "projects", "allocations", "submissions"]
 ENUMS = [
-    "user_role", "user_status", "cycle_status", "project_status", "difficulty_level", "run_status",
-    "recommendation_source", "allocation_source", "submission_status", "evaluation_outcome",
+    "user_role",
+    "user_status",
+    "cycle_status",
+    "project_status",
+    "difficulty_level",
+    "run_status",
+    "recommendation_source",
+    "allocation_source",
+    "submission_status",
+    "evaluation_outcome",
 ]
 
 UPGRADE = [

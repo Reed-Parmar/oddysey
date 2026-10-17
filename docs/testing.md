@@ -68,6 +68,14 @@
 
 **Cross-user (everyone):** student → other trainee's submission/record 404; supervisor → other projects' trainees/submissions/allocations 404 or absent; non-admin on every admin endpoint → 403.
 
+**ADR-017 (backend `tests/integration/`):**
+- `test_automation.py`: dataset processed + allocated with no admin step (supervisor auto-selection, factors sum to score, several trainees share a project individually, reruns keep allocations); student sees only their project (other project/document → 404, `/recommendations` gone); supervisor sees only their projects; generated code `PRJ-0001`, rule fallback, low-confidence → needs_attention → admin confirmation → ready; AI generation via fake + awaiting_supervisor → supervisor joins → ready; document type/no-text errors; unassigned rows with waiting reasons and whole-set summary.
+- `test_rejection.py`: idempotent rejection, row kept, DB trigger blocks the excluded pair, rejector reallocated to a different project; replacement goes to the highest-ranked waiting trainee before ordinary allocation (ranking snapshot, at most one replacement); owner-only (404/403), 409 after submission, 409 after archive.
+- `test_analysis.py`: report required (video/ZIP alone fail); without AI → review_required, supervisor rework; fake AI → server-computed total, grade, outcome, evidence location, amendment keeps automated total; copied passage flagged with redacted sources per viewer and identical HTML export; link fetch (fake) and private-link not_analyzable; scanned PDF never scored.
+- `test_onboarding_archive.py`: resumable onboarding → waiting for cycle → enrolled; typed ID cannot claim an imported record; profile-mode allocation to an ungated project; manual archive preview/freeze; scheduled archive by the worker (system actor); staff spreadsheet dry run/apply with queued emails.
+- `test_resumes.py`: + resume-reported marks stored as unverified claims (official marks and mode unchanged).
+**ADR-017 (ai/tests):** `test_scoring.py` (profile mode, multi-trade, min match, best project, mixed-pool ranking), `test_originality.py`, `test_project_gen.py`, `test_report_eval.py`, `test_resume.py` (explicit marks). Fixtures are behaviour checks, never accuracy measurements.
+
 ## 4. E2E (Playwright) demo paths
 
 1. **Programme team flow** (`empty` + admin): create cycle → import dataset trainees + projects (dry run, then apply) → assign supervisors and publish projects → run recommendations → open one trainee's factors → auto-allocate → override TRN-CP-008 with a reason → publish.

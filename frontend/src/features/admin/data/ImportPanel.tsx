@@ -1,7 +1,7 @@
 /** IMP-01 / IMP-02 three-step import: choose file → dry-run preview → apply (admin.md §3.2, §9.3, §12.6). */
 import { Check, CloudArrowUp, FileXls, Info, Warning, WarningCircle } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ApiError, errorMessage, type ErrorDetail } from "@/api/errors";
 import type { ImportResult } from "@/api/types";
@@ -193,9 +193,11 @@ function ImportSteps({ stage }: { stage: 0 | 1 | 2 }) {
 
 type Envelope = { data: ImportResult };
 
-export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied }: {
+export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied, notes }: {
   open: boolean; onClose: () => void; endpoint: ImportEndpoint; cycleId: string; noun: string;
   onApplied: (r: ImportResult) => void;
+  /** Column notes shown above the file picker (e.g. which legacy columns are ignored). */
+  notes?: ReactNode;
 }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -258,6 +260,7 @@ export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied
       description="Upload the sheet, check the dry-run preview, then apply. Re-importing updates existing records by code.">
       <div className="flex flex-col gap-5">
         <ImportSteps stage={stage} />
+        {notes && <Alert variant="info" icon={<Info />}>{notes}</Alert>}
         <FormField label="Spreadsheet (.xlsx or .csv, max 5 MB)" htmlFor="import-file" hint="Row numbers in problems refer to the sheet rows.">
           <DropZone id="import-file" accept=".xlsx,.csv" maxBytes={MAX_BYTES} file={file} error={fileError}
             onChange={(f) => { setFile(f); setPreview(null); setApplyProblems([]); setFileError(undefined); }} />

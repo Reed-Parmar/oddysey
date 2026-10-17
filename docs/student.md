@@ -1,5 +1,17 @@
 # Student Module Handbook (Teammate A)
 
+> **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Navigation is exactly **Dashboard** (`/student`) and
+> **My Project** (`/student/project`). There is no catalogue, no suggested projects and no project request. New trainees
+> self-register at `/student/onboarding` (ONB-01..03: name, gender incl. "prefer not to say" (private, never a matching input),
+> canonical trainee ID, centre, one or more ITI trades, skills, career interest; resumable; waits for a cycle if none is open;
+> a typed ID never claims an existing record). The Dashboard holds the profile form (trades, skills, interest), the resume
+> panel and resume-reported marks (unverified; never a gate). My Project shows the own allocated project only: brief,
+> supervisor, deadline, document, generated guide, "Why this project was allocated to me" (persisted factors + mode), a
+> **Reject this project** action before the first submission (ALLOC-07; permanent exclusion; a different eligible project is
+> found automatically), the submission form (a report link or PDF/DOCX report is required; video optional), version history,
+> the automated report evaluation, the own Plagiarism & Originality Analysis (sources redacted) and improvement steps.
+> Allocation is automatic; unassigned trainees see a waiting state.
+
 **Status:** Proposed (Phase 3 handbook, rev 2.1). Derived from [api.md](api.md) rev 2.1 (including the binding §8 Clarifications C-1..C-30, which win over api.md §3/§5 text where more specific), [schema.md](schema.md), [frontend.md](frontend.md), [auth.md](auth.md), [roadmap.md](roadmap.md), [testing.md](testing.md), [requirements.md](requirements.md) and the Approved ADRs in [decisions.md](decisions.md). On any conflict, `api.md` and `schema.md` win. A change to an endpoint, field or code here goes into `api.md` first, through a lead-reviewed `contract/*` PR.
 
 Terminology follows [requirements.md](requirements.md) §0: **Student** is the role (a trainee with a login), **Trainee** is the record in `app.trainees`, which may have no login.

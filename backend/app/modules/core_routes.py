@@ -79,17 +79,31 @@ def provision(
                     M.Invitation.email == principal.email,
                 )
                 .values(accepted_at=func.now(), accepted_user_id=uid)
-                .returning(M.Invitation.id, M.Invitation.role, M.Invitation.trainee_id)
+                .returning(
+                    M.Invitation.id,
+                    M.Invitation.role,
+                    M.Invitation.trainee_id,
+                    M.Invitation.full_name,
+                    M.Invitation.department,
+                )
             ).first()
             if row is None:
                 raise invalid
-            inv_id, role, trainee_id = row
-            db.execute(update(M.User).where(M.User.id == uid).values(role=role))
+            inv_id, role, trainee_id, inv_name, inv_dept = row
+            values = {"role": role} | ({"department": inv_dept} if inv_dept else {})
+            if inv_name and not principal.full_name_hint:
+                values["full_name"] = inv_name
+            db.execute(update(M.User).where(M.User.id == uid).values(**values))
+            if role == UserRole.supervisor:
+                from app.automation.projects import requeue_for_staff_change
+
+                db.flush()
+                requeue_for_staff_change(db)
             if role == UserRole.student:
                 linked = db.execute(
                     update(M.Trainee)
                     .where(M.Trainee.id == trainee_id, M.Trainee.user_id.is_(None))
-                    .values(user_id=uid)
+                    .values(user_id=uid, onboarded_via="invite")
                     .returning(M.Trainee.id)
                 ).first()
                 if linked is None:

@@ -16,9 +16,9 @@ from app.modules import (
     core_routes,
     cycles,
     imports,
+    onboarding,
     progress,
     projects,
-    recommendations,
     resumes,
     submissions,
     trainees,
@@ -30,16 +30,16 @@ log = logging.getLogger("spa.access")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    from app.db.session import get_sessionmaker
+    """No "everything running is orphaned" cleanup: jobs use leases (ADR-017)."""
+    worker = None
+    if get_settings().run_worker_in_api:
+        from app.worker import start_in_thread
 
-    try:
-        with get_sessionmaker()() as db:
-            n = recommendations.fail_stale_runs(db)
-            if n:
-                log.warning("marked %s stale recommendation runs as failed", n)
-    except Exception:
-        log.exception("stale-run cleanup failed")
+        worker = start_in_thread()
+        log.info("in-process worker started")
     yield
+    if worker is not None:
+        worker.stop()
 
 
 def create_app() -> FastAPI:
@@ -90,8 +90,8 @@ def create_app() -> FastAPI:
         cycles,
         projects,
         trainees,
+        onboarding,
         imports,
-        recommendations,
         allocations,
         submissions,
         resumes,

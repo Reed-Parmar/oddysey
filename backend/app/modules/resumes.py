@@ -13,13 +13,13 @@ from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.ai import default_ai_client
 from app.core.config import get_settings
 from app.core.deps import DB, AnyRole, Student
 from app.core.errors import AppError, conflict, not_found
 from app.core.responses import Envelope
 from app.db import models as M
 from app.db.enums import ExtractionSource, ResumeStatus, UserRole
-from app.modules.recommendations import default_ai_client
 from app.modules.submissions import FileUrl, _safe_name
 from app.modules.trainees import get_visible_trainee, my_trainee
 from app.storage import get_resume_storage
@@ -41,12 +41,23 @@ class ResumeProject(BaseModel):
     summary: str
 
 
+class ReportedMark(BaseModel):
+    """A mark explicitly stated in the resume (resume_reported, unverified; never a verified gate)."""
+
+    field: str
+    value: float | None
+    unit: str
+    excerpt: str | None
+    status: str  # found | not_found | ambiguous
+
+
 class ResumeExtracted(BaseModel):
     skills: list[str]
     projects: list[ResumeProject]
     certifications: list[str]
     tools: list[str]
     career_interest_hint: str | None
+    assessment_marks: list[ReportedMark] = []
 
 
 class SkillMatch(BaseModel):

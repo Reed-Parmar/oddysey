@@ -1,4 +1,4 @@
-/** Resume panel on /student/profile (student.md §3.3a, RES-01/02/04). Suggestions only: nothing is applied until saved via TRN-02. */
+/** Resume panel in the Dashboard profile section (student.md §3.3a, RES-01/02/04). Suggestions only: nothing is applied until saved via TRN-02. */
 import { ArrowClockwise, Check, FileArrowUp, FileText, Plus, Sparkle, WarningCircle } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type DragEvent } from "react";
@@ -16,7 +16,6 @@ import { RESUME_ACCEPT, SKILL_MAX, mergeSkills, resumeFileError, resumeUploadMes
 import { useMyResume } from "./hooks";
 
 type ResumeEnvelope = { data: Resume | null };
-type MeEnvelope = { data: TraineeMe | null };
 
 function DropZone({ disabled, onFile }: { disabled: boolean; onFile: (f: File) => void }) {
   const inputId = useId();
@@ -96,8 +95,7 @@ function SkillSuggestions({ resume, me }: { resume: Resume; me: TraineeMe }) {
       } : old);
       return { previous };
     },
-    onSuccess: (res, body) => {
-      qc.setQueryData<MeEnvelope>(qk.trainees.me(), (old) => old?.data ? { data: { ...res.data, allocation: old.data.allocation } } : old);
+    onSuccess: (_res, body) => {
       setChosen(new Set());
       toast.success(body.skills ? "Skills added to your profile" : "Career interest updated");
     },
@@ -106,7 +104,7 @@ function SkillSuggestions({ resume, me }: { resume: Resume; me: TraineeMe }) {
       toast.error(errorMessage(e));
     },
     onSettled: () => Promise.all([
-      qc.invalidateQueries({ queryKey: qk.trainees.all() }),
+      qc.invalidateQueries({ queryKey: qk.trainees.me() }),
       qc.invalidateQueries({ queryKey: qk.resumes.all() }),
       qc.invalidateQueries({ queryKey: qk.skills.all() }),
     ]),
@@ -222,7 +220,7 @@ export function ResumePanel({ me }: { me: TraineeMe }) {
     <Card
       title="Resume"
       icon={<FileText />}
-      description="Upload your resume and we will suggest skills from it. Nothing changes on your profile until you choose to add it."
+      description="Upload your resume and we will suggest skills (and read any ITI marks it lists). These are suggestions only: nothing changes on your profile until you choose to add it."
       actions={r ? <ResumeDownloadButton resume={r} /> : undefined}
     >
       <div className="flex flex-col gap-4">

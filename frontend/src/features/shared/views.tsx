@@ -15,14 +15,14 @@ import {
   Wrench,
   CurrencyInr,
 } from "@phosphor-icons/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import { api, call } from "@/api/client";
+import { API_BASE, api, authHeaders, call } from "@/api/client";
 import { errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { PageMeta, ProgressRow, Project, Recommendation, Resume, Submission, Trainee } from "@/api/types";
+import type { Allocation, Analysis, Factor, PageMeta, ProgressRow, Project, Resume, Submission, Trainee } from "@/api/types";
 import {
   Avatar, DataTable, DateTime, EmptyState, ErrorState, KeyValue, LoadingState, Pagination, ScoreBar, SkillChips,
   StatusBadge, useToast, type Column,
@@ -44,6 +44,8 @@ const ExternalLink = ({ href, children }: { href: string; children: ReactNode })
 
 // ---------------------------------------------------------------- projects
 
+export const tradeNames = (p: Project) => p.target_trades.map((t) => t.name).join(", ") || "Not set";
+
 export function ProjectCard({ project, to, badge }: { project: Project; to: string; badge?: ReactNode }) {
   return (
     <Link
@@ -55,13 +57,15 @@ export function ProjectCard({ project, to, badge }: { project: Project; to: stri
           <p className="text-xs font-semibold tracking-wide text-subtle">{project.project_code}</p>
           <h3 className="mt-1 text-base leading-snug font-semibold text-text group-hover:text-primary-ink">{project.title}</h3>
         </div>
-        {badge}
+        {badge ?? <StatusBadge kind="processing" value={project.processing_status} />}
       </div>
       <div className="mt-4 flex flex-wrap gap-1.5">
-        <StatusBadge kind="difficulty" value={project.difficulty} />
-        <Tag><Wrench aria-hidden size={12} />{project.target_trade.name}</Tag>
-        <Tag>Min practical {formatScore(project.min_practical_score)}%</Tag>
-        <Tag><UsersThree aria-hidden size={12} />Capacity {project.max_trainees}</Tag>
+        {project.difficulty && <StatusBadge kind="difficulty" value={project.difficulty} />}
+        <Tag><Wrench aria-hidden size={12} />{tradeNames(project)}</Tag>
+        {project.min_practical_score > 0 && <Tag>Verified practical ≥ {formatScore(project.min_practical_score)}%</Tag>}
+        {project.stats && (
+          <Tag><UsersThree aria-hidden size={12} />{project.stats.working_individually} working individually</Tag>
+        )}
       </div>
       <span className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary">
         View details <CaretRight aria-hidden size={14} className="transition-transform group-hover:translate-x-0.5" />
@@ -70,23 +74,46 @@ export function ProjectCard({ project, to, badge }: { project: Project; to: stri
   );
 }
 
+/** Opens the project document: a 5-minute signed URL for uploads, or the legacy https link. */
+export function ProjectDocumentButton({ project }: { project: Project }) {
+  const toast = useToast();
+  const m = useMutation({
+    mutationFn: () => call(api.GET("/api/v1/projects/{project_id}/document-url", { params: { path: { project_id: project.id } } })),
+    onSuccess: (res) => window.open(res.data.url, "_blank", "noopener,noreferrer"),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  if (!project.document && !project.problem_doc_url) return <span className="text-muted">No document yet</span>;
+  return (
+    <Button size="sm" variant="secondary" icon={<FileText />} loading={m.isPending} onClick={() => m.mutate()}>
+      {project.document ? `Open ${project.document.name}` : "Open problem statement"}
+    </Button>
+  );
+}
+
 export function ProjectDetailView({ project, actions }: { project: Project; actions?: ReactNode }) {
+  const supervisor = project.supervisor
+    ? `${project.supervisor.full_name}${project.supervisor.department ? ` (${project.supervisor.department})` : ""}`
+    : "Not assigned yet";
   return (
     <Card
       title={<span>{project.title} <span className="text-sm font-normal text-muted">· {project.project_code}</span></span>}
       actions={actions}
     >
       <KeyValue items={[
-        ["Status", <StatusBadge key="s" kind="project" value={project.status} />],
-        ["Target trade", project.target_trade.name],
-        ["Difficulty", <StatusBadge key="d" kind="difficulty" value={project.difficulty} />],
-        ["Minimum practical score", `${formatScore(project.min_practical_score)}%`],
-        ["Capacity", `${project.max_trainees} trainees${project.stats?.allocated_count != null ? ` · ${project.stats.allocated_count} allocated` : ""}`],
+        ["Status", <span key="s" className="flex flex-wrap gap-1.5"><StatusBadge kind="processing" value={project.processing_status} /><StatusBadge kind="project" value={project.status} /></span>],
+        ["Target trades", tradeNames(project)],
+        ["Difficulty", project.difficulty ? <StatusBadge key="d" kind="difficulty" value={project.difficulty} /> : "Not set"],
+        ["Verified practical requirement", project.min_practical_score > 0 ? `${formatScore(project.min_practical_score)}% (verified marks only)` : "None"],
+        ["Minimum match threshold", project.min_match_score > 0 ? `${formatScore(project.min_match_score)} / 100` : "None (0)"],
+        ...(project.stats ? [
+          ["Number of trainees working individually", String(project.stats.working_individually)] as [string, string],
+          ["Rejections (history)", String(project.stats.rejected_total)] as [string, string],
+        ] : []),
+        ["Deadline", <span key="dl"><DateTime value={project.effective_deadline} />{!project.deadline && <span className="text-xs text-muted"> (cycle default)</span>}</span>],
         ["Category / sponsor goal", project.category ?? "—"],
-        ["Supervisor", project.supervisor ? `${project.supervisor.full_name}${project.supervisor.department ? ` (${project.supervisor.department})` : ""}` : "Not assigned"],
-        ["Prerequisite skills", <SkillChips key="k" skills={project.skills} />],
-        ["Problem statement", project.problem_doc_url ? <ExternalLink href={project.problem_doc_url}>Open document</ExternalLink> : "—"],
-        ...(project.stats?.eligible_trainee_count != null ? [["Eligible trainees (latest run)", String(project.stats.eligible_trainee_count)] as [string, string]] : []),
+        ["Supervisor", supervisor],
+        ["Prerequisite skills", project.skills.length ? <SkillChips key="k" skills={project.skills} /> : "—"],
+        ["Project document", <ProjectDocumentButton key="doc" project={project} />],
       ]} />
       {project.description && (
         <div className="mt-5 border-t border-border pt-4">
@@ -98,9 +125,52 @@ export function ProjectDetailView({ project, actions }: { project: Project; acti
   );
 }
 
+type Step = { stage: string; title: string; detail: string; generated?: boolean };
+
+/** Ordered execution guide generated from the brief (labelled as generated where applicable). */
+export function ProjectGuide({ project }: { project: Project }) {
+  const g = (project.generated ?? {}) as {
+    steps?: Step[]; deliverables?: string[]; tools_materials?: string[]; timeline?: { milestone: string; offset_pct: number }[];
+    assumptions?: string[]; source?: string;
+  };
+  if (!g.steps?.length) return <p className="text-sm text-muted">The project guide is being prepared from the project document.</p>;
+  return (
+    <div className="flex flex-col gap-5 text-sm">
+      <ol className="relative space-y-4 border-l-2 border-border pl-5">
+        {g.steps.map((s, i) => (
+          <li key={s.stage} className="relative">
+            <span aria-hidden className="absolute top-0.5 -left-[1.95rem] inline-flex size-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-fg">{i + 1}</span>
+            <p className="font-semibold text-text">
+              {s.title}
+              {s.generated && <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-ink"><Sparkle aria-hidden size={10} weight="fill" />Generated</span>}
+            </p>
+            <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-muted">{s.detail}</p>
+          </li>
+        ))}
+      </ol>
+      {!!g.deliverables?.length && (
+        <div><h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Deliverables</h3>
+          <ul className="list-disc space-y-1 pl-5">{g.deliverables.map((d) => <li key={d}>{d}</li>)}</ul></div>
+      )}
+      {!!g.tools_materials?.length && (
+        <div><h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Tools and materials</h3>
+          <SkillChips skills={g.tools_materials.map((name) => ({ name }))} /></div>
+      )}
+      {!!g.timeline?.length && (
+        <div>
+          <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Suggested timeline (proposal)</h3>
+          <ul className="space-y-1">{g.timeline.map((t) => <li key={t.milestone} className="flex justify-between gap-3"><span>{t.milestone}</span><span className="text-muted tabular-nums">by {t.offset_pct}% of the time</span></li>)}</ul>
+        </div>
+      )}
+      {!!g.assumptions?.length && <p className="text-xs text-muted">Assumptions: {g.assumptions.join(" ")}</p>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- trainees
 
 export function TraineeProfileView({ trainee, showSensitive }: { trainee: Trainee; showSensitive?: boolean }) {
+  const trades = trainee.trades.map((t) => t.name).join(", ");
   return (
     <Card
       title={
@@ -108,22 +178,22 @@ export function TraineeProfileView({ trainee, showSensitive }: { trainee: Traine
           <Avatar name={trainee.full_name} />
           <span>
             {trainee.full_name}
-            <span className="block text-sm font-normal text-muted">{trainee.trainee_code} · {trainee.trade.name}</span>
+            <span className="block text-sm font-normal text-muted">{trainee.trainee_code} · {trades}</span>
           </span>
         </span>
       }
-      actions={<StatusBadge kind="assessment" value={trainee.assessment_status} />}
+      actions={<span className="flex flex-wrap gap-1.5"><StatusBadge kind="assessment" value={trainee.assessment_status} /><StatusBadge kind="matchMode" value={trainee.match_mode} /></span>}
     >
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         {([["Theory score", trainee.scores.theory, "Theory"], ["Practical score", trainee.scores.practical, "Practical"], ["Safety compliance", trainee.scores.safety, "Safety"]] as const).map(([k, v, l]) => (
           <div key={k} className="rounded-lg border border-border bg-surface-2 p-3">
-            <p className="text-xs font-medium text-muted">{k}</p>
+            <p className="text-xs font-medium text-muted">{k} <span className="text-[11px]">(verified)</span></p>
             <div className="mt-1.5"><ScoreBar value={v} label={l} tone="auto" /></div>
           </div>
         ))}
       </div>
       <KeyValue items={[
-        ["Trade", trainee.trade.name],
+        ["Trades", trades],
         ["Training centre", trainee.centre_name ?? "—"],
         ["Skills", <SkillChips key="k" skills={trainee.skills} />],
         ["Career interest", trainee.career_interest ?? "—"],
@@ -137,10 +207,10 @@ export function TraineeProfileView({ trainee, showSensitive }: { trainee: Traine
   );
 }
 
-// ---------------------------------------------------------------- recommendations
+// ---------------------------------------------------------------- matching explanation
 
 /** Itemised factors; the points always sum to the match score. */
-export function FactorTable({ factors }: { factors: Recommendation["factors"] }) {
+export function FactorTable({ factors }: { factors: Factor[] }) {
   const total = factors.reduce((s, f) => s + (f.max_points === 0 ? 0 : f.points), 0);
   return (
     <div className="mt-3 overflow-x-auto">
@@ -157,16 +227,7 @@ export function FactorTable({ factors }: { factors: Recommendation["factors"] })
             const pct = f.max_points > 0 ? Math.max(0, Math.min(100, (f.points / f.max_points) * 100)) : 0;
             return (
               <tr key={f.key} className="border-t border-border">
-                <td className="py-2.5 pr-2 align-top font-medium">
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    {f.label}
-                    {f.ai_refined && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-accent-soft px-1.5 py-px text-[0.68rem] font-bold text-accent-ink" title="Refined with AI">
-                        <Sparkle aria-hidden size={10} weight="fill" />AI
-                      </span>
-                    )}
-                  </span>
-                </td>
+                <td className="py-2.5 pr-2 align-top font-medium">{f.label}</td>
                 <td className="py-2.5 pl-3 align-top whitespace-nowrap">
                   {f.max_points === 0 ? (
                     <span className="text-muted">gate</span>
@@ -188,7 +249,7 @@ export function FactorTable({ factors }: { factors: Recommendation["factors"] })
           <tr className="border-t-2 border-border-strong">
             <th scope="row" className="pt-2.5 text-left font-semibold">Total</th>
             <td className="pt-2.5 pl-3 font-semibold tabular-nums">{formatScore(total, 2)}</td>
-            <td className="pt-2.5 pl-3 text-xs text-muted">Sum of the factor points</td>
+            <td className="pt-2.5 pl-3 text-xs text-muted">Sum of the factor points (match score out of 100)</td>
           </tr>
         </tfoot>
       </table>
@@ -196,66 +257,29 @@ export function FactorTable({ factors }: { factors: Recommendation["factors"] })
   );
 }
 
-function ScoreDial({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, score));
-  const tone = pct >= 75 ? "var(--color-success)" : pct >= 50 ? "var(--color-primary)" : pct >= 30 ? "var(--color-warning)" : "var(--color-danger)";
-  return (
-    <span
-      className="relative inline-flex size-14 shrink-0 items-center justify-center rounded-full"
-      style={{ background: `conic-gradient(${tone} ${pct * 3.6}deg, var(--color-neutral-bg) 0deg)` }}
-      aria-label={`Match score ${score} of 100`}
-      role="img"
-    >
-      <span className="inline-flex size-11 items-center justify-center rounded-full bg-surface font-heading text-base font-semibold tabular-nums">
-        {formatScore(score)}
-      </span>
-    </span>
-  );
-}
+const MODE_NOTE = {
+  full: "Full assessment mode: verified practical 35, skills 30, interest 20, theory and safety 15.",
+  profile: "Profile-based mode (no complete verified assessment): skills 60, interest 40. This is profile fit, not practical competence.",
+} as const;
 
-export function RecommendationCard({ recommendation: r, actions, compact, perspective }: {
-  recommendation: Recommendation; actions?: ReactNode; compact?: boolean; perspective?: "trainee" | "project";
-}) {
-  const heading = perspective === "project"
-    ? `${r.trainee.full_name} · ${r.trainee.trainee_code}`
-    : `${r.project.title} · ${r.project.project_code}`;
+/** "Why this project was allocated": the persisted factors, mode and constraints of one allocation. */
+export function MatchExplanation({ allocation }: { allocation: Allocation }) {
+  const mode = (allocation.match_mode ?? "full") as keyof typeof MODE_NOTE;
   return (
-    <article className="rounded-xl border border-border bg-surface p-5 shadow-card">
-      <div className="flex items-start gap-4">
-        <ScoreDial score={r.score} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold tracking-wide text-subtle uppercase">Rank {r.rank}</p>
-              <h3 className="mt-0.5 text-base leading-snug font-semibold">{heading}</h3>
-              {!perspective && <p className="text-xs text-muted">{r.trainee.full_name} · {r.trainee.trainee_code}</p>}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {r.eligible ? <StatusBadge kind="eligibility" value="eligible" /> : r.ineligible_reasons.map((x) => <StatusBadge key={x} kind="eligibility" value={x} />)}
-              <StatusBadge kind="source" value={r.source} />
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-heading text-lg font-semibold tabular-nums">{formatScore(allocation.match_score)} / 100</span>
+        <span className="text-xs text-muted">match score</span>
+        {allocation.match_mode && <StatusBadge kind="matchMode" value={allocation.match_mode} />}
+        <StatusBadge kind="allocationSource" value={allocation.trigger === "replacement" ? "replacement" : allocation.source} />
       </div>
-      {r.ai_explanation && (
-        <div className="mt-4 rounded-lg border border-accent/20 bg-accent-soft px-4 py-3 text-sm">
-          <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-accent-ink uppercase">
-            <Sparkle aria-hidden size={14} weight="fill" /> AI explanation
-          </p>
-          <p className="mt-1 leading-relaxed text-text">{r.ai_explanation}</p>
-        </div>
-      )}
-      {compact ? (
-        <details className="group mt-3 text-sm">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded font-semibold text-primary [&::-webkit-details-marker]:hidden">
-            <CaretRight aria-hidden size={14} className="transition-transform group-open:rotate-90" />
-            Why this score?
-          </summary>
-          <FactorTable factors={r.factors} />
-        </details>
-      ) : <FactorTable factors={r.factors} />}
-      {actions && <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">{actions}</div>}
-    </article>
+      {allocation.explanation && <p className="leading-relaxed">{allocation.explanation}</p>}
+      <p className="text-xs text-muted">
+        {MODE_NOTE[mode] ?? ""} Minimum match threshold for this project: {allocation.min_match_score > 0 ? `${formatScore(allocation.min_match_score)} / 100` : "none"}.
+        The match score is a heuristic fit, not a grade or a prediction.
+      </p>
+      {allocation.factors ? <FactorTable factors={allocation.factors} /> : <p className="text-muted">Allocated before itemised factors were recorded.</p>}
+    </div>
   );
 }
 
@@ -339,7 +363,7 @@ export function TraineeResumeCard({ traineeId, canDownload }: { traineeId: strin
     <Card
       title="From resume"
       icon={<FileText />}
-      description={r ? <>Uploaded <DateTime value={r.created_at} />{r.source && ` � ${RESUME_SOURCE_LABEL[r.source]}`}. Suggestions only; the trainee decides which skills to add.</> : undefined}
+      description={r ? <>Uploaded <DateTime value={r.created_at} />{r.source && ` · ${RESUME_SOURCE_LABEL[r.source]}`}. Suggestions only; the trainee decides which skills to add.</> : undefined}
       actions={r && canDownload ? <ResumeDownloadButton resume={r} /> : undefined}
     >
       {q.isLoading ? <LoadingState /> : q.error ? (
@@ -432,7 +456,7 @@ export function SubmissionDetailView({ submission: s, history, historyHref, acti
       <Card
         title={`Version ${s.version} · ${s.project.title}`}
         description={<>{s.trainee.full_name} · {s.trainee.trainee_code} · submitted <DateTime value={s.submitted_at} /></>}
-        actions={<div className="flex gap-2"><StatusBadge kind="submission" value={s.status} />{s.is_late && <StatusBadge kind="late" value="late" />}</div>}
+        actions={<div className="flex flex-wrap gap-2"><StatusBadge kind="submission" value={s.status} /><StatusBadge kind="analysis" value={s.analysis_status} />{s.is_late && <StatusBadge kind="late" value="late" />}</div>}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <Evidence icon={<VideoCamera />} label="Video">{s.video_url ? <ExternalLink href={s.video_url}>{s.video_url}</ExternalLink> : "—"}</Evidence>
@@ -442,7 +466,8 @@ export function SubmissionDetailView({ submission: s, history, historyHref, acti
           <Evidence icon={<CurrencyInr />} label="Bill of materials"><span className="tabular-nums">{formatInr(s.bom_cost_inr)}</span></Evidence>
           <Evidence icon={<Note />} label="Note">{s.note ? <span className="font-normal whitespace-pre-wrap">{s.note}</span> : "—"}</Evidence>
         </div>
-        {s.evaluation && <div className="mt-5"><EvaluationView evaluation={s.evaluation} /></div>}
+        <p className="mt-4 flex flex-wrap items-center gap-2 text-sm"><span className="text-muted">Automated report evaluation:</span><ReportScore summary={s.report_evaluation} /><span className="text-xs text-muted">· deadline <DateTime value={s.deadline} /></span></p>
+        {s.evaluation && <div className="mt-5"><h3 className="mb-2 text-sm font-semibold">Verified practical evaluation (supervisor)</h3><EvaluationView evaluation={s.evaluation} /></div>}
       </Card>
       {actions}
       {history && history.length > 1 && (
@@ -479,6 +504,250 @@ export function SubmissionDetailView({ submission: s, history, historyHref, acti
   );
 }
 
+// ---------------------------------------------------------------- report evaluation + originality (ADR-017)
+
+type Criterion = { key: string; label: string; max_points: number; points: number; explanation?: string; evidence?: { excerpt: string; location: string }[] };
+type Suggestion = { priority: number; issue: string; evidence: string; why_it_matters: string; steps: string[]; expected_benefit: string };
+type Passage = { target_excerpt: string; source_excerpt: string | null; tokens: number };
+type Source = { source_id: string | null; label: string; matched_tokens: number; coverage_pct: number; passages: Passage[] };
+
+/** Compact automated-evaluation summary for lists and cards. */
+export function ReportScore({ summary }: { summary: Submission["report_evaluation"] }) {
+  if (!summary) return <span className="text-muted">—</span>;
+  if (summary.total == null) return <span className="text-xs text-muted">{summary.status === "unavailable" ? "Awaiting review" : summary.status}</span>;
+  const total = summary.effective_total ?? summary.total;
+  const grade = summary.effective_grade ?? summary.grade;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className="font-semibold tabular-nums">{total} / {summary.max_total}</span>
+      {grade && <StatusBadge kind="grade" value={grade} />}
+      {summary.amended && <span className="text-xs text-muted">(supervisor-amended)</span>}
+    </span>
+  );
+}
+
+function Section({ title, children, note }: { title: string; children: ReactNode; note?: ReactNode }) {
+  return (
+    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <h3 className="text-sm font-semibold text-text">{title}</h3>
+      {note && <p className="mt-0.5 text-xs text-muted">{note}</p>}
+      <div className="mt-2 text-sm">{children}</div>
+    </section>
+  );
+}
+
+export function useAnalysis(submissionId: string, poll: boolean) {
+  return useQuery({
+    queryKey: qk.submissions.analysis(submissionId),
+    queryFn: () => call(api.GET("/api/v1/submissions/{submission_id}/analysis", { params: { path: { submission_id: submissionId } } })),
+    refetchInterval: (q) => {
+      const st = q.state.data?.data?.status;
+      return poll && (st === "queued" || st === "extracting" || st === "analysing" || st === "retrying") ? 4000 : false;
+    },
+    retry: (n, e) => !(e instanceof Error && "status" in e && (e as { status: number }).status === 404) && n < 2,
+  });
+}
+
+/** Opens the printable HTML export (authenticated fetch → blob URL; the same persisted findings as the screen). */
+export function ExportReportButton({ submissionId }: { submissionId: string }) {
+  const toast = useToast();
+  const m = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/submissions/${submissionId}/analysis/export`, { headers: await authHeaders() });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      return URL.createObjectURL(await res.blob());
+    },
+    onSuccess: (url) => {
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return <Button size="sm" variant="secondary" icon={<DownloadSimple />} loading={m.isPending} onClick={() => m.mutate()}>Printable report</Button>;
+}
+
+/** Plagiarism & Originality Analysis + automated report evaluation + improvements (same persisted data as the export). */
+export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis; showExport?: boolean }) {
+  const o = (a.originality ?? {}) as {
+    status?: string; overlap_pct?: number | null; overlap_reason?: string | null; method?: string; formula?: string;
+    tokens?: { eligible: number; excluded: number; excluded_pct: number; excluded_by_reason: Record<string, number> };
+    sources?: Source[]; attention_band?: string | null; bands_version?: string; finding?: string; finding_reason?: string;
+    self_reuse?: { overlap_pct: number | null; note: string }; limitations?: string[]; code?: { reason: string };
+  };
+  const ev = (a.evaluation ?? {}) as {
+    status?: string; status_reason?: string | null; total?: number | null; max_total?: number; grade?: string | null;
+    confidence?: string | null; outcome?: string | null; suggestions?: Suggestion[]; checklist?: string[]; limitations?: string[];
+  };
+  const criteria = a.effective_criteria as Criterion[];
+  const corpus = (a.corpus ?? {}) as { scope?: string; items?: number };
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <StatusBadge kind="analysis" value={a.status} />
+        <span className="text-xs text-muted">Version {a.submission_version} · revision {a.revision} · {a.pipeline_version}</span>
+        {a.finished_at && <span className="text-xs text-muted">· <DateTime value={a.finished_at} /></span>}
+        {showExport && <ExportReportButton submissionId={a.submission_id} />}
+      </div>
+      {a.status_reason && <p className="rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning">{a.status_reason}</p>}
+
+      <Section title="Automated report evaluation" note="Scores only what the report documents. It does not verify workmanship, a working device, observed safety practice or a viva.">
+        {ev.total == null ? (
+          <p className="text-muted">{ev.status === "unavailable" ? "Automated evaluation is not configured; a supervisor will review this report." : ev.status_reason ?? "Not evaluated yet."}</p>
+        ) : (
+          <>
+            <p className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="font-heading text-lg font-semibold tabular-nums">{criteria.reduce((s, c) => s + c.points, 0)} / {ev.max_total ?? 100}</span>
+              {ev.grade && <StatusBadge kind="grade" value={ev.grade} />}
+              <span className="text-xs text-muted">Automated report grade{a.amended ? " (supervisor-amended)" : ""}{ev.confidence ? ` · confidence ${ev.confidence}` : ""}</span>
+            </p>
+            <ul className="space-y-3">
+              {criteria.map((c) => (
+                <li key={c.key}>
+                  <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{c.label}</span><span className="tabular-nums"><span className="font-semibold">{c.points}</span><span className="text-muted"> / {c.max_points}</span></span></div>
+                  {c.explanation && <p className="text-xs text-muted">{c.explanation}</p>}
+                  {c.evidence?.map((e, i) => <blockquote key={i} className="mt-1 border-l-2 border-primary/40 pl-2 text-xs italic">“{e.excerpt}” <span className="not-italic text-muted">({e.location})</span></blockquote>)}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Section>
+
+      <Section title="Plagiarism & Originality Analysis" note="Potential overlap that needs contextual review. Trainees may receive the same brief; shared brief and guide text is excluded.">
+        {o.status === "insufficient_text" || o.overlap_pct == null ? (
+          <p className="text-muted">Text overlap not computed: {o.overlap_reason ?? "not enough analysable text"}.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="font-heading text-lg font-semibold tabular-nums">{o.overlap_pct}%</span>
+              <span className="text-xs text-muted">text overlap with other people's work</span>
+              {o.attention_band && <span className="rounded bg-neutral-bg px-1.5 text-xs">Review band: {o.attention_band} ({o.bands_version}, not a probability)</span>}
+            </p>
+            {o.finding_reason && <p>{o.finding_reason}</p>}
+          </div>
+        )}
+        {o.tokens && (
+          <p className="mt-2 text-xs text-muted">
+            {o.tokens.eligible} eligible words; {o.tokens.excluded} excluded ({o.tokens.excluded_pct}%:{" "}
+            {Object.entries(o.tokens.excluded_by_reason).filter(([, n]) => n).map(([k, n]) => `${k.replace("_", " ")} ${n}`).join(", ") || "none"}). {o.formula}
+          </p>
+        )}
+        {!!o.sources?.length && (
+          <ul className="mt-3 space-y-3">
+            {o.sources.map((s, i) => (
+              <li key={i} className="rounded-lg border border-border p-3">
+                <p className="flex justify-between gap-2 text-xs"><span className="font-semibold">{s.label}</span><span className="tabular-nums">{s.matched_tokens} words · {s.coverage_pct}%</span></p>
+                {s.passages.slice(0, 5).map((p, j) => (
+                  <div key={j} className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+                    <blockquote className="rounded bg-warning-bg px-2 py-1">{p.target_excerpt}</blockquote>
+                    <blockquote className="rounded bg-surface-2 px-2 py-1 text-muted">{p.source_excerpt ?? "Source text withheld (outside your access)"}</blockquote>
+                  </div>
+                ))}
+              </li>
+            ))}
+          </ul>
+        )}
+        {o.self_reuse?.overlap_pct != null && <p className="mt-2 text-xs text-muted">Reuse of the trainee's own earlier versions: {o.self_reuse.overlap_pct}% (reported separately, not counted as overlap).</p>}
+        <p className="mt-2 text-xs text-muted">Corpus: {corpus.scope} ({corpus.items ?? 0} items).</p>
+      </Section>
+
+      <Section title="Concept and code similarity">
+        <p className="text-muted">{(a.semantic as { reason?: string } | null)?.reason ?? "Not assessed."}</p>
+        <p className="mt-1 text-muted">{o.code?.reason ?? "Code similarity not assessed."}</p>
+      </Section>
+      <Section title="AI-writing assessment">
+        <p className="text-muted">{(a.ai_writing as { reason?: string } | null)?.reason ?? "Not available."}</p>
+      </Section>
+
+      <Section title="How to improve" note="Specific to this project. Improvement guidance is not a misconduct finding.">
+        {ev.suggestions?.length ? (
+          <ol className="space-y-3">
+            {ev.suggestions.map((s) => (
+              <li key={s.priority} className="rounded-lg border border-border p-3">
+                <p className="font-semibold">{s.priority}. {s.issue}</p>
+                {s.evidence && <p className="text-xs text-muted">Evidence: {s.evidence}</p>}
+                <p className="mt-1 text-xs">Why it matters: {s.why_it_matters}</p>
+                {!!s.steps.length && <ul className="mt-1 list-disc pl-5 text-xs">{s.steps.map((x) => <li key={x}>{x}</li>)}</ul>}
+                {s.expected_benefit && <p className="mt-1 text-xs text-muted">Expected benefit: {s.expected_benefit}</p>}
+              </li>
+            ))}
+          </ol>
+        ) : <p className="text-muted">No suggestions recorded.</p>}
+        {!!ev.checklist?.length && <ul className="mt-3 space-y-1">{ev.checklist.map((c) => <li key={c}>☐ {c}</li>)}</ul>}
+      </Section>
+
+      {a.reviews.length > 0 && (
+        <Section title="Review history">
+          <ul className="space-y-1.5">{a.reviews.map((r) => <li key={r.id}><DateTime value={r.created_at} /> · {r.reviewer}: <span className="font-medium">{r.action.replace("_", " ")}</span> — {r.note}</li>)}</ul>
+        </Section>
+      )}
+      <Section title="Limitations">
+        <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted">{[...(o.limitations ?? []), ...(ev.limitations ?? [])].map((l) => <li key={l}>{l}</li>)}</ul>
+      </Section>
+    </div>
+  );
+}
+
+const REVIEW_ACTIONS = [
+  ["confirm", "Confirm findings"], ["annotate", "Add note"], ["request_explanation", "Ask trainee to explain"],
+  ["request_rework", "Request rework"], ["amend", "Amend scores"],
+] as const;
+
+/** Supervisor/admin review: keeps the automated result and adds a history entry (amendments need a reason). */
+export function ReviewActions({ analysis, submissionId }: { analysis: Analysis; submissionId: string }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [action, setAction] = useState<(typeof REVIEW_ACTIONS)[number][0]>("confirm");
+  const [note, setNote] = useState("");
+  const criteria = analysis.effective_criteria as Criterion[];
+  const [points, setPoints] = useState<Record<string, number>>(() => Object.fromEntries(criteria.map((c) => [c.key, c.points])));
+  const m = useMutation({
+    mutationFn: () => call(api.POST("/api/v1/submissions/{submission_id}/analysis/review", {
+      params: { path: { submission_id: submissionId } },
+      body: { action, note, amended_criteria: action === "amend" ? Object.entries(points).map(([key, p]) => ({ key, points: p })) : null },
+    })),
+    onSuccess: async () => {
+      toast.success("Review saved");
+      setNote("");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: qk.submissions.all() }),
+        qc.invalidateQueries({ queryKey: qk.progress.all() }),
+      ]);
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  if (!analysis.viewer_can_review) return null;
+  const needsLong = action === "amend" || action === "request_rework";
+  return (
+    <Card title="Review" description="Your review is recorded alongside the automated findings; nothing is overwritten.">
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Review action">
+          {REVIEW_ACTIONS.filter(([k]) => k !== "amend" || criteria.length > 0).map(([k, l]) => (
+            <button key={k} type="button" role="radio" aria-checked={action === k} onClick={() => setAction(k)}
+              className={cx("min-h-8 rounded-full border px-3 text-sm font-medium", action === k ? "border-primary bg-primary-soft text-primary-ink" : "border-border-strong")}>{l}</button>
+          ))}
+        </div>
+        {action === "amend" && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {criteria.map((c) => (
+              <label key={c.key} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-1.5">
+                <span>{c.label}</span>
+                <input type="number" min={0} max={c.max_points} value={points[c.key] ?? 0} className="w-16 rounded border border-border-strong px-1.5 py-0.5 text-right"
+                  onChange={(e) => setPoints((p) => ({ ...p, [c.key]: Math.max(0, Math.min(c.max_points, Number(e.target.value))) }))} />
+              </label>
+            ))}
+          </div>
+        )}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-muted">{needsLong ? "Reason (at least 10 characters)" : "Note"}</span>
+          <textarea className="min-h-20 rounded-lg border border-border-strong bg-surface px-3 py-2" value={note} maxLength={3000} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <div><Button loading={m.isPending} disabled={note.trim().length < (needsLong ? 10 : 3)} onClick={() => m.mutate()}>Save review</Button></div>
+      </div>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------- progress
 
 export function ProgressTable({ rows, meta, onPageChange, sort, onSortChange, isLoading, error, onRetry, emptyState,
@@ -498,18 +767,19 @@ export function ProgressTable({ rows, meta, onPageChange, sort, onSortChange, is
           <Avatar name={r.trainee.full_name} size="sm" />
           <span className="min-w-0">
             <span className={cx("block font-semibold", href && "text-primary group-hover:underline")}>{r.trainee.full_name}</span>
-            <span className="block text-xs text-muted">{r.trainee.trainee_code} · {r.trainee.trade.name}</span>
+            <span className="block text-xs text-muted">{r.trainee.trainee_code} · {r.trainee.trades.map((t) => t.name).join(", ")}</span>
           </span>
         </span>
       );
       return href ? <Link className="group rounded" to={href}>{text}</Link> : text;
     } }] : []),
-    { key: "project", header: "Project", sort: "project_title", cell: (r) => r.project ? <span className="block min-w-40">{r.project.title}<span className="block text-xs text-muted">{r.project.project_code}</span></span> : <span className="text-muted">—</span> },
+    { key: "project", header: "Project", sort: "project_title", cell: (r) => r.project ? <span className="block min-w-40">{r.project.title}<span className="block text-xs text-muted">{r.project.project_code}</span></span> : <span className="text-xs text-muted">{r.waiting_reason ? <StatusBadge kind="waiting" value={r.waiting_reason} /> : "—"}</span> },
     ...(showSupervisorColumn ? [{ key: "sup", header: "Supervisor", cell: (r: ProgressRow) => r.supervisor?.full_name ?? "—" }] : []),
-    { key: "match", header: "Match", sort: "-match_score", cell: (r) => <span className="flex flex-wrap items-center gap-1.5 tabular-nums">{formatScore(r.allocation?.match_score)}{r.allocation?.is_override && <StatusBadge kind="allocationSource" value="override" />}</span> },
-    { key: "progress", header: "Status", cell: (r) => <span className="flex flex-wrap gap-1"><StatusBadge kind="progress" value={r.progress} />{r.latest_submission?.is_late && <StatusBadge kind="late" value="late" />}</span> },
-    { key: "version", header: "Latest version", cell: (r) => r.latest_submission ? <span className="tabular-nums">v{r.latest_submission.version}</span> : "—" },
-    { key: "score", header: "Score", sort: "-total_score", cell: (r) => r.evaluation ? <span className="flex items-center gap-1.5"><span className="font-semibold tabular-nums">{r.evaluation.total_score}</span>{r.evaluation.grade && <StatusBadge kind="grade" value={r.evaluation.grade} />}</span> : "—" },
+    { key: "match", header: "Match (min / trainee)", sort: "-match_score", cell: (r) => r.allocation ? <span className="flex flex-col tabular-nums"><span>{formatScore(r.allocation.min_match_score)} / <span className="font-semibold">{formatScore(r.allocation.match_score)}</span></span><span className="text-xs text-muted">{r.allocation.match_mode === "profile" ? "profile mode" : "full mode"}</span></span> : "—" },
+    { key: "progress", header: "Status", cell: (r) => <span className="flex flex-wrap gap-1"><StatusBadge kind="progress" value={r.progress} />{r.latest_submission?.is_late && <StatusBadge kind="late" value="late" />}{r.rejections > 0 && <span className="text-xs text-muted">{r.rejections} rejected</span>}</span> },
+    { key: "version", header: "Latest version", cell: (r) => r.latest_submission ? <span className="flex flex-col"><span className="tabular-nums">v{r.latest_submission.version}</span>{r.analysis_status && <StatusBadge kind="analysis" value={r.analysis_status} />}</span> : "—" },
+    { key: "score", header: "Evaluation", sort: "-total_score", cell: (r) => r.evaluation ? <span className="flex flex-col gap-0.5"><span className="flex items-center gap-1.5"><span className="font-semibold tabular-nums">{r.evaluation.total_score}/{r.evaluation.max_score}</span>{r.evaluation.grade && <StatusBadge kind="grade" value={r.evaluation.grade} />}</span><span className="text-xs text-muted">{r.evaluation.score_type === "automated_report" ? "Automated report" : "Verified practical"}</span></span> : "—" },
+    { key: "deadline", header: "Deadline", sort: "deadline", cell: (r) => r.deadline ? <DateTime value={r.deadline} dateOnly /> : "—" },
   ];
   return (
     <>

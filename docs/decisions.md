@@ -117,3 +117,56 @@ Status values: **Approved** (source of truth), **Proposed** (awaiting owner appr
 - **Code layout:** the backend keeps router, schemas and service together per module (`app/modules/<name>.py`) and one `app/db/models.py`, instead of the five files per module in architecture.md §5. Object-level checks live in each module's scope functions (`scope_trainees`, `scope_submissions`, …).
 - **Seed accounts without a secret key:** `scripts/_auth_users.py` uses the Supabase Admin API when `SUPABASE_SECRET_KEY` is set, otherwise it writes confirmed users to `auth.users`/`auth.identities` through the owner connection (dev/demo only).
 - **Not yet configured on Supabase (owner action):** "Confirm email" is still on (A-06 assumes off), and `SUPABASE_SECRET_KEY` is unset, so file uploads return 503 until it is added. URL submissions work.
+
+## ADR-017: Judges' feedback — automated allocation, rejection with ranked replacement, document evaluation, originality reports
+**Status:** Approved (owner instruction, 2026-10-18: "Claude implementation prompt v2"). It **supersedes** the conflicting parts of ADR-003 (draft review + publish gate), ADR-011 (capacity counts trainees), ADR-012 (supervisor-entered rubric as the only evaluation) and the ADR-016 cut line (no self-onboarding). Roles stay Student (= ITI trainee) / Supervisor / Admin.
+
+**Interpretations of the judges' notes** (recorded so nothing is silently reinterpreted)
+1. *Automation is the normal path.* Project processing, matching, allocation, visibility of assignments, report analysis and evaluation, notifications and scheduled archiving run in a durable background worker. Admin inputs: project title/description/document, cycle and deadlines, optional corrections (trades, deadlines, minimum match), staff spreadsheet, manual archive. There is no mandatory approval gate after each AI step.
+2. *Independent contributors, no teams.* One ACTIVE allocation per trainee per cycle. Many trainees may hold the same project, each with their own allocation, submissions, evaluation and originality report. `max_trainees` (capacity) is removed from the product: the column stays nullable for history and the capacity trigger is dropped. Each project shows a server-derived **Number of trainees working individually** (non-rejected allocations).
+3. *Multiple trades.* `trainee_trades` / `project_trades` join tables. The old single `trade_id` / `target_trade_id` stay as the primary (first) trade for compatibility. The trade gate is set overlap. One canonical trainee identifier (`trainee_code`); no national ID documents.
+4. *Recommendation screens removed, matching kept internal.* REC endpoints and pages are removed. Matching runs inside the allocation job, and its factors are persisted on each allocation (`factors`, `match_mode`, `scoring_version`).
+5. *"Legacy report" = plagiarism/originality report*, implemented as **Plagiarism & Originality Analysis** (below).
+6. *"Minimum batch/match" = minimum match threshold* (`projects.min_match_score`, default 0 = none). Distinct from the trainee's match score, the evaluation score and `min_practical_score`.
+7. *Project code is generated* from a DB sequence (`PRJ-0001` …): never by the LLM, never regenerated on edits. Imported dataset codes are preserved on reimport.
+8. *Rejection = exclusion + ranked replacement* (below).
+
+**Matching (spa_ai.scoring, `scoring-2`)**
+- `full` mode when theory, practical and safety marks are all present (imported/verified): practical 35 + skills 30 + interest 20 + theory/safety 15 (unchanged).
+- `profile` mode otherwise: skills 60 + interest 40 (same normalised ratios), labelled as profile fit, not competence.
+- Gates: trade overlap; `min_practical_score > 0` requires a verified practical mark (`verified_assessment_required` when unknown: never zero, assumed, resume-reported or LLM-estimated); `below_min_match` when the score is under the explicit threshold.
+- Ordinary allocation gives each unassigned trainee their best eligible project (ties: project code). With no capacity the assignment problem decomposes, so the Hungarian solver and scipy are removed.
+- Resume-reported marks are stored separately as unverified and never satisfy a gate or select `full` mode.
+
+**Durable automation (`app.jobs`, `app/worker.py`)**
+- A Postgres job table. Workers claim with `FOR UPDATE SKIP LOCKED` and a lease (`locked_until`); an expired lease is reclaimable. This replaces the "every running run at boot is orphaned" assumption. Duplicate triggers collapse on a partial unique `dedupe_key` while queued. Effects are idempotent (at-least-once processing, not exactly-once).
+- Kinds: `allocate_cycle`, `replace_rejection`, `process_project`, `analyse_submission`, `enrol_waiting`, `send_notification`, `archive_due`. A scheduler tick enqueues `allocate_cycle` every `ALLOCATION_INTERVAL_MINUTES` (default 15) and checks scheduled archives. Event triggers: onboarding completed, project ready, rejection, staff changes.
+- Replacement jobs have a higher priority and run before ordinary allocation.
+- The worker runs as `python -m app.worker` (a separate Render worker) or inside the API process with `RUN_WORKER_IN_API=true` for single-instance demos. Tests drain the queue synchronously.
+- System actions are audited with a null actor and `{"actor": "system"}`; no admin is impersonated.
+
+**Rejection with ranked replacement**
+- `POST /allocations/{id}/reject` (student, own active allocation, before any submission, cycle open; body `reason` ≥ 10 characters and `idempotency_key`). One transaction locks cycle → trainee → allocation (the same order as submission creation), marks the allocation `rejected` (row kept), records an `allocation_rejections` row with the match snapshot, and enqueues `replace_rejection` and `allocate_cycle` jobs keyed by the rejection. Replays return the stored result.
+- The exclusion key is stable: `(upper(trainee_code), projects.canonical_id)`. A DB trigger refuses any allocation insert that matches a rejection, so every path (worker, old endpoints, imports, retries) is covered.
+- Replacement candidates: same open cycle, enrolled, no active allocation, not excluded, gates pass, at or above the minimum match. Ranking uses one scale for the pool (`full` if all candidates have verified marks, otherwise `profile` for everyone); ties by enrolment time, then trainee id. The worker locks and re-checks the top candidate at commit and skips anyone assigned meanwhile. The outcome is stored on the rejection (`replacement_status`, ranking snapshot, selected rank, explanation). `waiting_for_eligible_trainee` is retried on later ticks. At most one successful replacement per rejection.
+- The rejector returns to the pool with all exclusions applied; their queue position (enrolment time) is unchanged.
+- `allocations_one_per_trainee` becomes a partial unique index on active rows. Admin reassign/delete stay blocked once work exists; the general manual allocation UI is removed.
+
+**Projects**
+- Authoring needs a title, a description and a PDF/DOCX document (private bucket `project-docs`). `process_project` extracts the text and generates trades, skills, difficulty, category, deliverables, guide steps, a timeline proposal and a min-practical requirement only when the document states one (spa_ai.project_gen; AI or a labelled rule fallback). Supervisor: the active supervisor with the best department/expertise overlap, then the fewest active projects, then id. None → `awaiting_supervisor`, retried when staff change.
+- `processing_status`: `awaiting_document → queued → processing → awaiting_supervisor | needs_attention | ready | failed`. Only `ready` projects are published (allocatable). Imported dataset rows with explicit metadata and a legacy https document link become ready without generation (provenance `import`).
+- Effective deadline = `projects.deadline` (explicit admin override), else the cycle `submission_deadline`. AI timelines are proposals only.
+
+**Submissions and evaluation**
+- A report URL or a PDF/DOCX report file is required; a video alone fails (client, server and DB check). ZIP/PPTX/images stay supplementary and never count as the analysable report.
+- `analyse_submission`: text snapshot + hash → originality (spa_ai.originality, `originality-1`) → automated report evaluation (spa_ai.report_eval, rubric `report-rubric-1`: implementation 25, testing 25, safety/SOP 15, documentation 15, reasoning 20; documented evidence only) → submission outcome (`evaluated`, or `rework_requested` when the total is under 50) → notification. Totals and grades are computed in Python. AI or extraction failures are retryable statuses, never zero marks. Without Groq the evaluation is `unavailable` and the submission waits for supervisor review.
+- The existing supervisor rubric table becomes the **verified practical evaluation** (optional, recorded only with real evidence). It is never copied from the automated report grade.
+- Originality is a deterministic 5-word shingle overlap against other people's internal submissions plus configured references, after excluding shared brief/guide/template text, short quotes, bibliography and short lines. It is null (not 0%) with too little eligible text. Semantic similarity, code similarity and AI-writing detection are reported as **not assessed / not available** because no validated provider is configured. Attention bands are configurable review heuristics, not probabilities, and flags never change marks.
+
+**Archive**
+- Cycles get `archive_at` (default: submission deadline + 7 days), `auto_archive_enabled`, `archived_at` and `archive_reason`. Manual archive shows an impact preview. Atomic policy: archiving locks the cycle row `FOR UPDATE`; every mutating job locks it `FOR SHARE` and re-checks the status, so a running job either commits before the freeze or sees `archived` and stops. Archiving retains everything; it is not deletion.
+
+**Onboarding**
+- Public sign-up creates a Student. `PUT /onboarding` saves a draft; `POST /onboarding/complete` validates it and enrols the trainee in the active cycle, or keeps the profile waiting until a cycle exists (`enrol_waiting` job on cycle creation). A typed trainee ID that already exists in the cycle is never linked (`IDENTITY_CONFLICT`, nothing revealed). Trainee-bound invitations keep working.
+
+**Consequences**: migration `0003_automation`. Removed endpoints: REC-01..03 and the admin auto-allocate/publish flow. New endpoints are listed in api.md "ADR-017 endpoints". Notifications go to an outbox (`EMAIL_BACKEND=disabled|console|smtp`); nothing is emailed unless SMTP is configured.

@@ -80,8 +80,8 @@ def test_rule_extraction_is_a_suggestion_and_reads_are_scoped(client, users, ram
     assert client.get(f"/api/v1/trainees/{t['id']}/resume", headers=other).status_code == 404
     assert client.get(f"/api/v1/resumes/{r['id']}/file-url", headers=other).status_code == 404
     assert ok(client.get("/api/v1/trainees/me/resumes/latest", headers=other))["data"] is None
-    # supervisors see nothing before allocations are published
-    sup = ramesh["s"]["sup_a"]
+    # a supervisor of other projects sees nothing
+    sup = ramesh["s"]["sup_b"]
     assert client.get(f"/api/v1/trainees/{t['id']}/resume", headers=sup).status_code == 404
 
 
@@ -175,12 +175,8 @@ def test_role_and_record_guards(client, users):
 def test_supervisor_sees_extraction_but_never_the_file(client, ramesh):
     admin, s, t = ramesh["admin"], ramesh["s"], ramesh["trainee"]
     r = ok(upload(client, ramesh["student"], make_pdf(RESUME)), 201)["data"]
-    project = s["projects"]["PRJ-EL-101"]
-    ok(
-        client.post("/api/v1/allocations", json={"trainee_id": t["id"], "project_id": project["id"]}, headers=admin),
-        201,
-    )
-    ok(client.post(f"/api/v1/cycles/{s['cycle']['id']}/transition", json={"to": "published"}, headers=admin))
+    # Ramesh (Electrician) was allocated automatically to a project supervised by sup_a
+    del admin
 
     seen = ok(client.get(f"/api/v1/trainees/{t['id']}/resume", headers=s["sup_a"]))["data"]
     assert seen["id"] == r["id"] and seen["extracted"]["skills"]
@@ -188,3 +184,26 @@ def test_supervisor_sees_extraction_but_never_the_file(client, ramesh):
     assert client.get(f"/api/v1/resumes/{r['id']}/file-url", headers=s["sup_a"]).status_code == 404
     # a supervisor of other projects still sees nothing
     assert client.get(f"/api/v1/trainees/{t['id']}/resume", headers=s["sup_b"]).status_code == 404
+
+
+def test_resume_reported_marks_are_stored_as_unverified_claims(client, ramesh):
+    st, t = ramesh["student"], ramesh["trainee"]
+    lines = [*RESUME, "Trade Theory Score: 79%", "Workshop Practical Score: 91%"]
+    r = ok(upload(client, st, make_pdf(lines)), 201)["data"]
+    marks = {m["field"]: m for m in r["extracted"]["assessment_marks"]}
+    assert marks["theory"]["value"] == 79.0 and marks["practical"]["value"] == 91.0
+    assert marks["safety"]["status"] == "not_found"
+    before = ok(client.get("/api/v1/trainees/me", headers=st))["data"]
+    body = {"reported_scores": {"resume_id": r["id"], "theory": 79, "practical": 90}}
+    me = ok(client.patch("/api/v1/trainees/me", headers=st, json=body))["data"]
+    rep = me["reported_scores"]
+    assert rep["verified"] is False and rep["source"] == "resume_reported"
+    assert rep["practical"] == {
+        "value": 90.0,
+        "extracted_value": 91.0,
+        "corrected": True,
+        "excerpt": marks["practical"]["excerpt"],
+    }
+    # official imported marks and the matching mode are untouched
+    assert me["scores"] == before["scores"] and me["match_mode"] == before["match_mode"]
+    assert t["scores"] == me["scores"]

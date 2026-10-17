@@ -1,4 +1,3 @@
-import { CalendarBlank, LinkBreak } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
@@ -8,7 +7,7 @@ import { qk } from "@/api/queryKeys";
 import type { UserRole } from "@/api/types";
 import { HOME } from "@/app/nav";
 import { useCurrentCycle } from "@/app/AppShell";
-import { EmptyState, ErrorState, Forbidden, LoadingState } from "@/components/shared";
+import { ErrorState, Forbidden, LoadingState } from "@/components/shared";
 
 import { useAuth } from "./AuthProvider";
 
@@ -47,22 +46,14 @@ export function useMyTrainee() {
   return useQuery({ queryKey: qk.trainees.me(), queryFn: () => call(api.GET("/api/v1/trainees/me")) });
 }
 
-/** Students need an active cycle and a linked trainee record (api.md C-9; TRN-08 is past the 48 h cut line). */
+/** Students without an enrolled trainee record (or without an open cycle) finish onboarding first (ADR-017).
+ * UX only: every student endpoint re-checks enrolment on the server. */
 export function StudentGate() {
   const cycle = useCurrentCycle();
   const me = useMyTrainee();
   if (cycle.isLoading || me.isLoading) return <LoadingState />;
   if (cycle.error) return <ErrorState error={cycle.error} onRetry={() => cycle.refetch()} />;
-  if (!cycle.data?.data)
-    return <EmptyState icon={<CalendarBlank />} title="No active programme cycle" description="Your programme team has not opened a project cycle yet. Check back later." />;
   if (me.error) return <ErrorState error={me.error} onRetry={() => me.refetch()} />;
-  if (!me.data?.data)
-    return (
-      <EmptyState
-        icon={<LinkBreak />}
-        title="Your trainee record is not linked yet"
-        description="Ask your programme coordinator to send you an invitation linked to your trainee record, then register using that link."
-      />
-    );
+  if (!cycle.data?.data || !me.data?.data) return <Navigate to="/student/onboarding" replace />;
   return <Outlet />;
 }

@@ -1,6 +1,6 @@
 # Smart Project Allocation — Claude working rules
 This is a hackathon project: prioritize a complete, working MVP while keeping the solution simple, scalable, robust, secure, maintainable, and sustainable. Avoid overengineering and unnecessary features.
-Hackathon app for Tata STRIVE: it manages ITI trainee projects end to end. Trainee data is imported, the AI recommends projects and explains its factors, the programme team makes the allocation decision, trainees submit their work, and supervisors evaluate it against a rubric.
+Hackathon app for Tata STRIVE: it manages ITI trainee projects end to end. Trainees are imported or self-register, projects are processed from their documents, a background worker matches and allocates trainees individually (with explained factors), trainees can reject a project before submitting (ranked replacement), submit a mandatory report, and receive an automated document evaluation plus a Plagiarism & Originality Analysis that supervisors review (ADR-017).
 Roles: **Student** (ITI trainee), **Supervisor** (facilitator/evaluator), **Admin** (programme team). Don't add other roles. The glossary is in `docs/requirements.md` §0.
 
 Read before any planning or architecture work:
@@ -29,10 +29,11 @@ If a contract must change, state the impact on DB, backend, frontend, tests, dep
 
 - ADR-001: FastAPI + Pydantic v2 + SQLAlchemy 2 + Alembic. OpenAPI is the contract, and frontend types are generated from it.
 - ADR-002: Public sign-up creates Students only. Staff are invited. The first Admin comes from a seed script.
-- ADR-003: Recommendations = deterministic rule scoring with itemised factors + optional Groq refinement and explanation, with a rule-only fallback. Auto-allocation produces a draft that the programme team reviews, edits and publishes. Gender is never a scoring input or sent to Groq.
-- ADR-011: Individual trainees are allocated (no teams). Capacity counts trainees. A cycle is `draft → published → archived`.
-- ADR-012: Evaluation uses the dataset's 5-criterion rubric (25/25/15/15/20) with a computed total and grade, plus a rework loop with versioned submissions.
+- ADR-003: Matching = deterministic rule scoring with itemised factors. Gender is never a scoring input or sent to Groq. (Its draft/review/publish workflow and recommendation screens are superseded by ADR-017.)
+- ADR-011: Individual trainees are allocated (no teams). (Capacity is removed by ADR-017; cycles are created active and are archived manually or on schedule.)
+- ADR-012: Versioned submissions with a rework loop; the dataset's 5-criterion rubric is the optional *verified practical* evaluation. ADR-017 adds an automated *report* evaluation (separate rubric) as the normal path.
 - ADR-013: Trainee records are owned by the programme team (admin edit + XLSX/CSV import, admins write scores) and can exist without a login. Student accounts link via trainee-bound invites or self-onboarding.
+- ADR-017: Judges' feedback. Durable job worker (Postgres queue) automates project processing, allocation (every 15 min + events), report analysis, notifications and scheduled archiving. Multi-trade trainees/projects; full (35/30/20/15) vs profile (60/40) score modes; one active allocation per trainee; owner rejection before first submission → permanent exclusion + ranked replacement; report required (video alone fails); originality = deterministic shingle overlap with exclusions, semantic/AI-writing reported as not assessed. Students see only their own project (nav: Dashboard, My Project). Admin nav: Overview, Projects, Allocation & Progress, Staff & Invitations.
 - ADR-015: Students (= ITI trainees) upload a resume (PDF/DOCX ≤ 5 MB). The server extracts suggested skills (Groq on redacted text, or a rule fallback). Nothing is applied until the student saves it through TRN-02. Supervisors see the extraction only, never the file.
 
 ## Repo layout (ADR-014)
@@ -47,12 +48,12 @@ Frontend → Vercel · API → Render · DB/Auth/Storage → Supabase · LLM →
 
 - **Security is enforced on the server.** Route guards are UX only. Deny by default, and run object-level checks on every record.
 - Validate all input at the API boundary (`extra="forbid"`). Students can never write scores, trade or codes.
-- Enforce capacity and allocation uniqueness in the DB (constraints/trigger) or in locked transactions.
+- Enforce allocation uniqueness (one active allocation per trainee) and rejection exclusions in the DB (constraints/trigger) or in locked transactions.
 - Every schema change goes through a migration. No dashboard edits.
 - Never commit secrets (Supabase secret key, DB URLs, `GROQ_API_KEY`, `.env*`, `.mcp.json`).
 - No PII in logs or Groq prompts (no name, code, centre, gender, email).
 - No mock data standing in for real backend behaviour. Tests use fakes only for external services (Storage, Groq).
-- Every recommendation shows its factors, and Σ factor points = score.
+- Every allocation shows its factors, and Σ factor points = score.
 
 ## How to work
 

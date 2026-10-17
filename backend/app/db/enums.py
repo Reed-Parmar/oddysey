@@ -54,6 +54,47 @@ class ExtractionSource(StrEnum):
     ai = "ai"
 
 
+class AllocationStatus(StrEnum):
+    active = "active"
+    rejected = "rejected"
+
+
+class ProjectProcessing(StrEnum):
+    awaiting_document = "awaiting_document"
+    queued = "queued"
+    processing = "processing"
+    awaiting_supervisor = "awaiting_supervisor"
+    needs_attention = "needs_attention"
+    ready = "ready"
+    failed = "failed"
+
+
+class JobStatus(StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
+class AnalysisStatus(StrEnum):
+    queued = "queued"
+    extracting = "extracting"
+    analysing = "analysing"
+    completed = "completed"
+    retrying = "retrying"
+    failed = "failed"
+    insufficient_evidence = "insufficient_evidence"
+    review_required = "review_required"
+    not_analyzable = "not_analyzable"
+
+
+class NotificationStatus(StrEnum):
+    queued = "queued"
+    sent = "sent"
+    failed = "failed"
+    not_configured = "not_configured"
+
+
 class AllocationSource(StrEnum):
     auto = "auto"
     manual = "manual"

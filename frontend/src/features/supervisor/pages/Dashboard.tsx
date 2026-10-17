@@ -151,19 +151,7 @@ export function DashboardPage() {
   if (isLoading) body = <LoadingState />;
   else if (error) body = <ErrorState error={error} onRetry={() => void refetch()} />;
   else if (!cycle) body = <NoCycleState />;
-  else if (!visible) {
-    body = (
-      <div className="space-y-6">
-        <Alert variant="info" icon={<Info />} title="Allocations are not published yet">
-          You can review your assigned projects now. Trainees, submissions and evaluations open once the programme team publishes allocations.
-        </Alert>
-        <section>
-          <ProjectsHeading />
-          <ProjectsSection />
-        </section>
-      </div>
-    );
-  } else {
+  else {
     const counts = new Map<string, number>();
     for (const r of grades.data ?? []) if (r.evaluation?.grade) counts.set(r.evaluation.grade, (counts.get(r.evaluation.grade) ?? 0) + 1);
     const gradeRows = GRADES.filter((g) => counts.get(g));

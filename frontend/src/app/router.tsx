@@ -18,6 +18,7 @@ const area = (load: () => Promise<ReactElement[]>) =>
 const StudentArea = area(() => import("@/features/student/routes").then((m) => m.studentRoutes));
 const SupervisorArea = area(() => import("@/features/supervisor/routes").then((m) => m.supervisorRoutes));
 const AdminArea = area(() => import("@/features/admin/routes").then((m) => m.adminRoutes));
+const StudentOnboarding = lazy(() => import("@/features/student/OnboardingPage").then((m) => ({ default: m.OnboardingPage })));
 
 const load = (el: ReactElement) => (
   <AreaBoundary>
@@ -36,6 +37,7 @@ export function AppRouter() {
           <Route path="/app" element={<RoleRedirect />} />
           <Route path="/account" element={<Account />} />
           <Route path="/student" element={<RequireRole role="student" />}>
+            <Route path="onboarding" element={load(<StudentOnboarding />)} />
             <Route element={<StudentGate />}>
               <Route path="*" element={load(<StudentArea />)} />
             </Route>

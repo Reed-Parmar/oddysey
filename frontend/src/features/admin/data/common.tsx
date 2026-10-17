@@ -1,4 +1,4 @@
-/** Helpers shared by the admin data pages (cycles, trainees, projects, users, overview). */
+/** Helpers shared by the admin pages (overview, projects, tracking, staff). */
 import { ArrowRight, Check, Copy, Info, MagnifyingGlass, Warning, WarningCircle, X } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
@@ -90,7 +90,8 @@ export function useInvalidate() {
 const CODE_MESSAGES: Record<string, string> = {
   SELF_MODIFICATION_FORBIDDEN: "You cannot change your own account",
   LAST_ADMIN: "At least one active admin is required",
-  ACTIVE_CYCLE_EXISTS: "Archive the current cycle before creating a new one",
+  ACTIVE_CYCLE_EXISTS: "Only one cycle can be active. Archive the current cycle before creating a new one",
+  RESOURCE_IN_USE: "This record is in use (for example, trainees are allocated to it or work was submitted), so it cannot be deleted",
   INVITATION_EXISTS: "An open invitation already exists for this email or trainee; revoke it first",
 };
 
@@ -325,21 +326,6 @@ export function ActionStack({ children, reason }: { children: ReactNode; reason?
   );
 }
 
-/** Compact capacity bar for table cells: filled / capacity, always with the numbers. */
-export function CapacityBar({ value, max, label = "Capacity filled" }: { value: number; max: number; label?: string }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  const full = max > 0 && value >= max;
-  return (
-    <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}
-      className="flex items-center gap-2 whitespace-nowrap">
-      <span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-neutral-bg">
-        <span className={cx("block h-full rounded-full", full ? "bg-success" : "bg-primary")} style={{ width: `${pct}%` }} />
-      </span>
-      <span className="text-sm tabular-nums"><span className="font-semibold text-text">{value}</span><span className="text-muted"> / {max}</span></span>
-    </div>
-  );
-}
-
 /** A titled group of form fields (two columns from `md`). Lives inside the form's single disabled fieldset. */
 export function FormSection({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
   const id = useId();
@@ -429,16 +415,50 @@ export function SkillsInput({ id, value, onChange, max = 15, disabled }: {
   );
 }
 
-/** ISO → value for <input type="datetime-local"> in the user's local time. */
+// ---------------------------------------------------------------- labels
+
+/** "needs_attention" → "Needs attention". */
+export const humanize = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (ch) => ch.toUpperCase());
+
+/** Allocation trigger (why the allocation job ran) → label. */
+const TRIGGER_LABEL: Record<string, string> = {
+  schedule: "Scheduled run",
+  replacement: "Replacement after a rejection",
+  rejection: "After a rejection",
+  run_now: "Run now (admin)",
+  onboarding: "Trainee onboarding",
+  project_ready: "Project became ready",
+  staff_change: "Staff change",
+  cycle_created: "Cycle created",
+};
+export const triggerLabel = (t?: string | null) => (t ? TRIGGER_LABEL[t] ?? humanize(t) : "—");
+
+// ---------------------------------------------------------------- Asia/Kolkata date-times
+
+/** Programme timezone: deadlines and archive dates are entered and shown in IST (UTC+05:30, no DST). */
+export const PROGRAMME_TZ = "Asia/Kolkata";
+const IST_OFFSET_MIN = 330;
+
+/** ISO → value for <input type="datetime-local">, expressed in Asia/Kolkata wall time. */
 export function toLocalInput(iso?: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  return new Date(t + IST_OFFSET_MIN * 60_000).toISOString().slice(0, 16);
 }
 
-/** <input type="datetime-local"> value (local) → ISO UTC. */
-export const fromLocalInput = (v: string) => new Date(v).toISOString();
+/** <input type="datetime-local"> value (Asia/Kolkata wall time) → ISO with the +05:30 offset. */
+export const fromLocalInput = (v: string) => `${v.length === 16 ? `${v}:00` : v}+05:30`;
+
+const istFmt = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: PROGRAMME_TZ });
+
+/** Formats an instant in Asia/Kolkata, e.g. "18 Oct 2026, 5:00 pm IST". */
+export const formatIst = (iso?: string | null) => (iso ? `${istFmt.format(new Date(iso))} IST` : "—");
+
+export function IstDateTime({ value }: { value?: string | null }) {
+  if (!value) return <span>—</span>;
+  return <time dateTime={value} className="tabular-nums">{formatIst(value)}</time>;
+}
 
 /** Copy-once reveal of an invite URL (admin.md §12.5). Kept only in component state. */
 export function InviteUrlReveal({ url, onCopied }: { url: string; onCopied: () => void }) {

@@ -15,7 +15,7 @@ import {
   BackLink, ConfirmDialog, ErrorState, FormError, FormField, LoadingState, NotFound, PageHeader, StatusBadge, useToast,
 } from "@/components/shared";
 import { Alert, Button, Card, Input, Textarea, buttonStyles, cx } from "@/components/ui";
-import { CRITERIA, SubmissionDetailView } from "@/features/shared/views";
+import { AnalysisReport, CRITERIA, ReviewActions, SubmissionDetailView, useAnalysis } from "@/features/shared/views";
 import { label } from "@/lib/statusLabels";
 
 import { useCycleState } from "../common";
@@ -119,7 +119,7 @@ function EvaluationForm({ submission, onDone }: { submission: Submission; onDone
   const final = outcome === "evaluated";
 
   return (
-    <Card icon={<Exam />} title="Evaluate this version" description="Rubric: five criteria, 100 points in total.">
+    <Card icon={<Exam />} title="Verified practical evaluation" description="Official rubric: five criteria, 100 points, recorded only with observed evidence.">
       <form noValidate onSubmit={handleSubmit(onValid)} className="flex flex-col gap-6">
         <fieldset>
           <legend className="mb-2 text-sm font-semibold text-text">Outcome <span className="text-danger" aria-hidden>*</span></legend>
@@ -251,7 +251,10 @@ export function SubmissionDetailPage() {
   if (!s) return <NotFound />;
 
   const cycle = cycleState.cycle;
-  const canEvaluate = s.status === "submitted" && cycle?.status === "published" && cycle.id === s.cycle_id;
+  const latestVersion = Math.max(s.version, ...(history.data?.data ?? []).map((h) => h.version));
+  // Verified practical evaluation is optional and separate from the automated report evaluation (ADR-017).
+  const canEvaluate = !s.evaluation && s.version === latestVersion && s.status !== "rework_requested"
+    && cycle?.status !== "archived" && cycle?.id === s.cycle_id;
 
   return (
     <>
@@ -266,29 +269,50 @@ export function SubmissionDetailPage() {
         }
       />
       {history.error && <div className="mb-4"><ErrorState error={history.error} onRetry={() => void history.refetch()} /></div>}
-      {canEvaluate ? (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-          <div className="min-w-0 space-y-4">
-            <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-muted uppercase">
-              <Info aria-hidden size={16} /> Submission evidence
-            </h2>
-            <SubmissionDetailView submission={s} history={history.data?.data} historyHref={(x) => `/supervisor/submissions/${x.id}`} />
-          </div>
-          <div className="min-w-0 lg:sticky lg:top-6">
-            <EvaluationForm key={s.id} submission={s} onDone={() => void sub.refetch()} />
-          </div>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+        <div className="min-w-0 space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-muted uppercase">
+            <Info aria-hidden size={16} /> Submission evidence
+          </h2>
+          <SubmissionDetailView submission={s} history={history.data?.data} historyHref={(x) => `/supervisor/submissions/${x.id}`} />
+          {canEvaluate ? (
+            <details className="rounded-xl border border-border bg-surface p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Record a verified practical evaluation (optional)</summary>
+              <p className="mt-2 mb-3 text-xs text-muted">
+                Only when you have observed the work itself: workmanship, a working demo, safety practice and a viva.
+                It is stored separately from the automated report evaluation and is never copied from it.
+              </p>
+              <EvaluationForm key={s.id} submission={s} onDone={() => void sub.refetch()} />
+            </details>
+          ) : !s.evaluation && <EvaluationReasonPanel submission={s} cycle={cycle} />}
         </div>
-      ) : (
-        <div className="max-w-4xl">
-          <SubmissionDetailView
-            submission={s}
-            history={history.data?.data}
-            historyHref={(x) => `/supervisor/submissions/${x.id}`}
-            actions={<EvaluationReasonPanel submission={s} cycle={cycle} />}
-          />
+        <div className="min-w-0 space-y-4">
+          <SupervisorAnalysis submissionId={s.id} />
         </div>
-      )}
+      </div>
       {cycleState.error && <p className="mt-3 text-sm text-danger">Could not load the cycle status: {errorMessage(cycleState.error)}</p>}
+    </>
+  );
+}
+
+/** Plagiarism & Originality Analysis + automated evaluation for this version, with review actions. */
+function SupervisorAnalysis({ submissionId }: { submissionId: string }) {
+  const q = useAnalysis(submissionId, true);
+  if (q.isLoading) return <LoadingState />;
+  if (q.error) {
+    if (q.error instanceof ApiError && q.error.status === 404) {
+      return <Alert variant="info" icon={<Info />}>The report has not been analysed yet. Analysis runs automatically after submission.</Alert>;
+    }
+    return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  }
+  const a = q.data?.data;
+  if (!a) return null;
+  return (
+    <>
+      <Card title="Report analysis" description="Automated, evidence-based checks. Flags never change marks by themselves.">
+        <AnalysisReport analysis={a} showExport />
+      </Card>
+      <ReviewActions analysis={a} submissionId={submissionId} />
     </>
   );
 }

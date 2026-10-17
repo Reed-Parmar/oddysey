@@ -9,6 +9,56 @@
 
 ---
 
+## 0. ADR-017 changes (rev 3, binding — supersedes conflicting text below)
+
+The judges' feedback (docs/decisions.md ADR-017) changed the API. Where §2–§8 disagree with this section,
+**this section wins**. The OpenAPI file `contracts/openapi.json` is generated from the code and is exact.
+
+**Removed:** REC-01..03 (`/cycles/{id}/recommendation-runs*`, `/recommendations`), ALLOC-02 (`/cycles/{id}/allocation-runs`),
+ALLOC-03/04/05 manual create/reassign/delete, CYC transitions other than archive, the capacity field (`max_trainees`
+is no longer accepted or returned), manual `project_code` input.
+
+**Error codes added:** `REPORT_REQUIRED` (422), `ALLOCATION_REJECTED`, `REJECTION_NOT_ALLOWED_AFTER_SUBMISSION`,
+`CYCLE_CLOSED`, `IDEMPOTENCY_KEY_REUSED`, `ALLOCATION_EXCLUDED` (DB exclusion trigger), `IDENTITY_CONFLICT`,
+`ONBOARDING_INCOMPLETE`, `ALREADY_ENROLLED`, `DOCUMENT_NO_TEXT`, `DOCUMENT_UNREADABLE`, `TRAINEE_ALREADY_ALLOCATED`
+(now: one ACTIVE allocation).
+
+| ID | Method | Path | Roles | Notes |
+|---|---|---|---|---|
+| ONB-01 | GET | `/onboarding` | student | Draft profile, `status` draft/waiting_for_cycle/enrolled/identity_conflict, `missing[]` |
+| ONB-02 | PUT | `/onboarding` | student | Save progress (full_name, gender, trainee_code, centre_name, trade_ids[1..5], skills, career_interest, background) |
+| ONB-03 | POST | `/onboarding/complete` | student | Validate + enrol in the active cycle, or wait for one. A typed code never claims an existing record (409 IDENTITY_CONFLICT) |
+| NOT-01 | GET | `/me/notifications` | any | In-app view of the outbox; `delivery` = email status |
+| NOT-02 | POST | `/me/notifications/read` | any | Mark all read |
+| CYC-02 | POST | `/cycles` | admin | Created **active** (`published`); `archive_at` defaults to deadline + 7 days; `auto_archive_enabled`, `archive_timezone` |
+| CYC-04 | PATCH | `/cycles/{id}` | admin | name, submission_deadline, archive_at, auto_archive_enabled, archive_timezone |
+| CYC-07 | GET | `/cycles/{id}/archive-preview` | admin | Counts of incomplete work at the boundary |
+| CYC-08 | POST | `/cycles/{id}/archive` | admin | `{reason, confirm: true}`; freezes, never deletes |
+| PRJ-01/02 | GET | `/projects`, `/projects/{id}` | admin all · supervisor own · student only projects of their ACTIVE allocation | `ProjectOut`: target_trades[], processing_status, processing_error, generation_source, generated (guide), document, min_match_score, deadline, effective_deadline, stats {working_individually, rejected_total} (staff only) |
+| PRJ-03 | POST | `/projects` | admin | multipart: cycle_id, title, description, file (PDF/DOCX ≤ 10 MB, text layer required); code generated `PRJ-0001`…; processing queued |
+| PRJ-04 | PATCH | `/projects/{id}` | admin | title, description, trade_ids[1..5], difficulty, skills, min_practical_score, min_match_score, category, supervisor_id, deadline. Trades/difficulty/minimums set here are authoritative (never overwritten by generation) |
+| PRJ-07 | PUT | `/projects/{id}/document` | admin | Replace the document; re-processing queued |
+| PRJ-08 | POST | `/projects/{id}/reprocess` | admin | Regenerate metadata/guide |
+| PRJ-09 | GET | `/projects/{id}/document-url` | as PRJ-02 | 5-minute signed URL, or the legacy https link |
+| PRJ-06 | POST | `/projects/{id}/transition` | admin | draft (pause) / published (only when ready) / archived; never removes allocations |
+| ALLOC-01 | GET | `/allocations` | admin, supervisor (own projects) | `status` filter (default active). `AllocationOut` adds status, trigger, match_mode, min_match_score, scoring_version, explanation, factors, rejected_at; `created_by` null = system |
+| ALLOC-07 | POST | `/allocations/{id}/reject` | student (owner) | `{reason (10–500), idempotency_key}`; before the first submission, cycle open; replay returns the same result |
+| ALLOC-08 | GET | `/trainees/me/allocation-history` | student | Own allocations incl. rejected; no ranking data |
+| ALLOC-09 | GET | `/admin/trainees/{id}/allocation-history` | admin | Includes replacement ranking snapshot (mode, candidates, selected rank, explanation) |
+| SUB-01 | POST | `/submissions` | student | A report link or a PDF/DOCX report file is REQUIRED (`REPORT_REQUIRED`); other files only as supplements; analysis queued |
+| SUB-05 | GET | `/submissions/{id}/analysis` | as SUB-03 | `AnalysisOut`: status, originality (sources redacted to the viewer's access), semantic/ai_writing (not assessed/not available), evaluation, effective_criteria, reviews |
+| SUB-06 | POST | `/submissions/{id}/analysis/review` | supervisor of project, admin | `{action: confirm|annotate|amend|request_explanation|request_rework, note, amended_criteria?}`; history kept |
+| SUB-07 | POST | `/submissions/{id}/analysis/retry` | supervisor of project, admin | Only for `failed` |
+| SUB-08 | GET | `/submissions/{id}/analysis/export` | as SUB-03 | Printable HTML of the persisted findings |
+| EVAL-01 | POST | `/submissions/{id}/evaluation` | supervisor | Now the **verified practical evaluation** (optional, latest version, once per version) |
+| PROG-01 | GET | `/progress` | any (scoped) | Envelope adds `summary` over the whole filtered set; rows add waiting_reason, analysis_status, evaluation.score_type, deadline, archived, rejections; filters analysis_status |
+| TRN-02 | PATCH | `/trainees/me` | student | adds trade_ids, reported_scores `{resume_id, theory?, practical?, safety?}` (unverified) |
+| ADM-01 | GET | `/admin/automation` | admin | Matching/automation status |
+| ADM-02 | POST | `/admin/automation/run-now` | admin | Optional nudge; the schedule runs anyway |
+| IMP-03 | POST | `/admin/imports/staff` | admin | XLSX/CSV Email, Full Name, Role, Department?; dry_run; invitations + queued emails |
+| INV-02 | POST | `/admin/invitations` | admin | adds full_name, department, send_email; list rows add email_delivery |
+| IMP-01/02 | POST | `/admin/imports/trainees|projects` | admin | Trades may be comma-separated; project codes optional (generated); "Max Trainee Capacity" ignored |
+
 ## 1. Conventions
 
 | Topic | Rule |

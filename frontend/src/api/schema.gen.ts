@@ -4,6 +4,43 @@
  */
 
 export interface paths {
+    "/api/v1/admin/automation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Automation */
+        get: operations["automation_api_v1_admin_automation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/automation/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Now
+         * @description Optional nudge: queue an allocation run now (the schedule runs it anyway).
+         */
+        post: operations["run_now_api_v1_admin_automation_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports/projects": {
         parameters: {
             query?: never;
@@ -15,6 +52,27 @@ export interface paths {
         put?: never;
         /** Import Projects */
         post: operations["import_projects_api_v1_admin_imports_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/imports/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Staff
+         * @description Staff spreadsheet (XLSX/CSV: Email, Full Name, Role [supervisor|admin], optional Department).
+         *     Each valid new address gets an invitation and a queued email. Existing users/invites are skipped.
+         */
+        post: operations["import_staff_api_v1_admin_imports_staff_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -90,6 +148,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/trainees/{trainee_id}/allocation-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trainee History */
+        get: operations["trainee_history_api_v1_admin_trainees__trainee_id__allocation_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -134,15 +209,14 @@ export interface paths {
         /** List Allocations */
         get: operations["list_allocations_api_v1_allocations_get"];
         put?: never;
-        /** Create Allocation */
-        post: operations["create_allocation_api_v1_allocations_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/allocations/{allocation_id}": {
+    "/api/v1/allocations/{allocation_id}/reject": {
         parameters: {
             query?: never;
             header?: never;
@@ -151,13 +225,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /** Delete Allocation */
-        delete: operations["delete_allocation_api_v1_allocations__allocation_id__delete"];
+        /**
+         * Reject
+         * @description Only the trainee who owns the active allocation, before any submission, while the cycle is open.
+         *     Replaying the same idempotency key returns the stored result without new jobs or counts.
+         */
+        post: operations["reject_api_v1_allocations__allocation_id__reject_post"];
+        delete?: never;
         options?: never;
         head?: never;
-        /** Reassign Allocation */
-        patch: operations["reassign_allocation_api_v1_allocations__allocation_id__patch"];
+        patch?: never;
         trace?: never;
     };
     "/api/v1/auth/provision": {
@@ -230,7 +307,7 @@ export interface paths {
         patch: operations["patch_cycle_api_v1_cycles__cycle_id__patch"];
         trace?: never;
     };
-    "/api/v1/cycles/{cycle_id}/allocation-runs": {
+    "/api/v1/cycles/{cycle_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -239,59 +316,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Auto Allocate */
-        post: operations["auto_allocate_api_v1_cycles__cycle_id__allocation_runs_post"];
+        /** Archive */
+        post: operations["archive_api_v1_cycles__cycle_id__archive_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cycles/{cycle_id}/recommendation-runs": {
+    "/api/v1/cycles/{cycle_id}/archive-preview": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Start Run */
-        post: operations["start_run_api_v1_cycles__cycle_id__recommendation_runs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/cycles/{cycle_id}/recommendation-runs/latest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Latest Run */
-        get: operations["latest_run_api_v1_cycles__cycle_id__recommendation_runs_latest_get"];
+        /** Archive Preview */
+        get: operations["archive_preview_api_v1_cycles__cycle_id__archive_preview_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/cycles/{cycle_id}/transition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Transition Cycle */
-        post: operations["transition_cycle_api_v1_cycles__cycle_id__transition_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -350,6 +393,78 @@ export interface paths {
         patch: operations["patch_me_api_v1_me_patch"];
         trace?: never;
     };
+    "/api/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Notifications */
+        get: operations["my_notifications_api_v1_me_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_api_v1_me_notifications_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Onboarding */
+        get: operations["get_onboarding_api_v1_onboarding_get"];
+        /**
+         * Save Onboarding
+         * @description Save progress (partial data allowed). Gender stays private and is never a matching input.
+         */
+        put: operations["save_onboarding_api_v1_onboarding_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Onboarding */
+        post: operations["complete_onboarding_api_v1_onboarding_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/progress": {
         parameters: {
             query?: never;
@@ -404,6 +519,60 @@ export interface paths {
         patch: operations["patch_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace Document */
+        put: operations["replace_document_api_v1_projects__project_id__document_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/document-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project Document Url */
+        get: operations["project_document_url_api_v1_projects__project_id__document_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess Project
+         * @description Regenerate metadata/guide (explicit admin values are still kept).
+         */
+        post: operations["reprocess_project_api_v1_projects__project_id__reprocess_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/transition": {
         parameters: {
             query?: never;
@@ -413,25 +582,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Transition Project */
+        /**
+         * Transition Project
+         * @description Take a project out of allocation (draft/archived) or put a READY project back. Existing
+         *     individual allocations are never removed by a transition.
+         */
         post: operations["transition_project_api_v1_projects__project_id__transition_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/recommendations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Recommendations */
-        get: operations["list_recommendations_api_v1_recommendations_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -507,6 +663,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/submissions/{submission_id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Analysis */
+        get: operations["get_analysis_api_v1_submissions__submission_id__analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/submissions/{submission_id}/analysis/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Analysis
+         * @description Printable HTML of exactly the persisted findings and the current review state.
+         */
+        get: operations["export_analysis_api_v1_submissions__submission_id__analysis_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/submissions/{submission_id}/analysis/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Analysis
+         * @description Retry a FAILED analysis (same revision; completed deterministic stages are reused).
+         */
+        post: operations["retry_analysis_api_v1_submissions__submission_id__analysis_retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/submissions/{submission_id}/analysis/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Analysis
+         * @description Supervisor/admin review: keeps the automated findings and adds a review history entry.
+         */
+        post: operations["review_analysis_api_v1_submissions__submission_id__analysis_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/submissions/{submission_id}/evaluation": {
         parameters: {
             query?: never;
@@ -516,7 +749,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Evaluate Submission */
+        /**
+         * Evaluate Submission
+         * @description Verified practical evaluation by the supervisor (observed workmanship, demo, safety, viva). Separate
+         *     from the automated report evaluation; recorded only with real evidence, once per version.
+         */
         post: operations["evaluate_submission_api_v1_submissions__submission_id__evaluation_post"];
         delete?: never;
         options?: never;
@@ -591,6 +828,26 @@ export interface paths {
         head?: never;
         /** Patch My Trainee */
         patch: operations["patch_my_trainee_api_v1_trainees_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/trainees/me/allocation-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My History
+         * @description The student's own allocations in every cycle (current, rejected, archived). Read-only.
+         */
+        get: operations["my_history_api_v1_trainees_me_allocation_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/trainees/me/resumes": {
@@ -713,22 +970,26 @@ export interface components {
         };
         /** AllocStats */
         AllocStats: {
-            /** Allocated */
-            allocated: number;
-            /** Auto */
-            auto: number;
+            /** Assigned */
+            assigned: number;
             /** Average Match Score */
             average_match_score: number | null;
-            /** Capacity Total */
-            capacity_total: number;
-            /** Capacity Used */
-            capacity_used: number;
-            /** Manual */
-            manual: number;
-            /** Overrides */
-            overrides: number;
-            /** Unallocated */
-            unallocated: number;
+            /** By Mode */
+            by_mode: {
+                [key: string]: number;
+            };
+            /** By Trigger */
+            by_trigger: {
+                [key: string]: number;
+            };
+            /** Completed Replacements */
+            completed_replacements: number;
+            /** Pending Replacements */
+            pending_replacements: number;
+            /** Rejections Total */
+            rejections_total: number;
+            /** Unassigned */
+            unassigned: number;
         };
         /** AllocSupervisorRef */
         AllocSupervisorRef: {
@@ -744,21 +1005,6 @@ export interface components {
              */
             id: string;
         };
-        /** AllocationCreate */
-        AllocationCreate: {
-            /** Override Reason */
-            override_reason?: string | null;
-            /**
-             * Project Id
-             * Format: uuid
-             */
-            project_id: string;
-            /**
-             * Trainee Id
-             * Format: uuid
-             */
-            trainee_id: string;
-        };
         /** AllocationOut */
         AllocationOut: {
             /**
@@ -766,12 +1012,14 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            created_by: components["schemas"]["UserRef"];
+            created_by: components["schemas"]["UserRef"] | null;
             /**
              * Cycle Id
              * Format: uuid
              */
             cycle_id: string;
+            /** Explanation */
+            explanation: string | null;
             /** Factors */
             factors: components["schemas"]["FactorOut"][] | null;
             /**
@@ -781,56 +1029,31 @@ export interface components {
             id: string;
             /** Is Override */
             is_override: boolean;
+            /** Match Mode */
+            match_mode: string | null;
             /** Match Score */
             match_score: number | null;
+            /** Min Match Score */
+            min_match_score: number;
             /** Override Reason */
             override_reason: string | null;
             project: components["schemas"]["AllocProjectRef"];
             /** Recommendation Id */
             recommendation_id: string | null;
+            /** Rejected At */
+            rejected_at: string | null;
+            /** Scoring Version */
+            scoring_version: string | null;
             source: components["schemas"]["AllocationSource"];
+            status: components["schemas"]["AllocationStatus"];
             trainee: components["schemas"]["TraineeRefTrade"];
+            /** Trigger */
+            trigger: string | null;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-        };
-        /** AllocationPatch */
-        AllocationPatch: {
-            /** Override Reason */
-            override_reason?: string | null;
-            /**
-             * Project Id
-             * Format: uuid
-             */
-            project_id: string;
-        };
-        /** AllocationRunOut */
-        AllocationRunOut: {
-            /** Allocated Count */
-            allocated_count: number;
-            /** Average Match Score */
-            average_match_score: number | null;
-            /**
-             * Cycle Id
-             * Format: uuid
-             */
-            cycle_id: string;
-            /** Manual Kept Count */
-            manual_kept_count: number;
-            /**
-             * Ran At
-             * Format: date-time
-             */
-            ran_at: string;
-            /**
-             * Recommendation Run Id
-             * Format: uuid
-             */
-            recommendation_run_id: string;
-            /** Unallocated Trainees */
-            unallocated_trainees: components["schemas"]["UnallocatedTrainee"][];
         };
         /**
          * AllocationSource
@@ -838,10 +1061,154 @@ export interface components {
          */
         AllocationSource: "auto" | "manual";
         /**
+         * AllocationStatus
+         * @enum {string}
+         */
+        AllocationStatus: "active" | "rejected";
+        /** AmendedCriterion */
+        AmendedCriterion: {
+            /** Key */
+            key: string;
+            /** Points */
+            points: number;
+        };
+        /** AnalysisOut */
+        AnalysisOut: {
+            /** Ai Writing */
+            ai_writing: {
+                [key: string]: unknown;
+            } | null;
+            /** Amended */
+            amended: boolean;
+            /** Corpus */
+            corpus: {
+                [key: string]: unknown;
+            } | null;
+            /** Effective Criteria */
+            effective_criteria: {
+                [key: string]: unknown;
+            }[];
+            /** Evaluation */
+            evaluation: {
+                [key: string]: unknown;
+            } | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Hash */
+            input_hash: string | null;
+            /** Originality */
+            originality: {
+                [key: string]: unknown;
+            } | null;
+            /** Parser */
+            parser: string | null;
+            /** Pipeline Version */
+            pipeline_version: string;
+            /** Review State */
+            review_state: string;
+            /** Reviews */
+            reviews: components["schemas"]["ReviewOut"][];
+            /** Revision */
+            revision: number;
+            /** Semantic */
+            semantic: {
+                [key: string]: unknown;
+            } | null;
+            /** Source Type */
+            source_type: string | null;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["AnalysisStatus"];
+            /** Status Reason */
+            status_reason: string | null;
+            /**
+             * Submission Id
+             * Format: uuid
+             */
+            submission_id: string;
+            /** Submission Version */
+            submission_version: number;
+            /** Viewer Can Review */
+            viewer_can_review: boolean;
+        };
+        /**
+         * AnalysisStatus
+         * @enum {string}
+         */
+        AnalysisStatus: "queued" | "extracting" | "analysing" | "completed" | "retrying" | "failed" | "insufficient_evidence" | "review_required" | "not_analyzable";
+        /** ArchiveIn */
+        ArchiveIn: {
+            /** Confirm */
+            confirm: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /** ArchivePreview */
+        ArchivePreview: {
+            /** Active Allocations */
+            active_allocations: number;
+            /** Allocations Without Submission */
+            allocations_without_submission: number;
+            /** Archive At */
+            archive_at: string | null;
+            /** Auto Archive Enabled */
+            auto_archive_enabled: boolean;
+            /** Pending Replacements */
+            pending_replacements: number;
+            /** Rework Requested */
+            rework_requested: number;
+            /** Submissions Awaiting Analysis */
+            submissions_awaiting_analysis: number;
+            /** Submissions Awaiting Evaluation */
+            submissions_awaiting_evaluation: number;
+            /** Unassigned Trainees */
+            unassigned_trainees: number;
+        };
+        /**
          * AssessmentStatus
          * @enum {string}
          */
         AssessmentStatus: "pending" | "complete";
+        /** AutomationStats */
+        AutomationStats: {
+            /** Ai Configured */
+            ai_configured: boolean;
+            /** Email Backend */
+            email_backend: string;
+            /** Failed Jobs 24H */
+            failed_jobs_24h: number;
+            /** Interval Minutes */
+            interval_minutes: number;
+            /** Last Allocation At */
+            last_allocation_at: string | null;
+            /** Last Allocation Result */
+            last_allocation_result: {
+                [key: string]: unknown;
+            } | null;
+            /** Next Allocation Estimate */
+            next_allocation_estimate: string | null;
+            /** Queued Jobs */
+            queued_jobs: number;
+        };
+        /** Body_create_project_api_v1_projects_post */
+        Body_create_project_api_v1_projects_post: {
+            /**
+             * Cycle Id
+             * Format: uuid
+             */
+            cycle_id: string;
+            /** Description */
+            description: string;
+            /** File */
+            file: string;
+            /** Title */
+            title: string;
+        };
         /** Body_create_submission_api_v1_submissions_post */
         Body_create_submission_api_v1_submissions_post: {
             /** Bom Cost Inr */
@@ -869,6 +1236,16 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_staff_api_v1_admin_imports_staff_post */
+        Body_import_staff_api_v1_admin_imports_staff_post: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** File */
+            file: string;
+        };
         /** Body_import_trainees_api_v1_admin_imports_trainees_post */
         Body_import_trainees_api_v1_admin_imports_trainees_post: {
             /** Cycle Id */
@@ -878,6 +1255,11 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
+            /** File */
+            file: string;
+        };
+        /** Body_replace_document_api_v1_projects__project_id__document_put */
+        Body_replace_document_api_v1_projects__project_id__document_put: {
             /** File */
             file: string;
         };
@@ -899,6 +1281,18 @@ export interface components {
         };
         /** CycleIn */
         CycleIn: {
+            /** Archive At */
+            archive_at?: string | null;
+            /**
+             * Archive Timezone
+             * @default Asia/Kolkata
+             */
+            archive_timezone: string;
+            /**
+             * Auto Archive Enabled
+             * @default true
+             */
+            auto_archive_enabled: boolean;
             /** Name */
             name: string;
             /**
@@ -909,6 +1303,16 @@ export interface components {
         };
         /** CycleOut */
         CycleOut: {
+            /** Archive At */
+            archive_at: string | null;
+            /** Archive Reason */
+            archive_reason: string | null;
+            /** Archive Timezone */
+            archive_timezone: string;
+            /** Archived At */
+            archived_at: string | null;
+            /** Auto Archive Enabled */
+            auto_archive_enabled: boolean;
             /**
              * Created At
              * Format: date-time
@@ -935,6 +1339,12 @@ export interface components {
         };
         /** CyclePatch */
         CyclePatch: {
+            /** Archive At */
+            archive_at?: string | null;
+            /** Archive Timezone */
+            archive_timezone?: string | null;
+            /** Auto Archive Enabled */
+            auto_archive_enabled?: boolean | null;
             /** Name */
             name?: string | null;
             /** Submission Deadline */
@@ -945,42 +1355,38 @@ export interface components {
          * @enum {string}
          */
         CycleStatus: "draft" | "published" | "archived";
-        /** Demand */
-        Demand: {
-            /** Allocated */
-            allocated: number;
-            /** Eligible Trainees */
-            eligible_trainees: number;
-            /** Max Trainees */
-            max_trainees: number;
-            /** Project Code */
-            project_code: string;
-            /**
-             * Project Id
-             * Format: uuid
-             */
-            project_id: string;
-            /** Title */
-            title: string;
-        };
         /**
          * Difficulty
          * @enum {string}
          */
         Difficulty: "beginner" | "intermediate" | "advanced";
+        /** DocumentInfo */
+        DocumentInfo: {
+            /** Mime Type */
+            mime_type: string;
+            /** Name */
+            name: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /** Envelope[AdminUser] */
         Envelope_AdminUser_: {
             data: components["schemas"]["AdminUser"];
             meta?: components["schemas"]["Meta"] | null;
         };
-        /** Envelope[AllocationOut] */
-        Envelope_AllocationOut_: {
-            data: components["schemas"]["AllocationOut"];
+        /** Envelope[AnalysisOut] */
+        Envelope_AnalysisOut_: {
+            data: components["schemas"]["AnalysisOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
-        /** Envelope[AllocationRunOut] */
-        Envelope_AllocationRunOut_: {
-            data: components["schemas"]["AllocationRunOut"];
+        /** Envelope[ArchivePreview] */
+        Envelope_ArchivePreview_: {
+            data: components["schemas"]["ArchivePreview"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[AutomationStats] */
+        Envelope_AutomationStats_: {
+            data: components["schemas"]["AutomationStats"];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[CycleOut] */
@@ -1008,9 +1414,14 @@ export interface components {
             data: components["schemas"]["InvitationCreated"];
             meta?: components["schemas"]["Meta"] | null;
         };
-        /** Envelope[InvitationOut] */
-        Envelope_InvitationOut_: {
-            data: components["schemas"]["InvitationOut"];
+        /** Envelope[InvitationRow] */
+        Envelope_InvitationRow_: {
+            data: components["schemas"]["InvitationRow"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[OnboardingOut] */
+        Envelope_OnboardingOut_: {
+            data: components["schemas"]["OnboardingOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[Overview] */
@@ -1023,14 +1434,19 @@ export interface components {
             data: components["schemas"]["ProjectOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
+        /** Envelope[RejectionOut] */
+        Envelope_RejectionOut_: {
+            data: components["schemas"]["RejectionOut"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
         /** Envelope[ResumeOut] */
         Envelope_ResumeOut_: {
             data: components["schemas"]["ResumeOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
-        /** Envelope[RunOut] */
-        Envelope_RunOut_: {
-            data: components["schemas"]["RunOut"];
+        /** Envelope[StaffImportResult] */
+        Envelope_StaffImportResult_: {
+            data: components["schemas"]["StaffImportResult"];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[SubmissionOut] */
@@ -1145,6 +1561,16 @@ export interface components {
         GradeRef: {
             /** Grade */
             grade: string | null;
+            /**
+             * Max Score
+             * @default 100
+             */
+            max_score: number;
+            /**
+             * Score Type
+             * @default verified_practical
+             */
+            score_type: string;
             /** Total Score */
             total_score: number | null;
         };
@@ -1159,6 +1585,20 @@ export interface components {
             status: string;
             /** Version */
             version?: string | null;
+        };
+        /** HistoryEntry */
+        HistoryEntry: {
+            allocation: components["schemas"]["AllocationOut"];
+            /** Rejected At */
+            rejected_at: string | null;
+            /** Rejection Reason */
+            rejection_reason: string | null;
+            /** Replacement */
+            replacement: {
+                [key: string]: unknown;
+            } | null;
+            /** Replacement Status */
+            replacement_status: string | null;
         };
         /** ImportResult */
         ImportResult: {
@@ -1183,23 +1623,32 @@ export interface components {
         };
         /** InvitationCreated */
         InvitationCreated: {
-            invitation: components["schemas"]["InvitationOut"];
+            invitation: components["schemas"]["InvitationRow"];
             /** Invite Url */
             invite_url: string;
         };
         /** InvitationIn */
         InvitationIn: {
+            /** Department */
+            department?: string | null;
             /**
              * Email
              * Format: email
              */
             email: string;
+            /** Full Name */
+            full_name?: string | null;
             role: components["schemas"]["UserRole"];
+            /**
+             * Send Email
+             * @default true
+             */
+            send_email: boolean;
             /** Trainee Id */
             trainee_id?: string | null;
         };
-        /** InvitationOut */
-        InvitationOut: {
+        /** InvitationRow */
+        InvitationRow: {
             /** Accepted At */
             accepted_at: string | null;
             /**
@@ -1207,13 +1656,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Department */
+            department: string | null;
             /** Email */
             email: string;
+            /** Email Delivery */
+            email_delivery: string | null;
             /**
              * Expires At
              * Format: date-time
              */
             expires_at: string;
+            /** Full Name */
+            full_name: string | null;
             /**
              * Id
              * Format: uuid
@@ -1249,10 +1704,20 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ListEnvelope[HistoryEntry] */
+        ListEnvelope_HistoryEntry_: {
+            /** Data */
+            data: components["schemas"]["HistoryEntry"][];
+        };
         /** ListEnvelope[NamedRef] */
         ListEnvelope_NamedRef_: {
             /** Data */
             data: components["schemas"]["NamedRef"][];
+        };
+        /** ListEnvelope[NotificationOut] */
+        ListEnvelope_NotificationOut_: {
+            /** Data */
+            data: components["schemas"]["NotificationOut"][];
         };
         /** MePatch */
         MePatch: {
@@ -1279,17 +1744,84 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** NotificationOut */
+        NotificationOut: {
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Delivery */
+            delivery: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Link */
+            link: string | null;
+            /** Read At */
+            read_at: string | null;
+            /** Subject */
+            subject: string;
+        };
+        /**
+         * OnboardingData
+         * @description Draft fields (all optional while saving; `complete` validates required ones).
+         */
+        OnboardingData: {
+            /** Background */
+            background?: string | null;
+            /** Career Interest */
+            career_interest?: string | null;
+            /** Centre Name */
+            centre_name?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Gender */
+            gender?: string | null;
+            /** Skills */
+            skills?: string[];
+            /** Trade Ids */
+            trade_ids?: string[];
+            /** Trainee Code */
+            trainee_code?: string | null;
+        };
+        /** OnboardingOut */
+        OnboardingOut: {
+            /** Completed At */
+            completed_at: string | null;
+            /** Cycle Open */
+            cycle_open: boolean;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Enrolled */
+            enrolled: boolean;
+            /** Has History */
+            has_history: boolean;
+            /** Message */
+            message: string;
+            /** Missing */
+            missing: string[];
+            /** Status */
+            status: string;
+        };
         /** Overview */
         Overview: {
             allocation: components["schemas"]["AllocStats"] | null;
+            automation: components["schemas"]["AutomationStats"];
             cycle: components["schemas"]["CycleBrief"] | null;
-            /** Demand */
-            demand: components["schemas"]["Demand"][] | null;
             /** Grades */
             grades: {
                 [key: string]: number;
             } | null;
-            recommendations: components["schemas"]["RecStats"] | null;
+            projects: components["schemas"]["ProjectBrief"] | null;
             submissions: components["schemas"]["SubStats"] | null;
             trainees: components["schemas"]["TraineeStats"] | null;
             users: components["schemas"]["UserStats"];
@@ -1312,28 +1844,16 @@ export interface components {
             data: components["schemas"]["CycleOut"][];
             meta: components["schemas"]["PageMeta"];
         };
-        /** PageEnvelope[InvitationOut] */
-        PageEnvelope_InvitationOut_: {
+        /** PageEnvelope[InvitationRow] */
+        PageEnvelope_InvitationRow_: {
             /** Data */
-            data: components["schemas"]["InvitationOut"][];
-            meta: components["schemas"]["PageMeta"];
-        };
-        /** PageEnvelope[ProgressRow] */
-        PageEnvelope_ProgressRow_: {
-            /** Data */
-            data: components["schemas"]["ProgressRow"][];
+            data: components["schemas"]["InvitationRow"][];
             meta: components["schemas"]["PageMeta"];
         };
         /** PageEnvelope[ProjectOut] */
         PageEnvelope_ProjectOut_: {
             /** Data */
             data: components["schemas"]["ProjectOut"][];
-            meta: components["schemas"]["PageMeta"];
-        };
-        /** PageEnvelope[RecommendationOut] */
-        PageEnvelope_RecommendationOut_: {
-            /** Data */
-            data: components["schemas"]["RecommendationOut"][];
             meta: components["schemas"]["PageMeta"];
         };
         /** PageEnvelope[SubmissionOut] */
@@ -1366,54 +1886,47 @@ export interface components {
             id: string;
             /** Is Override */
             is_override: boolean;
+            /** Match Mode */
+            match_mode: string | null;
             /** Match Score */
             match_score: number | null;
+            /** Min Match Score */
+            min_match_score: number;
             source: components["schemas"]["AllocationSource"];
+            /** Trigger */
+            trigger: string | null;
         };
         /** ProgressRow */
         ProgressRow: {
             allocation: components["schemas"]["ProgressAllocation"] | null;
+            analysis_status: components["schemas"]["AnalysisStatus"] | null;
+            /** Archived */
+            archived: boolean;
+            /** Deadline */
+            deadline: string | null;
             evaluation: components["schemas"]["GradeRef"] | null;
             latest_submission: components["schemas"]["LatestSubmission"] | null;
             progress: components["schemas"]["TraineeProgress"];
             project: components["schemas"]["ProjectRef"] | null;
+            /** Rejections */
+            rejections: number;
             supervisor: components["schemas"]["UserRef"] | null;
             trainee: components["schemas"]["TraineeRefTrade"];
+            /** Waiting Reason */
+            waiting_reason: string | null;
         };
-        /** ProjectCreate */
-        ProjectCreate: {
-            /** Category */
-            category?: string | null;
-            /**
-             * Cycle Id
-             * Format: uuid
-             */
-            cycle_id: string;
-            /** Description */
-            description?: string | null;
-            difficulty: components["schemas"]["Difficulty"];
-            /** Max Trainees */
-            max_trainees: number;
-            /**
-             * Min Practical Score
-             * @default 0
-             */
-            min_practical_score: number | string;
-            /** Problem Doc Url */
-            problem_doc_url?: string | null;
-            /** Project Code */
-            project_code: string;
-            /** Skills */
-            skills?: string[] | null;
-            /** Supervisor Id */
-            supervisor_id?: string | null;
-            /**
-             * Target Trade Id
-             * Format: uuid
-             */
-            target_trade_id: string;
-            /** Title */
-            title: string;
+        /** ProjectBrief */
+        ProjectBrief: {
+            /** By Processing */
+            by_processing: {
+                [key: string]: number;
+            };
+            /** Ready */
+            ready: number;
+            /** Total */
+            total: number;
+            /** Working Individually */
+            working_individually: number;
         };
         /** ProjectOut */
         ProjectOut: {
@@ -1429,20 +1942,34 @@ export interface components {
              * Format: uuid
              */
             cycle_id: string;
+            /** Deadline */
+            deadline: string | null;
             /** Description */
             description: string | null;
-            difficulty: components["schemas"]["Difficulty"];
+            difficulty: components["schemas"]["Difficulty"] | null;
+            document: components["schemas"]["DocumentInfo"] | null;
+            /** Effective Deadline */
+            effective_deadline: string | null;
+            /** Generated */
+            generated: {
+                [key: string]: unknown;
+            } | null;
+            /** Generation Source */
+            generation_source: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Max Trainees */
-            max_trainees: number;
+            /** Min Match Score */
+            min_match_score: number;
             /** Min Practical Score */
             min_practical_score: number;
             /** Problem Doc Url */
             problem_doc_url: string | null;
+            /** Processing Error */
+            processing_error: string | null;
+            processing_status: components["schemas"]["ProjectProcessing"];
             /** Project Code */
             project_code: string;
             /** Skills */
@@ -1450,7 +1977,9 @@ export interface components {
             stats: components["schemas"]["ProjectStats"] | null;
             status: components["schemas"]["ProjectStatus"];
             supervisor: components["schemas"]["SupervisorRef"] | null;
-            target_trade: components["schemas"]["NamedRef"];
+            target_trade: components["schemas"]["NamedRef"] | null;
+            /** Target Trades */
+            target_trades: components["schemas"]["NamedRef"][];
             /** Title */
             title: string;
             /**
@@ -1463,26 +1992,29 @@ export interface components {
         ProjectPatch: {
             /** Category */
             category?: string | null;
+            /** Deadline */
+            deadline?: string | null;
             /** Description */
             description?: string | null;
             difficulty?: components["schemas"]["Difficulty"] | null;
-            /** Max Trainees */
-            max_trainees?: number | null;
+            /** Min Match Score */
+            min_match_score?: number | string | null;
             /** Min Practical Score */
             min_practical_score?: number | string | null;
-            /** Problem Doc Url */
-            problem_doc_url?: string | null;
-            /** Project Code */
-            project_code?: string | null;
             /** Skills */
             skills?: string[] | null;
             /** Supervisor Id */
             supervisor_id?: string | null;
-            /** Target Trade Id */
-            target_trade_id?: string | null;
             /** Title */
             title?: string | null;
+            /** Trade Ids */
+            trade_ids?: string[] | null;
         };
+        /**
+         * ProjectProcessing
+         * @enum {string}
+         */
+        ProjectProcessing: "awaiting_document" | "queued" | "processing" | "awaiting_supervisor" | "needs_attention" | "ready" | "failed";
         /** ProjectRef */
         ProjectRef: {
             /**
@@ -1495,12 +2027,15 @@ export interface components {
             /** Title */
             title: string;
         };
-        /** ProjectStats */
+        /**
+         * ProjectStats
+         * @description Server-derived counts (ADR-017). `working_individually` = non-rejected individual allocations.
+         */
         ProjectStats: {
-            /** Allocated Count */
-            allocated_count: number | null;
-            /** Eligible Trainee Count */
-            eligible_trainee_count: number | null;
+            /** Rejected Total */
+            rejected_total: number;
+            /** Working Individually */
+            working_individually: number;
         };
         /**
          * ProjectStatus
@@ -1520,68 +2055,103 @@ export interface components {
             /** Invitation Token */
             invitation_token?: string | null;
         };
-        /** RecProjectRef */
-        RecProjectRef: {
-            difficulty: components["schemas"]["Difficulty"];
+        /** RejectIn */
+        RejectIn: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Reason */
+            reason: string;
+        };
+        /** RejectionOut */
+        RejectionOut: {
             /**
-             * Id
+             * Allocation Id
              * Format: uuid
              */
-            id: string;
-            /** Project Code */
-            project_code: string;
-            target_trade: components["schemas"]["NamedRef"];
-            /** Title */
-            title: string;
-        };
-        /** RecStats */
-        RecStats: {
-            latest_run: components["schemas"]["RunBrief"] | null;
-            /** Trainees With Eligible */
-            trainees_with_eligible: number;
-            /** Trainees Without Eligible */
-            trainees_without_eligible: number;
-        };
-        /** RecommendationOut */
-        RecommendationOut: {
-            /** Ai Explanation */
-            ai_explanation: string | null;
+            allocation_id: string;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Eligible */
-            eligible: boolean;
-            /** Factors */
-            factors: components["schemas"]["FactorOut"][];
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Ineligible Reasons */
-            ineligible_reasons: string[];
-            project: components["schemas"]["RecProjectRef"];
-            /** Rank */
-            rank: number;
-            /**
-             * Run Id
-             * Format: uuid
-             */
-            run_id: string;
-            /** Score */
-            score: number;
-            source: components["schemas"]["RecommendationSource"];
-            trainee: components["schemas"]["TraineeRef"];
+            /** Message */
+            message: string;
+            project: components["schemas"]["ProjectRef"];
+            /** Reason */
+            reason: string;
+            /** Replacement Status */
+            replacement_status: string;
         };
         /**
-         * RecommendationSource
-         * @enum {string}
+         * ReportEvaluationSummary
+         * @description Automated document-based report evaluation (ADR-017). Not a verified practical result.
          */
-        RecommendationSource: "rule" | "rule_ai";
+        ReportEvaluationSummary: {
+            /** Amended */
+            amended: boolean;
+            /** Effective Grade */
+            effective_grade: string | null;
+            /** Effective Total */
+            effective_total: number | null;
+            /** Grade */
+            grade: string | null;
+            /** Grade Label */
+            grade_label: string | null;
+            /** Max Total */
+            max_total: number;
+            /** Outcome */
+            outcome: string | null;
+            /** Status */
+            status: string;
+            /** Total */
+            total: number | null;
+        };
+        /**
+         * ReportedMark
+         * @description A mark explicitly stated in the resume (resume_reported, unverified; never a verified gate).
+         */
+        ReportedMark: {
+            /** Excerpt */
+            excerpt: string | null;
+            /** Field */
+            field: string;
+            /** Status */
+            status: string;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number | null;
+        };
+        /**
+         * ReportedScoresIn
+         * @description Resume-reported marks the trainee confirmed or corrected. Stored as unverified claims: they never
+         *     replace imported/verified marks and never satisfy a verified-assessment gate (ADR-017 §6.2).
+         */
+        ReportedScoresIn: {
+            /** Practical */
+            practical?: number | string | null;
+            /**
+             * Resume Id
+             * Format: uuid
+             */
+            resume_id: string;
+            /** Safety */
+            safety?: number | string | null;
+            /** Theory */
+            theory?: number | string | null;
+        };
         /** ResumeExtracted */
         ResumeExtracted: {
+            /**
+             * Assessment Marks
+             * @default []
+             */
+            assessment_marks: components["schemas"]["ReportedMark"][];
             /** Career Interest Hint */
             career_interest_hint: string | null;
             /** Certifications */
@@ -1636,6 +2206,38 @@ export interface components {
          * @enum {string}
          */
         ResumeStatus: "extracted" | "failed";
+        /** ReviewIn */
+        ReviewIn: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "confirm" | "annotate" | "amend" | "request_explanation" | "request_rework";
+            /** Amended Criteria */
+            amended_criteria?: components["schemas"]["AmendedCriterion"][] | null;
+            /** Note */
+            note: string;
+        };
+        /** ReviewOut */
+        ReviewOut: {
+            /** Action */
+            action: string;
+            /** Amended Criteria */
+            amended_criteria: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Created At */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Reviewer */
+            reviewer: string;
+        };
         /** RowError */
         RowError: {
             /** Column */
@@ -1671,87 +2273,6 @@ export interface components {
             /** Workmanship */
             workmanship: number | null;
         };
-        /** RunBrief */
-        RunBrief: {
-            /** Ai Failed Count */
-            ai_failed_count: number;
-            /** Ai Used Count */
-            ai_used_count: number;
-            /** Finished At */
-            finished_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Status */
-            status: string;
-        };
-        /** RunEnvelope */
-        RunEnvelope: {
-            data: components["schemas"]["RunOut"] | null;
-            meta: components["schemas"]["RunMeta"];
-        };
-        /** RunIn */
-        RunIn: {
-            /**
-             * Use Ai
-             * @default true
-             */
-            use_ai: boolean;
-        };
-        /** RunMeta */
-        RunMeta: {
-            /** Ai Configured */
-            ai_configured: boolean;
-        };
-        /** RunOut */
-        RunOut: {
-            /** Ai Failed Count */
-            ai_failed_count: number;
-            /** Ai Model */
-            ai_model: string | null;
-            /** Ai Used Count */
-            ai_used_count: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Cycle Id
-             * Format: uuid
-             */
-            cycle_id: string;
-            /** Error Message */
-            error_message: string | null;
-            /** Finished At */
-            finished_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Progress Done */
-            progress_done: number;
-            /** Scored Pairs */
-            scored_pairs: number;
-            /** Skipped Pending Count */
-            skipped_pending_count: number;
-            /** Started At */
-            started_at: string | null;
-            started_by: components["schemas"]["UserRef"];
-            status: components["schemas"]["RunStatus"];
-            /** Trainee Count */
-            trainee_count: number;
-            /** Use Ai */
-            use_ai: boolean;
-        };
-        /**
-         * RunStatus
-         * @enum {string}
-         */
-        RunStatus: "queued" | "running" | "completed" | "failed";
         /** Scores */
         Scores: {
             /** Practical */
@@ -1779,8 +2300,45 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** StaffImportResult */
+        StaffImportResult: {
+            /** Applied */
+            applied: boolean;
+            /** Email Backend */
+            email_backend: string;
+            /** Errors */
+            errors: number;
+            /** Invited */
+            invited: number;
+            /** Results */
+            results: components["schemas"]["StaffRowResult"][];
+            /** Rows */
+            rows: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** StaffRowResult */
+        StaffRowResult: {
+            /** Email */
+            email: string | null;
+            /** Message */
+            message: string;
+            /** Role */
+            role: string | null;
+            /** Row */
+            row: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "invite" | "skipped" | "error";
+        };
         /** SubStats */
         SubStats: {
+            /** By Analysis */
+            by_analysis: {
+                [key: string]: number;
+            };
             /** Evaluated */
             evaluated: number;
             /** Late */
@@ -1799,6 +2357,7 @@ export interface components {
              * Format: uuid
              */
             allocation_id: string;
+            analysis_status: components["schemas"]["AnalysisStatus"];
             /** Bom Cost Inr */
             bom_cost_inr: number | null;
             /**
@@ -1806,6 +2365,11 @@ export interface components {
              * Format: uuid
              */
             cycle_id: string;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
             evaluation: components["schemas"]["EvaluationOut"] | null;
             file: components["schemas"]["FileInfo"] | null;
             /**
@@ -1820,6 +2384,7 @@ export interface components {
             /** Note */
             note: string | null;
             project: components["schemas"]["ProjectRef"];
+            report_evaluation: components["schemas"]["ReportEvaluationSummary"] | null;
             /** Report Url */
             report_url: string | null;
             status: components["schemas"]["SubmissionStatus"];
@@ -1852,6 +2417,44 @@ export interface components {
              */
             id: string;
         };
+        /** TrackingEnvelope */
+        TrackingEnvelope: {
+            /** Data */
+            data: components["schemas"]["ProgressRow"][];
+            meta: components["schemas"]["PageMeta"];
+            summary: components["schemas"]["TrackingSummary"];
+        };
+        /** TrackingSummary */
+        TrackingSummary: {
+            /** Assigned */
+            assigned: number;
+            /** By Analysis */
+            by_analysis: {
+                [key: string]: number;
+            };
+            /** By Grade */
+            by_grade: {
+                [key: string]: number;
+            };
+            /** By Progress */
+            by_progress: {
+                [key: string]: number;
+            };
+            /** By Waiting Reason */
+            by_waiting_reason: {
+                [key: string]: number;
+            };
+            /** Due Within 7 Days */
+            due_within_7_days: number;
+            /** Late */
+            late: number;
+            /** Rejections */
+            rejections: number;
+            /** Total */
+            total: number;
+            /** Unassigned */
+            unassigned: number;
+        };
         /** TradeCount */
         TradeCount: {
             /** Count */
@@ -1879,8 +2482,8 @@ export interface components {
             scores?: components["schemas"]["ScoresIn"] | null;
             /** Skills */
             skills?: string[] | null;
-            /** Trade Id */
-            trade_id?: string | null;
+            /** Trade Ids */
+            trade_ids?: string[] | null;
             /** Trainee Code */
             trainee_code?: string | null;
         };
@@ -1914,10 +2517,20 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Match Mode */
+            match_mode: string;
+            /** Onboarded Via */
+            onboarded_via: string;
+            /** Reported Scores */
+            reported_scores: {
+                [key: string]: unknown;
+            } | null;
             scores: components["schemas"]["Scores"];
             /** Skills */
             skills: components["schemas"]["NamedRef"][];
             trade: components["schemas"]["NamedRef"];
+            /** Trades */
+            trades: components["schemas"]["NamedRef"][];
             /** Trainee Code */
             trainee_code: string;
             /**
@@ -1955,10 +2568,20 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Match Mode */
+            match_mode: string;
+            /** Onboarded Via */
+            onboarded_via: string;
+            /** Reported Scores */
+            reported_scores: {
+                [key: string]: unknown;
+            } | null;
             scores: components["schemas"]["Scores"];
             /** Skills */
             skills: components["schemas"]["NamedRef"][];
             trade: components["schemas"]["NamedRef"];
+            /** Trades */
+            trades: components["schemas"]["NamedRef"][];
             /** Trainee Code */
             trainee_code: string;
             /**
@@ -1994,6 +2617,8 @@ export interface components {
              */
             id: string;
             trade: components["schemas"]["NamedRef"];
+            /** Trades */
+            trades: components["schemas"]["NamedRef"][];
             /** Trainee Code */
             trainee_code: string;
         };
@@ -2003,46 +2628,26 @@ export interface components {
             background?: string | null;
             /** Career Interest */
             career_interest?: string | null;
+            reported_scores?: components["schemas"]["ReportedScoresIn"] | null;
             /** Skills */
             skills?: string[] | null;
+            /** Trade Ids */
+            trade_ids?: string[] | null;
         };
         /** TraineeStats */
         TraineeStats: {
             /** Assessment Complete */
             assessment_complete: number;
-            /** Assessment Pending */
-            assessment_pending: number;
             /** By Trade */
             by_trade: components["schemas"]["TradeCount"][];
             /** Linked Accounts */
             linked_accounts: number;
+            /** Profile Only */
+            profile_only: number;
+            /** Self Registered */
+            self_registered: number;
             /** Total */
             total: number;
-        };
-        /** TransitionIn */
-        TransitionIn: {
-            /**
-             * To
-             * @enum {string}
-             */
-            to: "draft" | "published" | "archived";
-        };
-        /** UnallocatedTrainee */
-        UnallocatedTrainee: {
-            /** Full Name */
-            full_name: string;
-            /**
-             * Reason
-             * @enum {string}
-             */
-            reason: "assessment_pending" | "no_eligible_project" | "no_capacity";
-            /** Trainee Code */
-            trainee_code: string;
-            /**
-             * Trainee Id
-             * Format: uuid
-             */
-            trainee_id: string;
         };
         /** UserOut */
         UserOut: {
@@ -2125,6 +2730,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    automation_api_v1_admin_automation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AutomationStats_"];
+                };
+            };
+        };
+    };
+    run_now_api_v1_admin_automation_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AutomationStats_"];
+                };
+            };
+        };
+    };
     import_projects_api_v1_admin_imports_projects_post: {
         parameters: {
             query?: never;
@@ -2145,6 +2790,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ImportResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_staff_api_v1_admin_imports_staff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_staff_api_v1_admin_imports_staff_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StaffImportResult_"];
                 };
             };
             /** @description Validation Error */
@@ -2212,7 +2890,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PageEnvelope_InvitationOut_"];
+                    "application/json": components["schemas"]["PageEnvelope_InvitationRow_"];
                 };
             };
             /** @description Validation Error */
@@ -2276,7 +2954,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope_InvitationOut_"];
+                    "application/json": components["schemas"]["Envelope_InvitationRow_"];
                 };
             };
             /** @description Validation Error */
@@ -2308,6 +2986,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_Overview_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trainee_history_api_v1_admin_trainees__trainee_id__allocation_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEnvelope_HistoryEntry_"];
                 };
             };
             /** @description Validation Error */
@@ -2397,10 +3106,9 @@ export interface operations {
             query?: {
                 cycle_id?: string | null;
                 project_id?: string | null;
-                trade_id?: string | null;
                 trainee_id?: string | null;
                 source?: components["schemas"]["AllocationSource"] | null;
-                is_override?: boolean | null;
+                status?: components["schemas"]["AllocationStatus"] | null;
                 q?: string | null;
                 sort?: string;
                 page?: number;
@@ -2432,69 +3140,7 @@ export interface operations {
             };
         };
     };
-    create_allocation_api_v1_allocations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AllocationCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_AllocationOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_allocation_api_v1_allocations__allocation_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                allocation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reassign_allocation_api_v1_allocations__allocation_id__patch: {
+    reject_api_v1_allocations__allocation_id__reject_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2505,7 +3151,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AllocationPatch"];
+                "application/json": components["schemas"]["RejectIn"];
             };
         };
         responses: {
@@ -2515,7 +3161,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope_AllocationOut_"];
+                    "application/json": components["schemas"]["Envelope_RejectionOut_"];
                 };
             };
             /** @description Validation Error */
@@ -2724,106 +3370,7 @@ export interface operations {
             };
         };
     };
-    auto_allocate_api_v1_cycles__cycle_id__allocation_runs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                cycle_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_AllocationRunOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_run_api_v1_cycles__cycle_id__recommendation_runs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                cycle_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RunIn"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_RunOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    latest_run_api_v1_cycles__cycle_id__recommendation_runs_latest_get: {
-        parameters: {
-            query?: {
-                status?: "completed" | null;
-            };
-            header?: never;
-            path: {
-                cycle_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    transition_cycle_api_v1_cycles__cycle_id__transition_post: {
+    archive_api_v1_cycles__cycle_id__archive_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2834,7 +3381,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TransitionIn"];
+                "application/json": components["schemas"]["ArchiveIn"];
             };
         };
         responses: {
@@ -2845,6 +3392,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_CycleOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_preview_api_v1_cycles__cycle_id__archive_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ArchivePreview_"];
                 };
             };
             /** @description Validation Error */
@@ -2958,6 +3536,117 @@ export interface operations {
             };
         };
     };
+    my_notifications_api_v1_me_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEnvelope_NotificationOut_"];
+                };
+            };
+        };
+    };
+    mark_read_api_v1_me_notifications_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_onboarding_api_v1_onboarding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OnboardingOut_"];
+                };
+            };
+        };
+    };
+    save_onboarding_api_v1_onboarding_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingData"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OnboardingOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_onboarding_api_v1_onboarding_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OnboardingOut_"];
+                };
+            };
+        };
+    };
     list_progress_api_v1_progress_get: {
         parameters: {
             query?: {
@@ -2966,6 +3655,7 @@ export interface operations {
                 trade_id?: string | null;
                 trainee_id?: string | null;
                 progress?: components["schemas"]["TraineeProgress"] | null;
+                analysis_status?: components["schemas"]["AnalysisStatus"] | null;
                 late_only?: boolean;
                 include_unallocated?: boolean;
                 q?: string | null;
@@ -2985,7 +3675,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PageEnvelope_ProgressRow_"];
+                    "application/json": components["schemas"]["TrackingEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -3005,11 +3695,8 @@ export interface operations {
                 cycle_id?: string | null;
                 q?: string | null;
                 trade_id?: string | null;
-                difficulty?: components["schemas"]["Difficulty"] | null;
-                skill_id?: string | null;
                 status?: components["schemas"]["ProjectStatus"] | null;
-                mine?: boolean;
-                supervisor_id?: string | null;
+                processing_status?: components["schemas"]["ProjectProcessing"] | null;
                 sort?: string;
                 page?: number;
                 page_size?: number;
@@ -3049,7 +3736,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProjectCreate"];
+                "multipart/form-data": components["schemas"]["Body_create_project_api_v1_projects_post"];
             };
         };
         responses: {
@@ -3168,7 +3855,7 @@ export interface operations {
             };
         };
     };
-    transition_project_api_v1_projects__project_id__transition_post: {
+    replace_document_api_v1_projects__project_id__document_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -3179,7 +3866,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProjectTransition"];
+                "multipart/form-data": components["schemas"]["Body_replace_document_api_v1_projects__project_id__document_put"];
             };
         };
         responses: {
@@ -3203,20 +3890,13 @@ export interface operations {
             };
         };
     };
-    list_recommendations_api_v1_recommendations_get: {
+    project_document_url_api_v1_projects__project_id__document_url_get: {
         parameters: {
-            query?: {
-                cycle_id?: string | null;
-                run_id?: string | null;
-                trainee_id?: string | null;
-                project_id?: string | null;
-                eligible_only?: boolean;
-                sort?: string;
-                page?: number;
-                page_size?: number;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                project_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3227,7 +3907,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PageEnvelope_RecommendationOut_"];
+                    "application/json": components["schemas"]["Envelope_FileUrl_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reprocess_project_api_v1_projects__project_id__reprocess_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ProjectOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transition_project_api_v1_projects__project_id__transition_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTransition"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ProjectOut_"];
                 };
             };
             /** @description Validation Error */
@@ -3310,6 +4056,7 @@ export interface operations {
                 trainee_id?: string | null;
                 project_id?: string | null;
                 status?: components["schemas"]["SubmissionStatus"] | null;
+                analysis_status?: components["schemas"]["AnalysisStatus"] | null;
                 latest_only?: boolean;
                 sort?: string;
                 page?: number;
@@ -3392,6 +4139,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_SubmissionOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_analysis_api_v1_submissions__submission_id__analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AnalysisOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_analysis_api_v1_submissions__submission_id__analysis_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_analysis_api_v1_submissions__submission_id__analysis_retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AnalysisOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_analysis_api_v1_submissions__submission_id__analysis_review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AnalysisOut_"];
                 };
             };
             /** @description Validation Error */
@@ -3580,6 +4455,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_history_api_v1_trainees_me_allocation_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEnvelope_HistoryEntry_"];
                 };
             };
         };

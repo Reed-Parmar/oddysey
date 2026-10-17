@@ -80,6 +80,11 @@ class Cycle(Base):
     name: Mapped[str] = mapped_column(Text)
     status: Mapped[E.CycleStatus] = mapped_column(_enum(E.CycleStatus, "cycle_status"), server_default="draft")
     submission_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    archive_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archive_timezone: Mapped[str] = mapped_column(Text, server_default="Asia/Kolkata")
+    auto_archive_enabled: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archive_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID] = _fk("app.users.id")
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
@@ -108,12 +113,20 @@ class Trainee(Base):
     career_interest: Mapped[str | None] = mapped_column(Text)
     background: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[uuid.UUID | None] = _fk("app.users.id", nullable=True)
+    reported_scores: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    onboarded_via: Mapped[str] = mapped_column(Text, server_default="import")
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 
     trade: Mapped[Trade] = relationship(lazy="joined")
+    trades: Mapped[list[Trade]] = relationship(secondary="app.trainee_trades", lazy="selectin", order_by="Trade.name")
     skills: Mapped[list[Skill]] = relationship(secondary="app.trainee_skills", lazy="selectin", order_by="Skill.name")
     user: Mapped[User | None] = relationship(lazy="joined")
+
+    @property
+    def all_trades(self) -> list[Trade]:
+        """Every trade (join table), falling back to the primary trade for rows not yet backfilled."""
+        return list(self.trades) or [self.trade]
 
 
 class ProjectSkill(Base):
@@ -132,20 +145,42 @@ class Project(Base):
     title: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     problem_doc_url: Mapped[str | None] = mapped_column(Text)
-    target_trade_id: Mapped[uuid.UUID] = _fk("app.trades.id")
-    difficulty: Mapped[E.Difficulty] = mapped_column(_enum(E.Difficulty, "difficulty_level"))
+    target_trade_id: Mapped[uuid.UUID | None] = _fk("app.trades.id", nullable=True)
+    difficulty: Mapped[E.Difficulty | None] = mapped_column(_enum(E.Difficulty, "difficulty_level"))
     min_practical_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="0")
-    max_trainees: Mapped[int] = mapped_column(SmallInteger)
+    max_trainees: Mapped[int | None] = mapped_column(SmallInteger)  # deprecated (ADR-017), history only
     category: Mapped[str | None] = mapped_column(Text)
     supervisor_id: Mapped[uuid.UUID | None] = _fk("app.users.id", nullable=True)
     status: Mapped[E.ProjectStatus] = mapped_column(_enum(E.ProjectStatus, "project_status"), server_default="draft")
     created_by: Mapped[uuid.UUID] = _fk("app.users.id")
+    canonical_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # set by trigger on insert
+    processing_status: Mapped[E.ProjectProcessing] = mapped_column(
+        _enum(E.ProjectProcessing, "project_processing"), server_default="awaiting_document"
+    )
+    processing_error: Mapped[str | None] = mapped_column(Text)
+    document_path: Mapped[str | None] = mapped_column(Text)
+    document_name: Mapped[str | None] = mapped_column(Text)
+    document_mime: Mapped[str | None] = mapped_column(Text)
+    document_size: Mapped[int | None] = mapped_column(Integer)
+    document_hash: Mapped[str | None] = mapped_column(Text)
+    document_text: Mapped[str | None] = mapped_column(Text)
+    generated: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    generation_source: Mapped[str | None] = mapped_column(Text)
+    generation_version: Mapped[str | None] = mapped_column(Text)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    min_match_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="0")
+    deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 
-    target_trade: Mapped[Trade] = relationship(lazy="joined")
+    target_trade: Mapped[Trade | None] = relationship(lazy="joined")
+    trades: Mapped[list[Trade]] = relationship(secondary="app.project_trades", lazy="selectin", order_by="Trade.name")
     skills: Mapped[list[Skill]] = relationship(secondary="app.project_skills", lazy="selectin", order_by="Skill.name")
     supervisor: Mapped[User | None] = relationship(foreign_keys=[supervisor_id], lazy="joined")
+
+    @property
+    def all_trades(self) -> list[Trade]:
+        return list(self.trades) or ([self.target_trade] if self.target_trade else [])
 
 
 class RecommendationRun(Base):
@@ -201,14 +236,23 @@ class Allocation(Base):
     recommendation_id: Mapped[uuid.UUID | None] = _fk("app.recommendations.id", nullable=True)
     is_override: Mapped[bool] = mapped_column(Boolean, server_default="false")
     override_reason: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[uuid.UUID] = _fk("app.users.id")
+    created_by: Mapped[uuid.UUID | None] = _fk("app.users.id", nullable=True)  # null = system (worker)
+    status: Mapped[E.AllocationStatus] = mapped_column(
+        _enum(E.AllocationStatus, "allocation_status"), server_default="active"
+    )
+    match_mode: Mapped[str | None] = mapped_column(Text)
+    factors: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
+    scoring_version: Mapped[str | None] = mapped_column(Text)
+    explanation: Mapped[str | None] = mapped_column(Text)
+    trigger: Mapped[str | None] = mapped_column(Text)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 
     trainee: Mapped[Trainee] = relationship(lazy="joined")
     project: Mapped[Project] = relationship(lazy="joined")
     recommendation: Mapped[Recommendation | None] = relationship(lazy="select")
-    creator: Mapped[User] = relationship(foreign_keys=[created_by], lazy="joined")
+    creator: Mapped[User | None] = relationship(foreign_keys=[created_by], lazy="joined")
 
 
 class Evaluation(Base):
@@ -249,6 +293,9 @@ class Submission(Base):
     file_mime_type: Mapped[str | None] = mapped_column(Text)
     logbook_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
     bom_cost_inr: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    analysis_status: Mapped[E.AnalysisStatus] = mapped_column(
+        _enum(E.AnalysisStatus, "analysis_status"), server_default="queued"
+    )
     submitted_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 
@@ -269,6 +316,8 @@ class Invitation(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     accepted_user_id: Mapped[uuid.UUID | None] = _fk("app.users.id", nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    full_name: Mapped[str | None] = mapped_column(Text)
+    department: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
 
     trainee: Mapped[Trainee | None] = relationship(lazy="joined")
@@ -301,3 +350,153 @@ class TraineeResume(Base):
     extracted: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     error_code: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
+
+
+class TraineeTrade(Base):
+    __tablename__ = "trainee_trades"
+    trainee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app.trainees.id", ondelete="CASCADE"), primary_key=True
+    )
+    trade_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("app.trades.id"), primary_key=True)
+
+
+class ProjectTrade(Base):
+    __tablename__ = "project_trades"
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app.projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    trade_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("app.trades.id"), primary_key=True)
+
+
+class OnboardingProfile(Base):
+    __tablename__ = "onboarding_profiles"
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app.users.id", ondelete="CASCADE"), primary_key=True
+    )
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    status: Mapped[str] = mapped_column(Text, server_default="draft")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = _ts()
+
+
+class AllocationRejection(Base):
+    __tablename__ = "allocation_rejections"
+    id: Mapped[uuid.UUID] = _pk()
+    allocation_id: Mapped[uuid.UUID] = _fk("app.allocations.id")
+    cycle_id: Mapped[uuid.UUID] = _fk("app.cycles.id")
+    trainee_id: Mapped[uuid.UUID] = _fk("app.trainees.id")
+    person_key: Mapped[str] = mapped_column(Text)
+    project_id: Mapped[uuid.UUID] = _fk("app.projects.id")
+    project_canonical_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    reason: Mapped[str] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(Text)
+    rejected_by: Mapped[uuid.UUID] = _fk("app.users.id")
+    previous_match_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    previous_match_mode: Mapped[str | None] = mapped_column(Text)
+    previous_factors: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
+    replacement_status: Mapped[str] = mapped_column(Text, server_default="queued")
+    replacement_allocation_id: Mapped[uuid.UUID | None] = _fk("app.allocations.id", nullable=True)
+    replacement_details: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    replacement_attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    replacement_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+
+    project: Mapped[Project] = relationship(lazy="joined")
+    trainee: Mapped[Trainee] = relationship(lazy="joined")
+    replacement_allocation: Mapped[Allocation | None] = relationship(
+        foreign_keys=[replacement_allocation_id], lazy="joined"
+    )
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(Text)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    dedupe_key: Mapped[str | None] = mapped_column(Text)
+    trigger: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[E.JobStatus] = mapped_column(_enum(E.JobStatus, "job_status"), server_default="queued")
+    priority: Mapped[int] = mapped_column(SmallInteger, server_default="100")
+    run_after: Mapped[datetime] = _ts()
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, server_default="5")
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_by: Mapped[str | None] = mapped_column(Text)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    created_at: Mapped[datetime] = _ts()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID | None] = _fk("app.users.id", nullable=True)
+    email: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    link: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[E.NotificationStatus] = mapped_column(
+        _enum(E.NotificationStatus, "notification_status"), server_default="queued"
+    )
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReportAnalysis(Base):
+    __tablename__ = "report_analyses"
+    id: Mapped[uuid.UUID] = _pk()
+    submission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app.submissions.id", ondelete="CASCADE")
+    )
+    revision: Mapped[int] = mapped_column(SmallInteger, server_default="1")
+    status: Mapped[E.AnalysisStatus] = mapped_column(
+        _enum(E.AnalysisStatus, "analysis_status"), server_default="queued"
+    )
+    status_reason: Mapped[str | None] = mapped_column(Text)
+    pipeline_version: Mapped[str] = mapped_column(Text)
+    input_hash: Mapped[str | None] = mapped_column(Text)
+    binary_hash: Mapped[str | None] = mapped_column(Text)
+    source_type: Mapped[str | None] = mapped_column(Text)
+    parser: Mapped[str | None] = mapped_column(Text)
+    text_snapshot: Mapped[str | None] = mapped_column(Text)
+    page_offsets: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
+    unit: Mapped[str | None] = mapped_column(Text)
+    corpus: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    originality: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    evaluation: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    semantic: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    ai_writing: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    review_state: Mapped[str] = mapped_column(Text, server_default="unreviewed")
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    reanalysis_reason: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+
+    reviews: Mapped[list["AnalysisReview"]] = relationship(
+        lazy="selectin", order_by="AnalysisReview.created_at", back_populates="analysis"
+    )
+
+
+class AnalysisReview(Base):
+    __tablename__ = "analysis_reviews"
+    id: Mapped[uuid.UUID] = _pk()
+    analysis_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app.report_analyses.id", ondelete="CASCADE")
+    )
+    reviewer_id: Mapped[uuid.UUID] = _fk("app.users.id")
+    action: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text)
+    amended_criteria: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
+    created_at: Mapped[datetime] = _ts()
+
+    analysis: Mapped[ReportAnalysis] = relationship(back_populates="reviews")
+    reviewer: Mapped[User] = relationship(lazy="joined")

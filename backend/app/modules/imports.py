@@ -16,19 +16,30 @@ from fastapi import APIRouter, File, Form, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from app import audit
+from app import audit, jobs
 from app.core.config import get_settings
 from app.core.deps import DB, Admin
 from app.core.errors import AppError, field_error, invalid_state
 from app.core.responses import Envelope
 from app.db import models as M
-from app.db.enums import CycleStatus, Difficulty, ProjectStatus, UserRole, UserStatus
+from app.db.enums import (
+    AllocationStatus,
+    CycleStatus,
+    Difficulty,
+    ProjectProcessing,
+    ProjectStatus,
+    UserRole,
+    UserStatus,
+)
 from app.domain import (
+    active_allocation,
     clean_names,
     lock_cycle,
     project_input,
     resolve_skill_names,
     resolve_trade_names,
+    set_project_trades,
+    set_trainee_trades,
     trainee_input,
 )
 from spa_ai.scoring import eligibility
@@ -267,9 +278,9 @@ async def import_trainees(
             gender = GENDERS.get(gender_raw.lower())
             if gender is None:
                 rc.err(number, "Gender", "must be Male, Female, Other or blank")
-        trade = _text(r.get("iti trade"))
-        if not trade or len(trade) > 80:
-            rc.err(number, "ITI Trade", "required (1–80 characters)")
+        trades_raw = _split(r.get("iti trade"))
+        if not trades_raw or len(trades_raw) > 5 or any(len(x) > 80 for x in trades_raw):
+            rc.err(number, "ITI Trade", "required: 1–5 trades separated by commas (each up to 80 characters)")
         centre = _text(r.get("iti name"))
         if centre and len(centre) > 120:
             rc.err(number, "ITI Name", "at most 120 characters")
@@ -303,7 +314,7 @@ async def import_trainees(
                         "code": code,
                         "full_name": name,
                         "gender": gender,
-                        "trade": trade,
+                        "trades": clean_names(trades_raw, 5, "ITI Trade") if trades_raw else [],
                         "centre_name": centre,
                         **scores,
                         "skills": skills,
@@ -317,7 +328,9 @@ async def import_trainees(
     if result.errors:
         return Envelope(data=_finish(db, result, dry_run, admin, "import.trainees", cycle))
 
-    trades, created_trades = resolve_trade_names(db, sorted({p["trade"] for _, p in parsed}, key=str.lower), True)
+    trades, created_trades = resolve_trade_names(
+        db, sorted({n for _, p in parsed for n in p["trades"]}, key=str.lower), True
+    )
     result.created_trades = created_trades
     existing = {
         t.trainee_code.upper(): t
@@ -327,10 +340,10 @@ async def import_trainees(
     for _, p in parsed:
         skills, new = resolve_skill_names(db, clean_names(p["skills"], 20, "skills"))
         created_skills += new
+        row_trades = [trades[n.lower()] for n in p["trades"]]
         values = {
             "full_name": p["full_name"],
             "gender": p["gender"],
-            "trade_id": trades[p["trade"].lower()].id,
             "centre_name": p["centre_name"],
             "theory_score": p["theory_score"],
             "practical_score": p["practical_score"],
@@ -342,23 +355,27 @@ async def import_trainees(
         t = existing.get(p["code"].upper())
         if t is None:
             t = M.Trainee(cycle_id=cycle.id, trainee_code=p["code"], **values)
+            set_trainee_trades(t, row_trades)
             t.skills = skills
             db.add(t)
             result.created += 1
             continue
-        dirty = any(getattr(t, k) != v for k, v in values.items()) or sorted(s.id for s in t.skills) != sorted(
-            s.id for s in skills
+        dirty = (
+            any(getattr(t, k) != v for k, v in values.items())
+            or sorted(s.id for s in t.skills) != sorted(s.id for s in skills)
+            or [x.id for x in t.all_trades] != [x.id for x in row_trades]
         )
         if not dirty:
             result.unchanged += 1
             continue
         for k, v in values.items():
             setattr(t, k, v)
+        set_trainee_trades(t, row_trades)
         t.skills = skills
         result.updated += 1
         db.flush()
         db.refresh(t)
-        a = db.scalar(select(M.Allocation).where(M.Allocation.trainee_id == t.id))
+        a = active_allocation(db, t.id)
         if a is not None:
             reasons = eligibility(trainee_input(t), project_input(a.project))
             if reasons:
@@ -368,22 +385,29 @@ async def import_trainees(
                 )
     db.flush()
     result.created_skills = created_skills
+    jobs.enqueue(
+        db,
+        "allocate_cycle",
+        {"cycle_id": str(cycle.id), "trigger": "import"},
+        dedupe_key=f"allocate:{cycle.id}",
+        trigger="import",
+    )
     return Envelope(data=_finish(db, result, dry_run, admin, "import.trainees", cycle))
 
 
 # ---------------------------------------------------------------- IMP-02 projects
 
 PROJECT_REQUIRED = [
-    "Project ID",
     "Project Title",
     "Target Trade",
     "Difficulty Level",
     "Required Prerequisite Skills",
     "Min Practical Score Required (%)",
-    "Max Trainee Capacity",
     "Project Category / Sponsor Goal",
     "Problem Statement Doc",
 ]
+# "Project ID" is optional (generated when blank; dataset codes are preserved). "Max Trainee Capacity" is a
+# legacy column: recognised and kept as history only, never enforced (ADR-017: no team capacity).
 
 
 @router.post("/admin/imports/projects")
@@ -395,7 +419,7 @@ async def import_projects(
     dry_run: Annotated[bool, Form()] = True,
 ) -> Envelope[ImportResult]:
     data = await _read(file)
-    sheet = parse_upload(file.filename or "", data, "Project Catalog", "Project ID", PROJECT_REQUIRED)
+    sheet = parse_upload(file.filename or "", data, "Project Catalog", "Project Title", PROJECT_REQUIRED)
     cycle = _cycle(db, cycle_id)
     rc = RowCollector(sheet)
     result = ImportResult(
@@ -430,27 +454,30 @@ async def import_projects(
     alloc_counts = dict(
         db.execute(
             select(M.Allocation.project_id, func.count())
-            .where(M.Allocation.cycle_id == cycle.id)
+            .where(M.Allocation.cycle_id == cycle.id, M.Allocation.status == AllocationStatus.active)
             .group_by(M.Allocation.project_id)
         ).all()
     )
+    titles = {p.title.strip().lower(): p for p in existing.values()}
     seen: set[str] = set()
     parsed: list[dict[str, Any]] = []
     for number, r in sheet.rows:
         before = len(rc.errors)
-        code = _text(r.get("project id"))
-        if not code or not CODE_RE.match(code):
-            rc.err(number, "Project ID", "required; letters, digits and '-' only (max 40)")
-        elif code.upper() in seen:
-            rc.err(number, "Project ID", f"duplicate code {code} in this file")
-        else:
-            seen.add(code.upper())
+        code = _text(r.get("project id")) if "project id" in sheet.headers else None
         title = _text(r.get("project title"))
+        if not code and title and title.strip().lower() in titles:
+            code = titles[title.strip().lower()].project_code  # reimport without codes: match by title
+        if code and not CODE_RE.match(code):
+            rc.err(number, "Project ID", "letters, digits and '-' only (max 40); leave blank to generate")
+        elif code and code.upper() in seen:
+            rc.err(number, "Project ID", f"duplicate code {code} in this file")
+        elif code:
+            seen.add(code.upper())
         if not title or not 5 <= len(title) <= 200:
             rc.err(number, "Project Title", "required (5–200 characters)")
-        trade = _text(r.get("target trade"))
-        if not trade or len(trade) > 80:
-            rc.err(number, "Target Trade", "required (1–80 characters)")
+        trades_raw = _split(r.get("target trade"))
+        if not trades_raw or len(trades_raw) > 5 or any(len(x) > 80 for x in trades_raw):
+            rc.err(number, "Target Trade", "required: 1–5 trades separated by commas (each up to 80 characters)")
         diff_raw = (_text(r.get("difficulty level")) or "").lower()
         if diff_raw not in {d.value for d in Difficulty}:
             rc.err(number, "Difficulty Level", "must be Beginner, Intermediate or Advanced")
@@ -461,13 +488,12 @@ async def import_projects(
         except ValueError as e:
             rc.err(number, "Min Practical Score Required (%)", str(e))
             minimum = None
+        capacity = None  # legacy column: history only, never enforced
         try:
-            cap_d = _decimal(r.get("max trainee capacity"))
-            if cap_d is None or cap_d != cap_d.to_integral_value() or not 1 <= cap_d <= 100:
-                raise ValueError("must be a whole number 1–100")
-            capacity = int(cap_d)
-        except ValueError as e:
-            rc.err(number, "Max Trainee Capacity", str(e))
+            cap_d = _decimal(r.get("max trainee capacity")) if "max trainee capacity" in sheet.headers else None
+            if cap_d is not None and cap_d == cap_d.to_integral_value() and 1 <= cap_d <= 100:
+                capacity = int(cap_d)
+        except ValueError:
             capacity = None
         skills = _split(r.get("required prerequisite skills"))
         if len(skills) > 15 or any(len(s) > 80 for s in skills):
@@ -486,8 +512,6 @@ async def import_projects(
         if sup_email and supervisor is None:
             rc.err(number, "Supervisor Email", "must belong to an active supervisor")
         current = existing.get(code.upper()) if code else None
-        if current is not None and capacity is not None and capacity < alloc_counts.get(current.id, 0):
-            rc.err(number, "Max Trainee Capacity", f"below the {alloc_counts[current.id]} current allocations")
         if current is not None and has_sup and not sup_email and current.status == ProjectStatus.published:
             rc.err(number, "Supervisor Email", "a published project needs a supervisor")
         if len(rc.errors) == before:
@@ -495,7 +519,7 @@ async def import_projects(
                 {
                     "code": code,
                     "title": title,
-                    "trade": trade,
+                    "trades": clean_names(trades_raw, 5, "Target Trade") if trades_raw else [],
                     "difficulty": Difficulty(diff_raw),
                     "min_practical_score": minimum,
                     "max_trainees": capacity,
@@ -510,13 +534,18 @@ async def import_projects(
     if result.errors:
         return Envelope(data=_finish(db, result, dry_run, admin, "import.projects", cycle))
 
-    trades, result.created_trades = resolve_trade_names(db, sorted({p["trade"] for p in parsed}, key=str.lower), True)
+    trades, result.created_trades = resolve_trade_names(
+        db, sorted({n for p in parsed for n in p["trades"]}, key=str.lower), True
+    )
+    from app.modules.projects import next_project_code
+
+    touched: list[M.Project] = []
     for p in parsed:
         skills, new = resolve_skill_names(db, clean_names(p["skills"], 15, "skills"))
         result.created_skills += new
+        row_trades = [trades[n.lower()] for n in p["trades"]]
         values: dict[str, Any] = {
             "title": p["title"],
-            "target_trade_id": trades[p["trade"].lower()].id,
             "difficulty": p["difficulty"],
             "min_practical_score": p["min_practical_score"],
             "max_trainees": p["max_trainees"],
@@ -527,35 +556,60 @@ async def import_projects(
             values["description"] = p["description"]
         if has_sup:
             values["supervisor_id"] = p["supervisor"].id if p["supervisor"] else None
-        proj = existing.get(p["code"].upper())
+        proj = existing.get(p["code"].upper()) if p["code"] else None
         if proj is None:
-            proj = M.Project(cycle_id=cycle.id, project_code=p["code"], created_by=admin.id, **values)
+            proj = M.Project(
+                id=uuid.uuid4(),
+                cycle_id=cycle.id,
+                project_code=p["code"] or next_project_code(db, cycle.id),
+                created_by=admin.id,
+                generation_source="import",
+                processing_status=ProjectProcessing.queued
+                if p["problem_doc_url"]
+                else ProjectProcessing.awaiting_document,
+                **values,
+            )
+            set_project_trades(proj, row_trades)
             proj.skills = skills
             db.add(proj)
+            touched.append(proj)
             result.created += 1
             continue
-        dirty = any(getattr(proj, k) != v for k, v in values.items()) or sorted(s.id for s in proj.skills) != sorted(
-            s.id for s in skills
+        dirty = (
+            any(getattr(proj, k) != v for k, v in values.items() if k != "max_trainees")
+            or sorted(s.id for s in proj.skills) != sorted(s.id for s in skills)
+            or [x.id for x in proj.all_trades] != [x.id for x in row_trades]
         )
         if not dirty:
             result.unchanged += 1
             continue
-        trade_or_min = (
-            proj.target_trade_id != values["target_trade_id"]
-            or proj.min_practical_score != values["min_practical_score"]
-        )
+        trade_or_min = [x.id for x in proj.all_trades] != [
+            x.id for x in row_trades
+        ] or proj.min_practical_score != values["min_practical_score"]
         for k, v in values.items():
             setattr(proj, k, v)
+        set_project_trades(proj, row_trades)
         proj.skills = skills
+        if proj.processing_status == ProjectProcessing.awaiting_document and p["problem_doc_url"]:
+            proj.processing_status = ProjectProcessing.queued
+        touched.append(proj)
         result.updated += 1
         if trade_or_min and alloc_counts.get(proj.id):
             db.flush()
             db.refresh(proj)
             pi = project_input(proj)
-            for a in db.scalars(select(M.Allocation).where(M.Allocation.project_id == proj.id)).unique():
+            for a in db.scalars(
+                select(M.Allocation).where(
+                    M.Allocation.project_id == proj.id, M.Allocation.status == AllocationStatus.active
+                )
+            ).unique():
                 if reasons := eligibility(trainee_input(a.trainee), pi):
                     result.warnings.append(
                         f"{a.trainee.trainee_code} is now ineligible for {proj.project_code} ({', '.join(reasons)})"
                     )
     db.flush()
+    for proj in touched:
+        jobs.enqueue(
+            db, "process_project", {"project_id": str(proj.id)}, dedupe_key=f"project:{proj.id}", trigger="import"
+        )
     return Envelope(data=_finish(db, result, dry_run, admin, "import.projects", cycle))

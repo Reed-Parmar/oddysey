@@ -95,7 +95,8 @@ ADMIN_ONLY = [
     ("get", "/api/v1/admin/invitations"),
     ("get", "/api/v1/admin/reports/overview"),
     ("post", "/api/v1/projects"),
-    ("post", "/api/v1/allocations"),
+    ("post", "/api/v1/admin/automation/run-now"),
+    ("get", "/api/v1/admin/automation"),
 ]
 
 
@@ -111,17 +112,25 @@ def test_role_scoped_endpoints(client, users):
     admin = users.make("admin")
     cycle = create_cycle(client, admin)
     student, sup = users.make("student"), users.make("supervisor")
-    assert client.post(f"/api/v1/cycles/{cycle['id']}/recommendation-runs", headers=sup).status_code == 403
-    assert client.post(f"/api/v1/cycles/{cycle['id']}/allocation-runs", headers=student).status_code == 403
+    # recommendation screens/endpoints and manual allocation runs no longer exist (ADR-017)
+    assert client.post(f"/api/v1/cycles/{cycle['id']}/recommendation-runs", headers=admin).status_code == 404
+    assert client.post(f"/api/v1/cycles/{cycle['id']}/allocation-runs", headers=admin).status_code == 404
+    assert client.get("/api/v1/recommendations", headers=admin).status_code == 404
+    # rejection is a student-only action
+    body = {"reason": "Not my area of interest", "idempotency_key": "abcdefgh1"}
+    assert client.post(f"/api/v1/allocations/{uuid.uuid4()}/reject", headers=sup, json=body).status_code == 403
+    assert client.post(f"/api/v1/allocations/{uuid.uuid4()}/reject", headers=admin, json=body).status_code == 403
     assert client.get("/api/v1/trainees", headers=student).status_code == 403
-    assert client.get("/api/v1/recommendations", headers=sup).status_code == 403
+    assert client.get("/api/v1/onboarding", headers=sup).status_code == 403
     assert (
         client.post(
             f"/api/v1/submissions/{uuid.uuid4()}/evaluation", headers=student, json={"outcome": "evaluated"}
         ).status_code
         == 403
     )
-    assert client.post("/api/v1/submissions", headers=sup, data={"video_url": "https://x.org"}).status_code == 403
+    assert (
+        client.post("/api/v1/submissions", headers=sup, data={"report_url": "https://x.org/r.pdf"}).status_code == 403
+    )
     assert client.patch("/api/v1/trainees/me", headers=student, json={"scores": {"practical": 99}}).status_code == 422
 
 
@@ -131,12 +140,13 @@ def test_object_level_visibility(client, users):
     student = link_student(client, admin, s["trainees"]["TRN-EL-001"]["id"], "ramesh@example.org")
     other = s["trainees"]["TRN-EL-002"]["id"]
     assert client.get(f"/api/v1/trainees/{other}", headers=student).status_code == 404
-    # supervisors see no trainees until allocations are published
-    assert client.get(f"/api/v1/trainees/{other}", headers=s["sup_a"]).status_code == 404
+    # supervisors see only trainees allocated to projects they supervise (visible immediately, no publish step)
+    assert client.get(f"/api/v1/trainees/{other}", headers=s["sup_b"]).status_code == 404
+    assert client.get(f"/api/v1/trainees/{other}", headers=s["sup_a"]).status_code == 200
     own = ok(client.get(f"/api/v1/trainees/{s['trainees']['TRN-EL-001']['id']}", headers=student))["data"]
     assert own["gender"] is None and own["account"]["email"] == "ramesh@example.org"
     admin_view = ok(client.get(f"/api/v1/trainees/{other}", headers=admin))["data"]
     assert admin_view["gender"] == "female"
-    # student project catalogue: published projects only, no stats
+    # no catalogue: a student sees only their own allocated project, without stats
     projects = ok(client.get("/api/v1/projects", params={"page_size": 100}, headers=student))["data"]
-    assert len(projects) == 8 and all(p["stats"] is None for p in projects)
+    assert len(projects) == 1 and all(p["stats"] is None for p in projects)

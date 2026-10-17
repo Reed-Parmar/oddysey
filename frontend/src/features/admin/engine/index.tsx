@@ -1,5 +1,3 @@
-/** Admin engine pages: recommendations, allocations, progress, submission detail (admin.md §3.5–3.8). */
-export { RecommendationsPage } from "./RecommendationsPage";
-export { AllocationsPage } from "./AllocationsPage";
-export { AdminProgressPage } from "./ProgressPage";
+/** Admin engine pages: allocation & progress tracking, submission detail. */
 export { AdminSubmissionPage } from "./SubmissionPage";
+export { TrackingPage } from "./TrackingPage";

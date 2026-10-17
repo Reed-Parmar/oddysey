@@ -1,4 +1,5 @@
 /** Supervisor-module helpers shared by its pages. */
+import { tradeNames } from "@/features/shared/views";
 import { CalendarBlank, Hourglass, Target, UsersThree } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
@@ -8,15 +9,15 @@ import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
 import type { Cycle, PageMeta, ProgressRow, Project } from "@/api/types";
 import {
-  Avatar, DataTable, EmptyState, ErrorState, LoadingState, Meter, Pagination, ScoreBar, StatusBadge, type Column,
+  Avatar, DataTable, EmptyState, ErrorState, LoadingState, Pagination, ScoreBar, StatusBadge, type Column,
 } from "@/components/shared";
 import { Select, cx } from "@/components/ui";
 import { useCurrentCycle } from "@/app/AppShell";
 import { formatScore } from "@/lib/format";
 import { label } from "@/lib/statusLabels";
 
-/** Supervisors see trainees/allocations/submissions only once the cycle is published or archived. */
-export const isVisibleCycle = (c: Cycle | null | undefined) => c?.status === "published" || c?.status === "archived";
+/** ADR-017: assignments are visible as soon as they are made (no publish step), so any existing cycle is visible. */
+export const isVisibleCycle = (c: Cycle | null | undefined) => c != null;
 
 export function useCycleState() {
   const q = useCurrentCycle();
@@ -29,8 +30,8 @@ export function NotPublishedState({ cycle }: { cycle: Cycle | null }) {
   return (
     <EmptyState
       icon={<Hourglass />}
-      title="Allocations are not published yet"
-      description={`The cycle "${cycle.name}" is in ${label("cycle", cycle.status)[0].toLowerCase()}. Trainees, submissions and progress appear here once the programme team publishes allocations.`}
+      title="No trainees allocated to your projects yet"
+      description={`Trainees appear here as soon as the automatic allocation assigns them to one of your projects in "${cycle.name}" (${label("cycle", cycle.status)[0].toLowerCase()}).`}
     />
   );
 }
@@ -127,10 +128,8 @@ export function PersonCell({ name, meta, to, onLinkClick }: {
   );
 }
 
-/** Supervisor project tile: code, title, status, trade/difficulty and a capacity meter. */
+/** Supervisor project tile: code, title, processing status, trades/difficulty and the individual contributor count. */
 export function SupervisorProjectCard({ project: p }: { project: Project }) {
-  const allocated = p.stats?.allocated_count;
-  const full = allocated != null && allocated >= p.max_trainees;
   return (
     <Link
       to={`/supervisor/projects/${p.id}`}
@@ -141,52 +140,38 @@ export function SupervisorProjectCard({ project: p }: { project: Project }) {
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">{p.project_code}</p>
           <h3 className="mt-0.5 text-base font-semibold text-text transition-colors group-hover:text-primary">{p.title}</h3>
         </div>
-        <StatusBadge kind="project" value={p.status} />
+        <StatusBadge kind="processing" value={p.processing_status} />
       </div>
       <div className="flex flex-wrap gap-1.5 text-xs">
-        <StatusBadge kind="difficulty" value={p.difficulty} />
-        <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 font-medium text-neutral">{p.target_trade.name}</span>
-        <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 font-medium text-neutral tabular-nums">
-          Min practical {formatScore(p.min_practical_score)}%
-        </span>
-      </div>
-      <div className="mt-auto space-y-2">
-        <Meter
-          label="Capacity"
-          value={allocated ?? 0}
-          max={p.max_trainees}
-          tone={full ? "success" : "primary"}
-          valueLabel={allocated == null ? `— / ${p.max_trainees}` : `${allocated} / ${p.max_trainees} allocated`}
-        />
-        {p.stats?.eligible_trainee_count != null && (
-          <p className="flex items-center gap-1.5 text-xs text-muted">
-            <UsersThree aria-hidden size={14} />
-            <span><span className="tabular-nums">{p.stats.eligible_trainee_count}</span> eligible trainees (latest run)</span>
-          </p>
+        {p.difficulty && <StatusBadge kind="difficulty" value={p.difficulty} />}
+        <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 font-medium text-neutral">{tradeNames(p)}</span>
+        {p.min_practical_score > 0 && (
+          <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 font-medium text-neutral tabular-nums">
+            Verified practical ≥ {formatScore(p.min_practical_score)}%
+          </span>
         )}
       </div>
+      <p className="mt-auto flex items-center gap-1.5 text-sm text-muted">
+        <UsersThree aria-hidden size={16} />
+        <span><span className="font-semibold text-text tabular-nums">{p.stats?.working_individually ?? 0}</span> trainees working individually</span>
+      </p>
     </Link>
   );
 }
 
-/** Capacity summary for a project detail page. */
-export function CapacitySummary({ project: p }: { project: Project }) {
-  const allocated = p.stats?.allocated_count ?? 0;
-  const left = Math.max(0, p.max_trainees - allocated);
+/** Individual contributor counts for a project detail page (no capacity: each trainee works on their own copy). */
+export function ContributorSummary({ project: p }: { project: Project }) {
   return (
-    <div className="space-y-4">
-      <Meter label="Seats filled" value={allocated} max={p.max_trainees} tone={left === 0 ? "success" : "primary"} />
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg bg-surface-2 p-3">
-          <dt className="text-xs text-muted">Seats left</dt>
-          <dd className="font-heading text-xl font-semibold tabular-nums">{left}</dd>
-        </div>
-        <div className="rounded-lg bg-surface-2 p-3">
-          <dt className="flex items-center gap-1 text-xs text-muted"><Target aria-hidden size={12} /> Eligible</dt>
-          <dd className="font-heading text-xl font-semibold tabular-nums">{p.stats?.eligible_trainee_count ?? "—"}</dd>
-        </div>
-      </dl>
-    </div>
+    <dl className="grid grid-cols-2 gap-3 text-sm">
+      <div className="rounded-lg bg-surface-2 p-3">
+        <dt className="text-xs text-muted">Number of trainees working individually</dt>
+        <dd className="font-heading text-xl font-semibold tabular-nums">{p.stats?.working_individually ?? 0}</dd>
+      </div>
+      <div className="rounded-lg bg-surface-2 p-3">
+        <dt className="flex items-center gap-1 text-xs text-muted"><Target aria-hidden size={12} /> Rejections (history)</dt>
+        <dd className="font-heading text-xl font-semibold tabular-nums">{p.stats?.rejected_total ?? 0}</dd>
+      </div>
+    </dl>
   );
 }
 

@@ -26,13 +26,16 @@ from app.db import models as M
 from app.db.enums import AssessmentStatus, UserRole
 from app.domain import (
     VISIBLE_ALLOC,
+    active_allocation,
     active_cycle,
     clean_names,
     lock_cycle,
+    now_utc,
     project_input,
     require_not_archived,
     resolve_cycle,
     resolve_skill_names,
+    set_trainee_trades,
     trainee_input,
 )
 from app.schemas import AllocationOut, TraineeOut, allocation_out, trainee_out
@@ -51,6 +54,7 @@ def scope_trainees(stmt: Select, viewer: M.User) -> Select:  # type: ignore[type
         return stmt.where(
             exists().where(
                 M.Allocation.trainee_id == M.Trainee.id,
+                M.Allocation.status == "active",
                 M.Allocation.project_id == M.Project.id,
                 M.Project.supervisor_id == viewer.id,
                 M.Cycle.id == M.Trainee.cycle_id,
@@ -84,15 +88,66 @@ def get_my_trainee(user: Student, db: DB) -> Envelope[TraineeMe | None]:
         return Envelope(data=None)
     alloc = None
     if cycle.status in VISIBLE_ALLOC:
-        a = db.scalar(select(M.Allocation).where(M.Allocation.trainee_id == t.id))
+        a = active_allocation(db, t.id)
         alloc = allocation_out(a, user) if a else None
     return Envelope(data=TraineeMe(**trainee_out(t, user).model_dump(), allocation=alloc))
 
 
+class ReportedScoresIn(BaseModel):
+    """Resume-reported marks the trainee confirmed or corrected. Stored as unverified claims: they never
+    replace imported/verified marks and never satisfy a verified-assessment gate (ADR-017 §6.2)."""
+
+    model_config = In.model_config
+    resume_id: uuid.UUID
+    theory: Decimal | None = Field(default=None, ge=0, le=100)
+    practical: Decimal | None = Field(default=None, ge=0, le=100)
+    safety: Decimal | None = Field(default=None, ge=0, le=100)
+
+
 class TraineeSelfPatch(In):
+    reported_scores: ReportedScoresIn | None = None
+    trade_ids: list[uuid.UUID] | None = Field(default=None, min_length=1, max_length=5)
     skills: list[str] | None = Field(default=None, max_length=20)
     career_interest: str | None = Field(default=None, max_length=300)
     background: str | None = Field(default=None, max_length=2000)
+
+
+def _reported(db: DB, t: M.Trainee, body: ReportedScoresIn) -> dict:
+    r = db.get(M.TraineeResume, body.resume_id)
+    if r is None or r.trainee_id != t.id:
+        raise field_error("body.reported_scores.resume_id", "unknown resume")
+    found = {m["field"]: m for m in (r.extracted or {}).get("assessment_marks", [])}
+    out: dict = {
+        "source": "resume_reported",
+        "verified": False,
+        "resume_id": str(r.id),
+        "confirmed_at": now_utc().isoformat(),
+    }
+    for field in ("theory", "practical", "safety"):
+        value = getattr(body, field)
+        if value is None:
+            continue
+        m = found.get(field) or {}
+        extracted = m.get("value")
+        out[field] = {
+            "value": float(value),
+            "extracted_value": extracted,
+            "corrected": extracted is None or float(extracted) != float(value),
+            "excerpt": m.get("excerpt"),
+        }
+    return out
+
+
+def _set_trades(db: DB, t: M.Trainee, ids: list[uuid.UUID]) -> bool:
+    if len(set(ids)) != len(ids):
+        raise field_error("body.trade_ids", "duplicate trades")
+    trades = [db.get(M.Trade, i) for i in ids]
+    if any(x is None for x in trades):
+        raise field_error("body.trade_ids", "unknown trade")
+    if sorted(str(x.id) for x in t.all_trades) == sorted(str(i) for i in ids):
+        return False
+    set_trainee_trades(t, trades)  # type: ignore[arg-type]
+    return True
 
 
 def _replace_skills(db: DB, t: M.Trainee, names: list[str]) -> bool:
@@ -117,6 +172,11 @@ def patch_my_trainee(body: TraineeSelfPatch, user: Student, db: DB) -> Envelope[
     if t is None:
         raise conflict("NO_TRAINEE_RECORD", "No trainee record is linked to your account")
     changes = body.model_dump(exclude_unset=True)
+    if body.reported_scores is not None:
+        t.reported_scores = _reported(db, t, body.reported_scores)
+        changes.pop("reported_scores")
+    if changes.get("trade_ids"):
+        _set_trades(db, t, changes["trade_ids"])
     if "skills" in changes:
         _replace_skills(db, t, changes["skills"] or [])
     for field in ("career_interest", "background"):
@@ -203,7 +263,7 @@ class TraineeAdminPatch(In):
     trainee_code: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,40}$")
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
     gender: Literal["female", "male", "other", "undisclosed"] | None = None
-    trade_id: uuid.UUID | None = None
+    trade_ids: list[uuid.UUID] | None = Field(default=None, min_length=1, max_length=5)
     centre_name: str | None = Field(default=None, max_length=120)
     scores: ScoresIn | None = None
     skills: list[str] | None = Field(default=None, max_length=20)
@@ -212,7 +272,7 @@ class TraineeAdminPatch(In):
 
 
 def allocation_warnings(db: DB, t: M.Trainee) -> list[str]:
-    a = db.scalar(select(M.Allocation).where(M.Allocation.trainee_id == t.id))
+    a = active_allocation(db, t.id)
     if a is None:
         return []
     reasons = eligibility(trainee_input(t), project_input(a.project))
@@ -235,11 +295,11 @@ def patch_trainee(trainee_id: uuid.UUID, body: TraineeAdminPatch, admin: Admin, 
     assert t is not None
     changes = body.model_dump(exclude_unset=True)
     changed: list[str] = []
-    for req in ("trainee_code", "full_name", "trade_id"):
+    for req in ("trainee_code", "full_name", "trade_ids"):
         if req in changes and changes[req] is None:
             raise field_error(f"body.{req}", "cannot be null")
-    if changes.get("trade_id") and db.get(M.Trade, changes["trade_id"]) is None:
-        raise field_error("body.trade_id", "unknown trade")
+    if changes.get("trade_ids") and _set_trades(db, t, changes.pop("trade_ids")):
+        changed.append("trades")
     if changes.get("trainee_code") and changes["trainee_code"].upper() != t.trainee_code.upper():
         from sqlalchemy import func
 
@@ -267,7 +327,7 @@ def patch_trainee(trainee_id: uuid.UUID, body: TraineeAdminPatch, admin: Admin, 
                 changed.append(field)
     db.flush()
     db.refresh(t)
-    warnings = allocation_warnings(db, t) if {"trade_id", "practical_score"} & set(changed) else []
+    warnings = allocation_warnings(db, t) if {"trades", "practical_score"} & set(changed) else []
     if changed:
         audit.record(db, admin.id, "trainee.updated", "trainee", t.id, {"changed": changed})
     db.commit()

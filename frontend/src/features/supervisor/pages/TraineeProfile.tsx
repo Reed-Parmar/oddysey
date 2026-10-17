@@ -70,7 +70,7 @@ export function TraineeProfilePage() {
                   <span className="text-muted">Match score</span>
                   {a.match_score == null ? <span>—</span> : <ScoreBar value={a.match_score} label="Match score" />}
                 </div>
-                {a.factors ? <FactorTable factors={a.factors} /> : <p className="text-sm text-muted">Manual allocation, no recommendation factors.</p>}
+                {a.factors ? <FactorTable factors={a.factors} /> : <p className="text-sm text-muted">Allocated before itemised factors were recorded.</p>}
               </div>
             )}
           </Card>

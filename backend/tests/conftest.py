@@ -28,6 +28,9 @@ OWNER_URL = f"{_base}/{DB_NAME}"
 host_part = _base.split("@", 1)[1]
 API_URL = f"postgresql+psycopg://spa_api:{API_PASSWORD}@{host_part}/{DB_NAME}"
 
+# openpyxl imports numpy when it is installed; one OpenBLAS thread keeps memory use small on dev machines.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 # Configure the app BEFORE it is imported. Real env vars win over backend/.env.
 os.environ.update(
     {
@@ -43,6 +46,14 @@ os.environ.update(
 )
 
 TABLES = [
+    "analysis_reviews",
+    "report_analyses",
+    "notifications",
+    "jobs",
+    "allocation_rejections",
+    "onboarding_profiles",
+    "trainee_trades",
+    "project_trades",
     "audit_events",
     "trainee_resumes",
     "evaluations",
@@ -115,7 +126,31 @@ def resume_storage(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 @pytest.fixture
-def client(fake_storage: Any, resume_storage: Any) -> Iterator[Any]:
+def project_storage(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from app.modules import projects
+    from app.storage import FakeStorage
+
+    fake = FakeStorage()
+    monkeypatch.setattr(projects, "get_project_doc_storage", lambda: fake)
+    return fake
+
+
+@pytest.fixture(autouse=True)
+def no_ai_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """External services are faked: no Groq calls and no network fetches in tests."""
+    from app.automation import analysis, fetch, projects
+
+    monkeypatch.setattr(projects, "ai_client_factory", lambda: None)
+    monkeypatch.setattr(analysis, "ai_client_factory", lambda: None)
+
+    def _no_network(url: str) -> tuple[bytes, str]:
+        raise fetch.FetchError("Network fetching is disabled in tests")
+
+    monkeypatch.setattr(fetch, "report_fetcher", _no_network)
+
+
+@pytest.fixture
+def client(fake_storage: Any, resume_storage: Any, project_storage: Any) -> Iterator[Any]:
     from fastapi.testclient import TestClient
 
     from app.main import app
@@ -179,3 +214,10 @@ def owner_sql(sql: str, params: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
     with psycopg.connect(OWNER_URL, autocommit=True) as c:
         cur = c.execute(sql, params)
         return cur.fetchall() if cur.description else []
+
+
+def drain() -> int:
+    """Run every ready background job now (the worker, synchronously)."""
+    from app.worker import drain as _drain
+
+    return _drain()

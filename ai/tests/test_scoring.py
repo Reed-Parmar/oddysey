@@ -9,7 +9,9 @@ from spa_ai.scoring import (
     TraineeInput,
     apply_ai,
     assessment_complete,
+    best_project,
     eligibility,
+    rank_candidates,
     rank_pairs,
     score_pair,
     select_stored,
@@ -171,17 +173,24 @@ def test_assessment_complete_and_pending():
     assert assessment_complete(T["TRN-EL-001"])
     assert not assessment_complete(_pending(theory=None))
     with pytest.raises(ValueError):
-        score_pair(_pending(safety=None), P["PRJ-EL-101"])
+        score_pair(_pending(safety=None), P["PRJ-EL-101"], mode="full")
+    # without a complete verified assessment the default is profile mode
+    assert score_pair(_pending(safety=None), P["PRJ-EL-101"]).mode == "profile"
 
 
 def test_eligibility_live_check():
     assert eligibility(T["TRN-EL-002"], P["PRJ-EL-101"]) == []
     assert eligibility(T["TRN-CP-008"], P["PRJ-CP-401"]) == ["below_min_practical"]
-    assert eligibility(_pending(practical=None), P["PRJ-EL-101"]) == ["assessment_pending"]
+    # a project with a minimum practical score needs a VERIFIED mark; unknown is never assumed
+    assert eligibility(_pending(practical=None), P["PRJ-EL-101"]) == [
+        "verified_assessment_required"
+    ]
     assert eligibility(_pending(practical=None), P["PRJ-FT-201"]) == [
         "trade_mismatch",
-        "assessment_pending",
+        "verified_assessment_required",
     ]
+    no_gate = dataclasses.replace(P["PRJ-EL-101"], min_practical_score=0.0)
+    assert eligibility(_pending(practical=None), no_gate) == []
 
 
 def test_no_prerequisites_and_percent_format():
@@ -234,3 +243,72 @@ def test_select_stored_union_preserves_rank():
         (1, "A"), (2, "B"), (3, "C"), (4, "D"), (5, "E"), (8, "H"),
     ]
     assert select_stored([], set()) == []
+
+
+# ------------------------------------------------------------ ADR-017: modes, trades, ranking
+
+
+def test_profile_mode_weights_and_sum():
+    t = dataclasses.replace(T["TRN-EL-002"], theory=None, practical=None, safety=None)
+    p = dataclasses.replace(P["PRJ-EL-101"], min_practical_score=0.0)
+    ps = score_pair(t, p)
+    assert ps.mode == "profile" and ps.eligible
+    assert [f.key for f in ps.factors] == ["trade_match", "skill_coverage", "interest_alignment"]
+    assert [f.max_points for f in ps.factors] == [0, 60, 40]
+    assert ps.factor("skill_coverage").points == 40.0  # 2 of 3 prerequisites
+    assert ps.factor("interest_alignment").points == 40.0
+    assert Decimal(repr(ps.score)) == dsum(ps)
+
+
+def test_profile_mode_shows_verified_gate_when_required():
+    t = dataclasses.replace(T["TRN-EL-002"], practical=None)
+    ps = score_pair(t, P["PRJ-EL-101"])
+    assert not ps.eligible and ps.ineligible_reasons == ["verified_assessment_required"]
+    assert ps.factor("verified_practical_gate").max_points == 0
+
+
+def test_multi_trade_overlap():
+    t = dataclasses.replace(
+        T["TRN-EL-002"],
+        trade_ids=("electrician", "solar_technician"),
+        trade_names=("Electrician", "Solar Technician"),
+    )
+    p = dataclasses.replace(
+        P["PRJ-EL-101"],
+        target_trade_id="",
+        target_trade_ids=("solar_technician", "fitter"),
+        target_trade_names=("Solar Technician", "Fitter"),
+    )
+    assert eligibility(t, p) == []
+    assert "overlap" in score_pair(t, p).factor("trade_match").detail
+    p2 = dataclasses.replace(p, target_trade_ids=("fitter",), target_trade_names=("Fitter",))
+    assert eligibility(t, p2) == ["trade_mismatch"]
+
+
+def test_min_match_threshold_is_separate_from_practical():
+    p = dataclasses.replace(P["PRJ-EL-101"], min_match_score=90.0)
+    ps = score_pair(T["TRN-EL-002"], p)
+    assert ps.score == 86.0 and ps.ineligible_reasons == ["below_min_match"]
+    assert score_pair(T["TRN-EL-002"], dataclasses.replace(p, min_match_score=0.0)).eligible
+
+
+def test_best_project_allows_shared_projects_and_breaks_ties_by_code():
+    a = dataclasses.replace(P["PRJ-EL-101"], min_practical_score=0.0, skills=())
+    b = dataclasses.replace(a, id="B", project_code="PRJ-EL-000")
+    best = best_project(T["TRN-EL-002"], [a, b])
+    assert best is not None and best.project_id == "B"
+    assert best_project(T["TRN-FT-003"], [a, b]) is None  # no trade overlap
+
+
+def test_rank_candidates_uses_one_scale_for_mixed_pools():
+    p = dataclasses.replace(P["PRJ-EL-101"], min_practical_score=0.0)
+    verified = T["TRN-EL-002"]
+    profile = dataclasses.replace(T["TRN-EL-001"], theory=None)
+    mode, ranked, _ = rank_candidates(p, [verified, profile])
+    assert mode == "profile" and all(r.mode == "profile" for r in ranked)
+    mode, ranked, _ = rank_candidates(p, [verified, T["TRN-EL-001"]])
+    assert mode == "full" and ranked[0].trainee_id == "TRN-EL-002"
+    # stable: equal scores keep the caller's (waiting-time) order
+    twin = dataclasses.replace(verified, id="TWIN")
+    _, ranked, _ = rank_candidates(p, [twin, verified])
+    assert [r.trainee_id for r in ranked] == ["TWIN", "TRN-EL-002"]

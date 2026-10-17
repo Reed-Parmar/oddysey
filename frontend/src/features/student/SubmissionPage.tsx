@@ -1,5 +1,6 @@
+/** Submission pieces for My Project (SUB-01/02) and the own submission detail page. */
 import {
-  ChatCircleText, ClockCounterClockwise, Files, Hourglass, Info, NotePencil, PaperPlaneTilt, Ruler, WarningCircle,
+  ChatCircleText, ClockCounterClockwise, Files, Hourglass, Info, MagnifyingGlass, PaperPlaneTilt, Ruler, WarningCircle,
 } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,25 +14,23 @@ import { qk } from "@/api/queryKeys";
 import type { Submission } from "@/api/types";
 import { uploadMultipart } from "@/api/upload";
 import {
-  BackLink, DateTime, EmptyState, ErrorState, FileField, FormField, LoadingState, PageHeader, StatusBadge, useToast,
+  BackLink, DateTime, ErrorState, FileField, FormField, LoadingState, PageHeader, StatusBadge, useToast,
 } from "@/components/shared";
 import { Alert, Button, Card, Input, Textarea, cx } from "@/components/ui";
-import { SubmissionDetailView } from "@/features/shared/views";
+import { AnalysisReport, ReportScore, SubmissionDetailView, useAnalysis } from "@/features/shared/views";
 
-import { AllocationPanel, NoAllocationPanel } from "./AllocationPanel";
 import {
-  ARTIFACT_REQUIRED, FILE_ACCEPT, MAX_FILE_BYTES, buildSubmissionFormData, emptySubmission, submissionSchema,
-  submitBlockedReason, type SubmissionValues,
+  FILE_ACCEPT, MAX_FILE_BYTES, REPORT_REQUIRED, buildSubmissionFormData, emptySubmission, submissionSchema,
+  type SubmissionValues,
 } from "./forms";
-import { useMySubmissionHistory, useStudentContext } from "./hooks";
 
 const FIELDS = ["video_url", "report_url", "file", "logbook_hours", "bom_cost_inr", "note"] as const;
 type FieldKey = (typeof FIELDS)[number];
 
 /** Form-level alert text for SUB-01 409 codes (student.md §9.3). */
 const CONFLICT_TEXT: Record<string, string> = {
-  NO_ACTIVE_CYCLE: "No allocation cycle is open.",
-  INVALID_STATE: "Allocations are not published yet.",
+  NO_ACTIVE_CYCLE: "No programme cycle is open.",
+  INVALID_STATE: "This cycle is archived; submissions are closed.",
   NOT_ALLOCATED: "You have no allocated project.",
   SUBMISSION_PENDING: "A version is already awaiting evaluation.",
   SUBMISSION_ALREADY_EVALUATED: "Your project has been evaluated; no further versions are accepted.",
@@ -41,7 +40,7 @@ const CONFLICT_TEXT: Record<string, string> = {
 /** A titled group of form fields. */
 function FieldGroup({ legend, description, icon, children }: { legend: string; description?: ReactNode; icon: ReactNode; children: ReactNode }) {
   return (
-    <fieldset className="rounded-lg border border-border p-4">
+    <fieldset className="min-w-0 rounded-lg border border-border p-4">
       <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold text-text">
         <span aria-hidden className="inline-flex text-primary [&>svg]:size-4">{icon}</span>
         {legend}
@@ -52,7 +51,19 @@ function FieldGroup({ legend, description, icon, children }: { legend: string; d
   );
 }
 
-function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean }) {
+/** The rules a trainee needs before submitting (mirrors the server; UX only). */
+export function SubmissionRules() {
+  return (
+    <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+      <li>A report is required: a report link, or a PDF/DOCX report file. A video alone is not enough.</li>
+      <li>PPTX, ZIP and image files are accepted only as supplements when you also give a report link.</li>
+      <li>While a version is awaiting evaluation you can't submit another one.</li>
+      <li>If rework is requested, you can submit a new version. An evaluated project is final.</li>
+    </ul>
+  );
+}
+
+export function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [progress, setProgress] = useState<number | null>(null);
@@ -82,6 +93,10 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
         setError("file", { message: e.details.find((d) => d.field.endsWith("file"))?.message ?? e.message });
         return;
       }
+      if (e.code === "REPORT_REQUIRED") {
+        setFormAlert({ text: REPORT_REQUIRED });
+        return;
+      }
       if (e.status === 422) {
         const unmapped: string[] = [];
         for (const [f, msg] of Object.entries(e.fieldErrors())) {
@@ -93,10 +108,8 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
       }
       if (e.code in CONFLICT_TEXT) {
         setFormAlert({ text: CONFLICT_TEXT[e.code] });
-        if (e.code === "NO_ACTIVE_CYCLE") void qc.invalidateQueries({ queryKey: qk.cycles.current() });
-        if (e.code === "INVALID_STATE") void qc.invalidateQueries({ queryKey: qk.cycles.current() });
-        if (["NO_TRAINEE_RECORD", "NOT_ALLOCATED", "INVALID_STATE"].includes(e.code))
-          void qc.invalidateQueries({ queryKey: qk.trainees.me() });
+        if (e.code === "NO_ACTIVE_CYCLE" || e.code === "INVALID_STATE") void qc.invalidateQueries({ queryKey: qk.cycles.current() });
+        if (["NO_TRAINEE_RECORD", "NOT_ALLOCATED"].includes(e.code)) void qc.invalidateQueries({ queryKey: qk.trainees.me() });
         if (["SUBMISSION_PENDING", "SUBMISSION_ALREADY_EVALUATED"].includes(e.code))
           void qc.invalidateQueries({ queryKey: qk.submissions.all() });
         return;
@@ -109,7 +122,7 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
   return (
     <Card
       title={nextVersion === 1 ? "Submit your work" : `Submit version ${nextVersion}`}
-      description="Share links or a file showing your finished project. Your supervisor evaluates it against the rubric."
+      description="Your report is analysed automatically (originality and a report score). Your supervisor may also record a verified practical evaluation."
       icon={<PaperPlaneTilt />}
     >
       <form
@@ -121,14 +134,15 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
         })}
       >
         {late && <Alert variant="warning" icon={<WarningCircle />}>The deadline has passed. Your submission will be accepted but marked Late.</Alert>}
-        <FieldGroup legend="Your work" description={ARTIFACT_REQUIRED} icon={<Files />}>
-          <FormField label="Video link" htmlFor="video_url" error={errors.video_url?.message} hint="A public https:// link, e.g. YouTube or Google Drive">
-            <Input id="video_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("video_url")} />
-          </FormField>
-          <FormField label="Report link" htmlFor="report_url" error={errors.report_url?.message} hint="A shared document or folder link starting with https://">
+        <FieldGroup legend="Your report (required)" description="Give a report link, or upload your report as a PDF or DOCX." icon={<Files />}>
+          <FormField label="Report link" htmlFor="report_url" error={errors.report_url?.message} hint="A shared document link starting with https://">
             <Input id="report_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("report_url")} />
           </FormField>
-          <FormField label="Report file" htmlFor="file" hint="Up to 10 MB: pdf, docx, pptx, zip, png, jpg">
+          <FormField
+            label="Report file or supplement"
+            htmlFor="file"
+            hint="Up to 10 MB. PDF or DOCX counts as your report; PPTX, ZIP, PNG or JPG only as a supplement next to a report link."
+          >
             <FileField
               key={fileKey}
               id="file"
@@ -138,8 +152,11 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
               onChange={(f) => setValue("file", f, { shouldValidate: true })}
             />
           </FormField>
+          <FormField label="Video link (optional)" htmlFor="video_url" error={errors.video_url?.message} hint="A public https:// link, e.g. YouTube or Google Drive">
+            <Input id="video_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("video_url")} />
+          </FormField>
         </FieldGroup>
-        <FieldGroup legend="Project log" description="Optional, but it helps your supervisor score documentation." icon={<Ruler />}>
+        <FieldGroup legend="Project log" description="Optional, but it helps your supervisor." icon={<Ruler />}>
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField label="Logbook hours" htmlFor="logbook_hours" error={errors.logbook_hours?.message} hint="0 to 1000">
               <Input id="logbook_hours" type="number" inputMode="decimal" min={0} max={1000} step="0.1" {...register("logbook_hours")} />
@@ -167,12 +184,23 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
             <p className="mt-1 text-xs text-muted" aria-live="polite">Uploading… {Math.round(progress * 100)}%</p>
           </div>
         )}
-        <div className="border-t border-border pt-4">
-          <Button type="submit" size="lg" loading={submit.isPending} icon={<PaperPlaneTilt />} className="w-full sm:w-auto">
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <SubmissionRules />
+          <Button type="submit" size="lg" loading={submit.isPending} icon={<PaperPlaneTilt />} className="w-full sm:w-auto sm:self-start">
             Submit version {nextVersion}
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** Shown in place of the form when submitting is not possible right now. */
+export function SubmitBlocked({ reason, pending }: { reason: string; pending?: boolean }) {
+  return (
+    <Card title="Submit your work" icon={pending ? <Hourglass /> : <Info />}>
+      <p className="text-sm text-muted" role="status">{reason}</p>
+      <div className="mt-3"><SubmissionRules /></div>
     </Card>
   );
 }
@@ -183,10 +211,10 @@ const DOT: Record<Submission["status"], string> = {
   evaluated: "bg-success",
 };
 
-/** Vertical timeline of every version, newest first. */
-function VersionTimeline({ versions, currentId }: { versions: Submission[]; currentId?: string }) {
+/** Vertical list of every version, newest first, with status, analysis status and automated score. */
+export function VersionTimeline({ versions, currentId }: { versions: Submission[]; currentId?: string }) {
   return (
-    <Card title="Version history" icon={<ClockCounterClockwise />} description={`${versions.length} version${versions.length === 1 ? "" : "s"} submitted`}>
+    <Card title="Versions" icon={<ClockCounterClockwise />} description={`${versions.length} version${versions.length === 1 ? "" : "s"} submitted`}>
       <ol className="relative ml-1.5 border-l-2 border-border">
         {versions.map((h) => {
           const current = h.id === currentId;
@@ -202,16 +230,16 @@ function VersionTimeline({ versions, currentId }: { versions: Submission[]; curr
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <StatusBadge kind="submission" value={h.status} />
+                <StatusBadge kind="analysis" value={h.analysis_status} />
                 {h.is_late && <StatusBadge kind="late" value="late" />}
                 {h.evaluation?.grade && <StatusBadge kind="grade" value={h.evaluation.grade} />}
               </div>
-              {h.evaluation?.feedback && (
-                <p className="mt-2 line-clamp-3 rounded-md bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted whitespace-pre-wrap">
-                  {h.evaluation.feedback}
-                </p>
-              )}
+              <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted">Report score:</span>
+                <ReportScore summary={h.report_evaluation} />
+              </p>
               {!current && (
-                <Link className="mt-1.5 inline-flex min-h-9 items-center text-sm font-semibold text-primary hover:underline" to={`/student/submissions/${h.id}`}>
+                <Link className="mt-1 inline-flex min-h-9 items-center text-sm font-semibold text-primary hover:underline" to={`/student/submissions/${h.id}`}>
                   View version {h.version}
                 </Link>
               )}
@@ -223,10 +251,10 @@ function VersionTimeline({ versions, currentId }: { versions: Submission[]; curr
   );
 }
 
-/** Highlighted supervisor feedback asking for rework. */
-function ReworkFeedback({ title, feedback }: { title: string; feedback: string }) {
+/** Highlighted feedback asking for rework. */
+export function ReworkFeedback({ title, feedback }: { title: string; feedback: string }) {
   return (
-    <section aria-label="Supervisor feedback" className="rounded-xl border border-warning/30 bg-warning-bg p-4 sm:p-5">
+    <section aria-label="Rework feedback" className="rounded-xl border border-warning/30 bg-warning-bg p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface text-warning">
           <ChatCircleText size={20} />
@@ -236,72 +264,33 @@ function ReworkFeedback({ title, feedback }: { title: string; feedback: string }
           <blockquote className="mt-2 border-l-2 border-warning/40 pl-3 text-sm leading-relaxed whitespace-pre-wrap text-text [overflow-wrap:anywhere]">
             {feedback}
           </blockquote>
-          <p className="mt-2 text-xs text-muted">Make the changes, then submit a new version below.</p>
+          <p className="mt-2 text-xs text-muted">Make the changes, then submit a new version.</p>
         </div>
       </div>
     </section>
   );
 }
 
-export function SubmissionPage() {
-  const { cycle, me } = useStudentContext();
-  const history = useMySubmissionHistory();
-  if (!cycle || !me) return <LoadingState />;
-
-  const versions = history.data?.data ?? [];
-  const latest = versions[0];
-  const blocked = submitBlockedReason(cycle, me, latest);
-  const late = Date.now() > new Date(cycle.submission_deadline).getTime();
-
+/** Own analysis for one version; polls while the pipeline is running. 404 means it has not been created yet. */
+export function AnalysisCard({ submissionId }: { submissionId: string }) {
+  const q = useAnalysis(submissionId, true);
+  const pending = q.error instanceof ApiError && q.error.status === 404;
   return (
-    <div className="space-y-6">
-      <PageHeader title="My project & submission" description="Your allocated project, your submitted work and your supervisor's evaluation." />
-      <div className="flex flex-col gap-6">
-        {me.allocation ? <AllocationPanel allocation={me.allocation} cycle={cycle} defaultOpen /> : <NoAllocationPanel cycle={cycle} />}
-
-        {history.isLoading ? (
-          <LoadingState />
-        ) : history.error ? (
-          <ErrorState error={history.error} onRetry={() => history.refetch()} />
-        ) : (
-          <>
-            {latest?.status === "rework_requested" && (
-              <ReworkFeedback
-                title={`Rework requested on version ${latest.version}`}
-                feedback={latest.evaluation?.feedback ?? "Your supervisor asked for changes. Submit a new version."}
-              />
-            )}
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
-              <div className="flex min-w-0 flex-col gap-6">
-                {blocked ? (
-                  me.allocation && (
-                    <Card title="Submit your work" icon={latest?.status === "submitted" ? <Hourglass /> : <Info />}>
-                      <p className="text-sm text-muted" role="status">{blocked}</p>
-                    </Card>
-                  )
-                ) : (
-                  <SubmitForm nextVersion={(latest?.version ?? 0) + 1} late={late} />
-                )}
-                {latest ? (
-                  <section aria-label="Latest version">
-                    <SubmissionDetailView submission={latest} />
-                  </section>
-                ) : (
-                  me.allocation && (
-                    <EmptyState icon={<NotePencil />} title="You have not submitted yet" description="Your submitted versions and feedback will appear here." />
-                  )
-                )}
-              </div>
-              {versions.length > 0 && (
-                <div className="min-w-0 lg:sticky lg:top-6">
-                  <VersionTimeline versions={versions} currentId={latest?.id} />
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <Card
+      title="Automated report evaluation"
+      icon={<MagnifyingGlass />}
+      description="Plagiarism & originality analysis and an automated report score. It checks only what your report documents."
+    >
+      {q.isLoading ? (
+        <LoadingState label="Loading analysis…" />
+      ) : pending ? (
+        <p className="text-sm text-muted" role="status">Analysis pending: your report is queued for automated analysis. This page updates by itself.</p>
+      ) : q.error || !q.data ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : (
+        <AnalysisReport analysis={q.data.data} showExport />
+      )}
+    </Card>
   );
 }
 
@@ -321,13 +310,13 @@ export function SubmissionDetailPage() {
   });
 
   if (sub.isLoading) return <LoadingState />;
-  if (sub.error || !s) return <ErrorState error={sub.error} onRetry={() => sub.refetch()} />;
+  if (sub.error || !s) return <ErrorState error={sub.error} onRetry={() => void sub.refetch()} />;
   const versions = (history.data?.data ?? []).filter((h) => h.allocation_id === s.allocation_id);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={<BackLink to="/student/submission">Back to My project</BackLink>}
+        eyebrow={<BackLink to="/student/project">Back to My project</BackLink>}
         title={`Submission · version ${s.version}`}
         description={`${s.project.project_code} · ${s.project.title}`}
       />
@@ -335,12 +324,13 @@ export function SubmissionDetailPage() {
         <ReworkFeedback title="Rework requested" feedback={s.evaluation.feedback} />
       )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-6">
           <SubmissionDetailView submission={s} />
+          <AnalysisCard submissionId={s.id} />
         </div>
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
           {versions.length > 1 && <VersionTimeline versions={versions} currentId={s.id} />}
-          {history.error && <ErrorState error={history.error} onRetry={() => history.refetch()} />}
+          {history.error && <ErrorState error={history.error} onRetry={() => void history.refetch()} />}
         </div>
       </div>
     </div>

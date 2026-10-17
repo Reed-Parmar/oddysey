@@ -1,5 +1,14 @@
 # Supervisor Module Handbook (Teammate B)
 
+> **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Supervisors are selected automatically by expertise
+> overlap and current load. They see only projects they supervise (PRJ-01) and trainees allocated to them, as soon as
+> allocations are made (no publish step). There are no recommendation runs or capacity: a project shows the
+> **Number of trainees working individually**. Each submission version shows the automated report evaluation and the
+> **Plagiarism & Originality Analysis** (SUB-05; sources outside the supervisor's access are withheld), with review actions
+> (SUB-06: confirm, annotate, amend with a reason, request explanation, request rework) and a printable export (SUB-08).
+> The 5-criterion rubric form is now the optional **verified practical evaluation** (EVAL-01), recorded only with observed
+> evidence and never copied from the automated report grade.
+
 **Status:** Proposed (Phase 1, rev 2.1: aligned with [api.md](api.md) §8 Clarifications C-1..C-30). Implementation reference for **Teammate B**: the Supervisor pages, the recommendation engine, the allocation engine, evaluation, and consolidated progress.
 **Binding sources, in priority order:** the official brief and dataset, [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), approved ADRs in [decisions.md](decisions.md) (ADR-003, ADR-011, ADR-012), then [requirements.md](requirements.md), [architecture.md](architecture.md), [auth.md](auth.md), [schema.md](schema.md), [api.md](api.md), [frontend.md](frontend.md), [testing.md](testing.md), [roadmap.md](roadmap.md).
 **On any conflict, [api.md](api.md) and [schema.md](schema.md) win; [api.md](api.md) §8 (C-n) wins over api.md §5.** This handbook adds no endpoint, field, enum, error code, query parameter or sort value. §9.2 (tokenizer and stop-words) is the source referenced by C-13. Open items are in §21.

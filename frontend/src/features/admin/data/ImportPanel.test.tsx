@@ -1,10 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ImportResult, Overview } from "@/api/types";
+import type { ImportResult } from "@/api/types";
 
 import { ImportPreview, problemsFromDetails } from "./ImportPanel";
-import { buildSteps } from "./OverviewPage";
 
 const base: ImportResult = {
   applied: false, rows: 8, created: 7, updated: 0, unchanged: 0, created_trades: [], created_skills: ["Circuit Design"],
@@ -54,23 +53,6 @@ describe("problemsFromDetails (422 IMPORT_INVALID)", () => {
     ])).toEqual([
       { row: null, column: "File", message: "Missing column Project ID" },
       { row: 7, column: "Max Trainee Capacity", message: "must be 1–100" },
-    ]);
-  });
-});
-
-describe("buildSteps", () => {
-  it("marks progress through the programme-team flow", () => {
-    const o = {
-      cycle: { id: "c1", name: "Oct", status: "draft" },
-      users: { students: 0, supervisors: 1, admins: 1, disabled: 0, pending_invitations: 0 },
-      trainees: { total: 12, assessment_complete: 12, assessment_pending: 0, linked_accounts: 0, by_trade: [] },
-      recommendations: { latest_run: null, trainees_with_eligible: 0, trainees_without_eligible: 12 },
-      allocation: null, demand: [], submissions: null, grades: null,
-    } as unknown as Overview;
-    const steps = buildSteps(o, 8);
-    expect(steps.map((s) => [s.key, s.done])).toEqual([
-      ["cycle", true], ["trainees", true], ["projects", true], ["publish-projects", false],
-      ["recs", false], ["alloc", false], ["publish", false],
     ]);
   });
 });

@@ -29,19 +29,22 @@ class ResumeParseError(Exception):
     """The file is malformed, encrypted or otherwise unreadable."""
 
 
-def _pdf_text(data: bytes) -> str:
+def _pdf_text_pages(data: bytes, max_pages: int = MAX_PDF_PAGES) -> list[str]:
     from pypdf import PdfReader
 
     try:
         reader = PdfReader(io.BytesIO(data), strict=False)
         if reader.is_encrypted and not reader.decrypt(""):
             raise ResumeParseError("encrypted")
-        pages = [page.extract_text() or "" for page in reader.pages[:MAX_PDF_PAGES]]
+        return [page.extract_text() or "" for page in reader.pages[:max_pages]]
     except ResumeParseError:
         raise
-    except Exception as exc:  # noqa: BLE001 - any parser failure is a malformed file
+    except Exception as exc:
         raise ResumeParseError(type(exc).__name__) from exc
-    return "\n".join(pages)
+
+
+def _pdf_text(data: bytes) -> str:
+    return "\n".join(_pdf_text_pages(data))
 
 
 def _docx_text(data: bytes) -> str:
@@ -53,7 +56,7 @@ def _docx_text(data: bytes) -> str:
             root = ElementTree.fromstring(zf.read(info))
     except ResumeParseError:
         raise
-    except Exception as exc:  # noqa: BLE001 - bad zip, missing part, invalid XML
+    except Exception as exc:
         raise ResumeParseError(type(exc).__name__) from exc
     lines: list[str] = []
     for para in root.iter(f"{_W}p"):

@@ -13,7 +13,8 @@ from app.db.enums import CycleStatus, SubmissionStatus, TraineeProgress
 from spa_ai.scoring import ProjectInput, TraineeInput
 
 ACTIVE = (CycleStatus.draft, CycleStatus.published)
-VISIBLE_ALLOC = (CycleStatus.published, CycleStatus.archived)
+# ADR-017: assignments become visible as soon as they are made (no separate publish step).
+VISIBLE_ALLOC = (CycleStatus.draft, CycleStatus.published, CycleStatus.archived)
 
 
 # ---------------------------------------------------------------- cycles
@@ -120,6 +121,8 @@ def _num(v: object) -> float | None:
 
 
 def trainee_input(t: M.Trainee) -> TraineeInput:
+    """Only verified/imported marks are scorer inputs; resume-reported marks never are (ADR-017)."""
+    trades = t.all_trades
     return TraineeInput(
         id=str(t.id),
         trade_id=str(t.trade_id),
@@ -130,22 +133,62 @@ def trainee_input(t: M.Trainee) -> TraineeInput:
         skills=tuple(s.name for s in t.skills),
         career_interest=t.career_interest,
         background=t.background,
+        trade_ids=tuple(str(x.id) for x in trades),
+        trade_names=tuple(x.name for x in trades),
     )
 
 
 def project_input(p: M.Project) -> ProjectInput:
+    trades = p.all_trades
     return ProjectInput(
         id=str(p.id),
         project_code=p.project_code,
         title=p.title,
         category=p.category,
         description=p.description,
-        difficulty=p.difficulty.value,
-        target_trade_id=str(p.target_trade_id),
-        target_trade_name=p.target_trade.name,
+        difficulty=p.difficulty.value if p.difficulty else "intermediate",
+        target_trade_id=str(p.target_trade_id) if p.target_trade_id else "",
+        target_trade_name=p.target_trade.name if p.target_trade else "",
         min_practical_score=float(p.min_practical_score),
         skills=tuple(s.name for s in p.skills),
+        target_trade_ids=tuple(str(x.id) for x in trades),
+        target_trade_names=tuple(x.name for x in trades),
+        min_match_score=float(p.min_match_score or 0),
     )
+
+
+def set_trainee_trades(t: M.Trainee, trades: list[M.Trade]) -> None:
+    """First trade is the primary (legacy single column); all trades go to the join table."""
+    if trades:
+        t.trade_id = trades[0].id
+        t.trade = trades[0]
+    t.trades = trades
+
+
+def set_project_trades(p: M.Project, trades: list[M.Trade]) -> None:
+    p.target_trade_id = trades[0].id if trades else None
+    p.target_trade = trades[0] if trades else None
+    p.trades = trades
+
+
+def effective_deadline(project: M.Project, cycle: M.Cycle) -> datetime:
+    """Explicit project deadline overrides the cycle default (ADR-017)."""
+    return project.deadline or cycle.submission_deadline
+
+
+def active_allocation(db: Session, trainee_id: uuid.UUID) -> M.Allocation | None:
+    from app.db.enums import AllocationStatus
+
+    return db.scalar(
+        select(M.Allocation).where(
+            M.Allocation.trainee_id == trainee_id, M.Allocation.status == AllocationStatus.active
+        )
+    )
+
+
+def person_key(t: M.Trainee) -> str:
+    """Stable person identity for rejection exclusions: the canonical trainee code."""
+    return t.trainee_code.upper()
 
 
 # ---------------------------------------------------------------- runs

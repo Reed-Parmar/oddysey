@@ -1,19 +1,4 @@
-import {
-  ChartBar,
-  ClipboardText,
-  FolderSimple,
-  GraduationCap,
-  House,
-  type Icon,
-  ListMagnifyingGlass,
-  Sparkle,
-  SquaresFour,
-  Strategy,
-  TrendUp,
-  UserCircle,
-  CalendarBlank,
-  UserPlus,
-} from "@phosphor-icons/react";
+import { ChartBar, ClipboardText, FolderSimple, House, type Icon, SquaresFour, TrendUp, UserPlus } from "@phosphor-icons/react";
 
 import type { UserRole } from "@/api/types";
 
@@ -21,12 +6,10 @@ export type NavItem = { label: string; to: string; end?: boolean; icon: Icon; se
 
 /** Role navigation, declared only here (frontend.md §2). `section` starts a labelled group. */
 export const NAV: Record<UserRole, NavItem[]> = {
+  // ADR-017: exactly two items for trainees; profile/resume live on the Dashboard, work in My Project.
   student: [
     { label: "Dashboard", to: "/student", end: true, icon: House },
-    { label: "My profile", to: "/student/profile", icon: UserCircle },
-    { label: "Suggested projects", to: "/student/recommendations", icon: Sparkle, section: "Projects" },
-    { label: "Project catalogue", to: "/student/projects", icon: ListMagnifyingGlass },
-    { label: "My project & submission", to: "/student/submission", icon: ClipboardText },
+    { label: "My Project", to: "/student/project", icon: ClipboardText },
   ],
   supervisor: [
     { label: "Dashboard", to: "/supervisor", end: true, icon: House },
@@ -36,13 +19,9 @@ export const NAV: Record<UserRole, NavItem[]> = {
   ],
   admin: [
     { label: "Overview", to: "/admin", end: true, icon: SquaresFour },
-    { label: "Trainees", to: "/admin/trainees", icon: GraduationCap, section: "Data" },
     { label: "Projects", to: "/admin/projects", icon: FolderSimple },
-    { label: "Recommendations", to: "/admin/recommendations", icon: Sparkle, section: "Allocation" },
-    { label: "Allocations", to: "/admin/allocations", icon: Strategy },
-    { label: "Progress", to: "/admin/progress", icon: ChartBar },
-    { label: "Cycles", to: "/admin/cycles", icon: CalendarBlank, section: "Setup" },
-    { label: "Users & invites", to: "/admin/users", icon: UserPlus },
+    { label: "Allocation & Progress", to: "/admin/tracking", icon: ChartBar },
+    { label: "Staff & Invitations", to: "/admin/staff", icon: UserPlus },
   ],
 };
 

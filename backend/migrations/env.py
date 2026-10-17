@@ -20,8 +20,7 @@ def _url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=_url(), literal_binds=True, version_table_schema=SCHEMA,
-                      transaction_per_migration=True)
+    context.configure(url=_url(), literal_binds=True, version_table_schema=SCHEMA, transaction_per_migration=True)
     with context.begin_transaction():
         context.run_migrations()
 
@@ -32,8 +31,12 @@ def run_migrations_online() -> None:
         # the version table needs its schema before the first revision runs
         connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
         connection.commit()
-        context.configure(connection=connection, target_metadata=target_metadata,
-                          version_table_schema=SCHEMA, transaction_per_migration=True)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table_schema=SCHEMA,
+            transaction_per_migration=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

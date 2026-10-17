@@ -40,8 +40,13 @@ def field_error(field: str, message: str) -> AppError:
 
 
 CONSTRAINT_CODES: dict[str, tuple[int, str, str]] = {
-    "allocations_one_per_trainee": (409, "TRAINEE_ALREADY_ALLOCATED", "Trainee already has an allocation"),
-    "allocations_project_capacity": (409, "PROJECT_FULL", "Project capacity reached"),
+    "allocations_one_active_per_trainee": (
+        409,
+        "TRAINEE_ALREADY_ALLOCATED",
+        "Trainee already has an active allocation",
+    ),
+    "allocations_rejected_exclusion": (409, "ALLOCATION_EXCLUDED", "This trainee rejected this project"),
+    "allocation_rejections_idempotency_key": (409, "DUPLICATE_REQUEST", "This request was already processed"),
     "submissions_one_pending": (409, "SUBMISSION_PENDING", "A version already awaits evaluation"),
     "submissions_one_evaluated": (409, "SUBMISSION_ALREADY_EVALUATED", "Submission already evaluated"),
     "evaluations_one_per_submission": (409, "SUBMISSION_ALREADY_EVALUATED", "Submission already evaluated"),

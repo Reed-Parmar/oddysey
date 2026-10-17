@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from tests.conftest import DATASET, Users, uid_of
+from tests.conftest import DATASET, Users, drain
 
 
 def ok(resp: Any, status: int = 200) -> Any:
@@ -37,38 +37,32 @@ def import_file(
 
 
 def setup_dataset(client: Any, users: Users, admin: dict[str, str]) -> dict[str, Any]:
+    """Dataset scenario under ADR-017: supervisors exist, the admin imports both sheets, and the worker
+    processes projects (supervisor auto-selection) and allocates automatically. No publish step."""
+    sup_a = users.make("supervisor", "mehta@example.org", "Dr. Mehta", "Electrician Solar Technician COPA")
+    sup_b = users.make("supervisor", "rao@example.org", "Ms. Rao", "Fitter Welder Mechanic Motor Vehicle")
     cycle = create_cycle(client, admin)
     ok(import_file(client, admin, "trainees", cycle["id"], dry_run=False))
     ok(import_file(client, admin, "projects", cycle["id"], dry_run=False))
-    sup_a = users.make("supervisor", "mehta@example.org", "Dr. Mehta", "Electrical")
-    sup_b = users.make("supervisor", "rao@example.org", "Ms. Rao", "Mechanical")
+    drain()
     projects = ok(client.get("/api/v1/projects", params={"cycle_id": cycle["id"], "page_size": 100}, headers=admin))[
         "data"
     ]
-    by_code = {p["project_code"]: p for p in projects}
-    for p in projects:
-        sup = sup_a if p["project_code"].split("-")[1] in ("EL", "CP", "SL") else sup_b
-        ok(client.patch(f"/api/v1/projects/{p['id']}", json={"supervisor_id": uid_of(sup)}, headers=admin))
-        ok(client.post(f"/api/v1/projects/{p['id']}/transition", json={"to": "published"}, headers=admin))
     trainees = ok(client.get("/api/v1/trainees", params={"cycle_id": cycle["id"], "page_size": 100}, headers=admin))[
         "data"
     ]
     return {
         "cycle": cycle,
-        "projects": by_code,
+        "projects": {p["project_code"]: p for p in projects},
         "trainees": {t["trainee_code"]: t for t in trainees},
         "sup_a": sup_a,
         "sup_b": sup_b,
     }
 
 
-def run_recommendations(client: Any, admin: dict[str, str], cycle_id: str, use_ai: bool = False) -> dict[str, Any]:
-    run = ok(
-        client.post(f"/api/v1/cycles/{cycle_id}/recommendation-runs", json={"use_ai": use_ai}, headers=admin), 202
-    )["data"]
-    latest = ok(client.get(f"/api/v1/cycles/{cycle_id}/recommendation-runs/latest", headers=admin))["data"]
-    assert latest["id"] == run["id"]
-    return latest
+def active_allocations(client: Any, admin: dict[str, str], cycle_id: str) -> dict[str, dict[str, Any]]:
+    rows = ok(client.get("/api/v1/allocations", params={"cycle_id": cycle_id, "page_size": 100}, headers=admin))["data"]
+    return {a["trainee"]["trainee_code"]: a for a in rows}
 
 
 def link_student(client: Any, admin: dict[str, str], trainee_id: str, email: str) -> dict[str, str]:

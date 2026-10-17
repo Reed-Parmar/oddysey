@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     auth_jwt_audience: str = "authenticated"
     storage_bucket: str = "submissions"
     resume_bucket: str = "resumes"
+    project_doc_bucket: str = "project-docs"
     max_upload_bytes: int = 10 * 1024 * 1024
     max_import_bytes: int = 5 * 1024 * 1024
     max_resume_bytes: int = 5 * 1024 * 1024
@@ -32,7 +33,23 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-20b"
     ai_timeout_seconds: float = 10.0
     ai_concurrency: int = 4
-    run_inline: bool = False  # tests: recommendation worker runs synchronously
+    run_inline: bool = False  # tests: jobs are drained synchronously after each request
+    # ADR-017 automation
+    allocation_interval_minutes: int = 15
+    archive_grace_days: int = 7
+    run_worker_in_api: bool = False  # single-instance demos: run the job worker inside the API process
+    worker_poll_seconds: float = 2.0
+    job_lease_seconds: int = 300
+    email_backend: str = "disabled"  # disabled | console | smtp
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    report_url_fetch_enabled: bool = True
+    max_report_fetch_bytes: int = 10 * 1024 * 1024
+    originality_medium_at: float = 15.0
+    originality_high_at: float = 40.0
 
     @field_validator("database_url")
     @classmethod

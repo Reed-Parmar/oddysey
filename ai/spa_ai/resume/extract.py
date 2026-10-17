@@ -156,6 +156,42 @@ def rule_extract(text: str, known_skills: Iterable[str]) -> dict[str, Any]:
     return {"skills": found, "projects": [], "certifications": [], "tools": [], "career_interest_hint": None}
 
 
+_MARK_PATTERNS = {
+    "theory": re.compile(r"(?:trade\s+)?theory(?:\s+(?:score|marks?))?\s*(?:\(%\))?\s*[:\-=]?\s*(\d{1,3}(?:\.\d+)?)\s*(%|/\s*100)?", re.IGNORECASE),
+    "practical": re.compile(
+        r"(?:workshop\s+)?practical(?:\s+(?:score|marks?))?\s*(?:\(%\))?\s*[:\-=]?\s*(\d{1,3}(?:\.\d+)?)\s*(%|/\s*100)?", re.IGNORECASE
+    ),
+    "safety": re.compile(
+        r"safety(?:\s+compliance)?(?:\s+(?:score|marks?))?\s*(?:\(%\))?\s*[:\-=]?\s*(\d{1,3}(?:\.\d+)?)\s*(%|/\s*100)?", re.IGNORECASE
+    ),
+}
+
+
+def assessment_marks(text: str) -> list[dict[str, Any]]:
+    """Theory/practical/safety marks EXPLICITLY stated in the resume, with the verbatim excerpt.
+
+    Deterministic (never the model). A mark is kept only when exactly one distinct value in 0..100
+    is stated for it; missing or ambiguous marks are reported as null with a reason. These are
+    resume-reported, unverified claims: they never satisfy a verified-assessment gate (ADR-017)."""
+    out: list[dict[str, Any]] = []
+    for field, pattern in _MARK_PATTERNS.items():
+        found: dict[float, str] = {}
+        for m in pattern.finditer(text):
+            value = float(m.group(1))
+            if 0 <= value <= 100:
+                start, end = max(0, m.start() - 20), min(len(text), m.end() + 5)
+                found.setdefault(value, " ".join(text[start:end].split()))
+        if len(found) == 1:
+            value, excerpt = next(iter(found.items()))
+            out.append({"field": field, "value": value, "unit": "%", "excerpt": excerpt[:160], "status": "found"})
+        else:
+            out.append({
+                "field": field, "value": None, "unit": "%", "excerpt": None,
+                "status": "ambiguous" if found else "not_found",
+            })
+    return out
+
+
 def build_messages(text: str) -> tuple[str, str]:
     return SYSTEM_PROMPT, "<resume>" + json.dumps(text[:PROMPT_TEXT_MAX], ensure_ascii=False) + "</resume>"
 
@@ -182,5 +218,8 @@ def extract(
             raw = None
         validated = validate_ai_output(raw, focused) if raw is not None else None
         if validated is not None:
+            validated["assessment_marks"] = assessment_marks(safe)
             return ResumeExtraction("extracted", "ai", client.model, validated, None)
-    return ResumeExtraction("extracted", "rule", None, rule_extract(safe, known_skills), None)
+    rule = rule_extract(safe, known_skills)
+    rule["assessment_marks"] = assessment_marks(safe)
+    return ResumeExtraction("extracted", "rule", None, rule, None)

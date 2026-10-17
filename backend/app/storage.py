@@ -103,3 +103,9 @@ def get_storage() -> StorageClient:
 def get_resume_storage() -> StorageClient:
     s = get_settings()
     return SupabaseStorage(s.supabase_url, s.supabase_secret_key, s.resume_bucket)
+
+
+@lru_cache
+def get_project_doc_storage() -> StorageClient:
+    s = get_settings()
+    return SupabaseStorage(s.supabase_url, s.supabase_secret_key, s.project_doc_bucket)

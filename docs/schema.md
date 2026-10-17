@@ -438,6 +438,28 @@ CREATE INDEX trainee_resumes_trainee_idx ON app.trainee_resumes (trainee_id, cre
 
 The latest row per trainee (by `created_at`) is the current resume. Older versions are kept for history. Extraction is synchronous inside RES-01, so there's no `processing` state.
 
+### 4.2 Migration 0003 (ADR-017: automation, multi-trade, rejection, analysis, archive)
+
+Implemented in `backend/migrations/versions/0003_automation.py` (reversible; the downgrade refuses to run if it
+would lose history such as rejected allocations). Summary:
+
+| Object | Change |
+|---|---|
+| enums | `allocation_status` (active, rejected), `project_processing` (awaiting_document, queued, processing, awaiting_supervisor, needs_attention, ready, failed), `job_status`, `analysis_status` (queued, extracting, analysing, completed, retrying, failed, insufficient_evidence, review_required, not_analyzable), `notification_status` |
+| `cycles` | + `archive_at` (backfilled deadline + 7 days), `archive_timezone` (Asia/Kolkata), `auto_archive_enabled`, `archived_at`, `archive_reason` |
+| `trainee_trades`, `project_trades` | New join tables (all trades); backfilled from the old single columns, which remain the primary trade |
+| `trainees` | + `reported_scores` (resume-reported, unverified JSON), `onboarded_via` (import/invite/self) |
+| `onboarding_profiles` | One row per student account: draft data, status, completed_at |
+| `projects` | `target_trade_id`, `difficulty`, `max_trainees` nullable (`max_trainees` deprecated, kept as history); + `canonical_id` (stable identity, set by trigger), `processing_status`, `processing_error`, document fields (path/name/mime/size/hash/text), `generated` (guide/metadata/provenance JSON), `generation_source`, `generation_version`, `generated_at`, `min_match_score` (default 0), `deadline`; sequence `project_code_seq`; CHECK ready ⇒ trade + difficulty |
+| `allocations` | capacity trigger and `allocations_one_per_trainee` dropped; partial unique `allocations_one_active_per_trainee`; + `status`, `match_mode`, `factors`, `scoring_version`, `explanation`, `trigger`, `rejected_at`; `created_by` nullable (null = system); trigger `allocations_rejection_exclusion` refuses an active allocation for a (person, canonical project) the person rejected |
+| `allocation_rejections` | Rejection event + exclusion key (`person_key` = upper(trainee_code), `project_canonical_id`) + replacement state/ranking snapshot; unique per allocation, per replacement allocation, per (trainee, idempotency_key) |
+| `jobs` | Durable queue (kind, payload, dedupe_key unique while queued, priority, run_after, attempts, lease, result) |
+| `notifications` | Outbox + in-app notifications (dedupe_key unique) |
+| `invitations` | + `full_name`, `department` (staff onboarding) |
+| `submissions` | + `analysis_status`; `submissions_has_report` (report URL or PDF/DOCX) for new rows (`NOT VALID`, so historic video-only rows stay) |
+| `report_analyses` | Per version and revision: text snapshot + hash, page offsets, corpus snapshot, originality, evaluation, semantic, ai_writing, review_state |
+| `analysis_reviews` | Supervisor/admin review history (confirm/annotate/amend/request_explanation/request_rework) |
+
 ## 5. Ownership and access
 
 | Table | Written by | Read scope |

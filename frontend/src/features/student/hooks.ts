@@ -13,15 +13,6 @@ export function useStudentContext() {
   return { cycle: cycleQ.data?.data ?? null, me: meQ.data?.data ?? null, cycleQ, meQ };
 }
 
-/** REC-03: the server forces own trainee, eligible, rank ≤ 5, latest completed run (C-19). */
-const REC_PARAMS = { page_size: 5 } as const;
-export function useMyRecommendations() {
-  return useQuery({
-    queryKey: qk.recommendations.list(REC_PARAMS),
-    queryFn: () => call(api.GET("/api/v1/recommendations", { params: { query: REC_PARAMS } })),
-  });
-}
-
 /** SUB-02: every own version in the active cycle, newest first. */
 const HISTORY_PARAMS = { latest_only: false, sort: "-submitted_at", page_size: 50 } as const;
 export function useMySubmissionHistory(enabled = true) {
@@ -32,19 +23,50 @@ export function useMySubmissionHistory(enabled = true) {
   });
 }
 
-/** PROG-01: scope forced to the own row. */
-export function useMyProgress(enabled = true) {
-  return useQuery({
-    queryKey: qk.progress.list({ scope: "own" }),
-    queryFn: () => call(api.GET("/api/v1/progress")),
-    enabled,
-  });
-}
-
 /** RES-02: latest resume of the own active-cycle trainee record (null when none). */
 export function useMyResume() {
   return useQuery({
     queryKey: qk.resumes.me(),
     queryFn: () => call(api.GET("/api/v1/trainees/me/resumes/latest")),
+  });
+}
+
+/** Own allocations in every cycle (active, rejected, archived). Read-only. */
+export function useMyAllocationHistory() {
+  return useQuery({
+    queryKey: qk.allocationHistory.me(),
+    queryFn: () => call(api.GET("/api/v1/trainees/me/allocation-history")),
+  });
+}
+
+/** In-app notifications (newest first). */
+export function useMyNotifications() {
+  return useQuery({
+    queryKey: qk.notifications.me(),
+    queryFn: () => call(api.GET("/api/v1/me/notifications")),
+  });
+}
+
+export function useTrades() {
+  return useQuery({
+    queryKey: qk.trades.list(),
+    queryFn: () => call(api.GET("/api/v1/trades")),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** PRJ detail (stats are null for students). */
+export function useProject(projectId: string | undefined) {
+  return useQuery({
+    queryKey: qk.projects.detail(projectId ?? ""),
+    queryFn: () => call(api.GET("/api/v1/projects/{project_id}", { params: { path: { project_id: projectId ?? "" } } })),
+    enabled: !!projectId,
+  });
+}
+
+export function useOnboarding() {
+  return useQuery({
+    queryKey: qk.onboarding.me(),
+    queryFn: () => call(api.GET("/api/v1/onboarding")),
   });
 }

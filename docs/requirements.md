@@ -1,5 +1,10 @@
 # Requirements — Smart Project Allocation MVP
 
+> **ADR-017 (rev 3).** The judges' feedback changed the workflow: automated allocation (no recommendation screens, no
+> publish gate, no capacity), self-service onboarding with multiple trades, trainee rejection with ranked replacement,
+> mandatory reports with automated document evaluation and a Plagiarism & Originality Analysis, and manual/scheduled
+> archives. See [decisions.md](decisions.md) ADR-017 and [api.md](api.md) §0. Requirements below that conflict are superseded.
+
 **Status:** Proposed (Phase 1, rev 2: re-scoped to the official Tata STRIVE brief and dataset). Becomes binding when the owner approves it at the Phase 1 checkpoint.
 Sources: `Project management_Smart project allocation_Hckathon 26 (1).docx.pdf` (brief) · `CSR_Hackathon_ITI_Project_Dataset.xlsx` (dataset) · [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
 Related: [architecture](architecture.md) · [auth](auth.md) · [schema](schema.md) · [api](api.md) · [roadmap](roadmap.md) · [decisions](decisions.md)

@@ -13,10 +13,10 @@ import {
 import { Alert, Card } from "@/components/ui";
 import { FactorTable, ProjectDetailView } from "@/features/shared/views";
 
-import { CapacitySummary, NotPublishedState, PersonCell, SupervisorProgressTable, useCycleState } from "../common";
+import { ContributorSummary, NotPublishedState, PersonCell, SupervisorProgressTable, useCycleState } from "../common";
 
 export function AllocationFactors({ allocation }: { allocation: Allocation }) {
-  if (!allocation.factors) return <p className="text-xs text-muted">Manual allocation, no recommendation factors.</p>;
+  if (!allocation.factors) return <p className="text-xs text-muted">Allocated before itemised factors were recorded.</p>;
   return (
     <details className="group text-sm">
       <summary className="cursor-pointer font-medium text-primary hover:underline">Why this match?</summary>
@@ -113,8 +113,8 @@ export function ProjectDetailPage() {
       <div className="space-y-6">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <ProjectDetailView project={p} />
-          <Card icon={<Gauge />} title="Capacity" description="Trainees allocated against seats." className="self-start">
-            <CapacitySummary project={p} />
+          <Card icon={<Gauge />} title="Individual contributors" description="Each trainee works on this project individually." className="self-start">
+            <ContributorSummary project={p} />
           </Card>
         </div>
         {!own ? (

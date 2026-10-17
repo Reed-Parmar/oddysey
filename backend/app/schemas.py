@@ -13,14 +13,15 @@ from app.db import models as M
 from app.db.enums import (
     GRADE_LABELS,
     AllocationSource,
+    AllocationStatus,
+    AnalysisStatus,
     AssessmentStatus,
     CycleStatus,
     Difficulty,
     EvaluationOutcome,
     InvitationStatus,
+    ProjectProcessing,
     ProjectStatus,
-    RecommendationSource,
-    RunStatus,
     SubmissionStatus,
     TraineeProgress,
     UserRole,
@@ -65,6 +66,11 @@ class CycleOut(BaseModel):
     name: str
     status: CycleStatus
     submission_deadline: datetime
+    archive_at: datetime | None
+    archive_timezone: str
+    auto_archive_enabled: bool
+    archived_at: datetime | None
+    archive_reason: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -87,9 +93,13 @@ class TraineeOut(BaseModel):
     full_name: str
     gender: str | None
     trade: NamedRef
+    trades: list[NamedRef]
     centre_name: str | None
     scores: Scores
+    reported_scores: dict[str, Any] | None  # resume-reported, unverified (ADR-017); never a gate
     assessment_status: AssessmentStatus
+    match_mode: str  # "full" (verified marks) or "profile"
+    onboarded_via: str
     skills: list[NamedRef]
     career_interest: str | None
     background: str | None
@@ -105,6 +115,7 @@ class TraineeRef(Ref):
 
 class TraineeRefTrade(TraineeRef):
     trade: NamedRef
+    trades: list[NamedRef]
 
 
 class SupervisorRef(UserRef):
@@ -112,8 +123,16 @@ class SupervisorRef(UserRef):
 
 
 class ProjectStats(BaseModel):
-    allocated_count: int | None
-    eligible_trainee_count: int | None
+    """Server-derived counts (ADR-017). `working_individually` = non-rejected individual allocations."""
+
+    working_individually: int
+    rejected_total: int  # historical rejections, labelled separately; never current contributors
+
+
+class DocumentInfo(BaseModel):
+    name: str
+    size_bytes: int
+    mime_type: str
 
 
 class ProjectOut(BaseModel):
@@ -123,14 +142,22 @@ class ProjectOut(BaseModel):
     title: str
     description: str | None
     problem_doc_url: str | None
-    target_trade: NamedRef
-    difficulty: Difficulty
+    document: DocumentInfo | None
+    target_trade: NamedRef | None
+    target_trades: list[NamedRef]
+    difficulty: Difficulty | None
     min_practical_score: float
-    max_trainees: int
+    min_match_score: float
     category: str | None
     skills: list[NamedRef]
     supervisor: SupervisorRef | None
     status: ProjectStatus
+    processing_status: ProjectProcessing
+    processing_error: str | None
+    generation_source: str | None
+    generated: dict[str, Any] | None  # guide, deliverables, timeline proposal, evidence, provenance
+    deadline: datetime | None  # explicit override; null = cycle default
+    effective_deadline: datetime | None
     stats: ProjectStats | None
     created_at: datetime
     updated_at: datetime
@@ -141,11 +168,6 @@ class ProjectRef(Ref):
     title: str
 
 
-class RecProjectRef(ProjectRef):
-    difficulty: Difficulty
-    target_trade: NamedRef
-
-
 class FactorOut(BaseModel):
     key: str
     label: str
@@ -153,40 +175,6 @@ class FactorOut(BaseModel):
     max_points: int
     detail: str
     ai_refined: bool
-
-
-class RecommendationOut(BaseModel):
-    id: uuid.UUID
-    run_id: uuid.UUID
-    trainee: TraineeRef
-    project: RecProjectRef
-    score: float
-    rank: int
-    eligible: bool
-    ineligible_reasons: list[str]
-    factors: list[FactorOut]
-    source: RecommendationSource
-    ai_explanation: str | None
-    created_at: datetime
-
-
-class RunOut(BaseModel):
-    id: uuid.UUID
-    cycle_id: uuid.UUID
-    status: RunStatus
-    use_ai: bool
-    ai_model: str | None
-    trainee_count: int
-    skipped_pending_count: int
-    scored_pairs: int
-    ai_used_count: int
-    ai_failed_count: int
-    progress_done: int
-    error_message: str | None
-    started_by: UserRef
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
 
 
 class AllocSupervisorRef(SupervisorRef):
@@ -202,13 +190,20 @@ class AllocationOut(BaseModel):
     cycle_id: uuid.UUID
     trainee: TraineeRefTrade
     project: AllocProjectRef
+    status: AllocationStatus
     source: AllocationSource
+    trigger: str | None
     match_score: float | None
+    match_mode: str | None
+    min_match_score: float
+    scoring_version: str | None
+    explanation: str | None
     recommendation_id: uuid.UUID | None
     factors: list[FactorOut] | None
     is_override: bool
     override_reason: str | None
-    created_by: UserRef
+    created_by: UserRef | None  # null = automated (system)
+    rejected_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -239,12 +234,29 @@ class FileInfo(BaseModel):
     mime_type: str
 
 
+class ReportEvaluationSummary(BaseModel):
+    """Automated document-based report evaluation (ADR-017). Not a verified practical result."""
+
+    status: str
+    total: int | None
+    max_total: int
+    grade: str | None
+    grade_label: str | None
+    outcome: str | None
+    effective_total: int | None  # after a supervisor amendment, if any
+    effective_grade: str | None
+    amended: bool
+
+
 class SubmissionOut(BaseModel):
     id: uuid.UUID
     cycle_id: uuid.UUID
     allocation_id: uuid.UUID
     version: int
     status: SubmissionStatus
+    analysis_status: AnalysisStatus
+    report_evaluation: ReportEvaluationSummary | None
+    deadline: datetime
     is_late: bool
     trainee: TraineeRef
     project: ProjectRef
@@ -261,7 +273,10 @@ class SubmissionOut(BaseModel):
 
 class ProgressAllocation(Ref):
     source: AllocationSource
+    trigger: str | None
     match_score: float | None
+    match_mode: str | None
+    min_match_score: float
     is_override: bool
 
 
@@ -275,6 +290,8 @@ class LatestSubmission(Ref):
 class GradeRef(BaseModel):
     total_score: int | None
     grade: str | None
+    score_type: str = "verified_practical"  # "automated_report" | "verified_practical"
+    max_score: int = 100
 
 
 class ProgressRow(BaseModel):
@@ -283,8 +300,13 @@ class ProgressRow(BaseModel):
     supervisor: UserRef | None
     allocation: ProgressAllocation | None
     progress: TraineeProgress
+    waiting_reason: str | None  # unassigned rows only
     latest_submission: LatestSubmission | None
+    analysis_status: AnalysisStatus | None
     evaluation: GradeRef | None
+    deadline: datetime | None
+    archived: bool
+    rejections: int
 
 
 class InvitationOut(BaseModel):
@@ -329,6 +351,11 @@ def cycle_out(c: M.Cycle) -> CycleOut:
         name=c.name,
         status=c.status,
         submission_deadline=c.submission_deadline,
+        archive_at=c.archive_at,
+        archive_timezone=c.archive_timezone,
+        auto_archive_enabled=c.auto_archive_enabled,
+        archived_at=c.archived_at,
+        archive_reason=c.archive_reason,
         created_at=c.created_at,
         updated_at=c.updated_at,
     )
@@ -352,9 +379,13 @@ def trainee_out(t: M.Trainee, viewer: M.User) -> TraineeOut:
         full_name=t.full_name,
         gender=t.gender if is_admin else None,
         trade=named(t.trade),
+        trades=[named(x) for x in t.all_trades],
         centre_name=t.centre_name,
         scores=Scores(theory=_f(t.theory_score), practical=_f(t.practical_score), safety=_f(t.safety_score)),
+        reported_scores=t.reported_scores if (is_admin or is_self) else None,
         assessment_status=assessment_status(t),
+        match_mode="full" if assessment_status(t) == AssessmentStatus.complete else "profile",
+        onboarded_via=t.onboarded_via,
         skills=[named(s) for s in t.skills],
         career_interest=t.career_interest,
         background=t.background,
@@ -369,14 +400,26 @@ def trainee_ref(t: M.Trainee) -> TraineeRef:
 
 
 def trainee_ref_trade(t: M.Trainee) -> TraineeRefTrade:
-    return TraineeRefTrade(id=t.id, trainee_code=t.trainee_code, full_name=t.full_name, trade=named(t.trade))
+    return TraineeRefTrade(
+        id=t.id,
+        trainee_code=t.trainee_code,
+        full_name=t.full_name,
+        trade=named(t.trade),
+        trades=[named(x) for x in t.all_trades],
+    )
 
 
 def supervisor_ref(u: M.User | None) -> SupervisorRef | None:
     return None if u is None else SupervisorRef(id=u.id, full_name=u.full_name, department=u.department)
 
 
-def project_out(p: M.Project, stats: ProjectStats | None = None) -> ProjectOut:
+def project_out(
+    p: M.Project,
+    stats: ProjectStats | None = None,
+    cycle_deadline: datetime | None = None,
+    show_generated: bool = True,
+) -> ProjectOut:
+    gen = dict(p.generated) if p.generated and show_generated else None
     return ProjectOut(
         id=p.id,
         cycle_id=p.cycle_id,
@@ -384,14 +427,24 @@ def project_out(p: M.Project, stats: ProjectStats | None = None) -> ProjectOut:
         title=p.title,
         description=p.description,
         problem_doc_url=p.problem_doc_url,
-        target_trade=named(p.target_trade),
+        document=DocumentInfo(name=p.document_name, size_bytes=p.document_size, mime_type=p.document_mime)
+        if p.document_name and p.document_size and p.document_mime
+        else None,
+        target_trade=named(p.target_trade) if p.target_trade else None,
+        target_trades=[named(t) for t in p.all_trades],
         difficulty=p.difficulty,
         min_practical_score=float(p.min_practical_score),
-        max_trainees=p.max_trainees,
+        min_match_score=float(p.min_match_score or 0),
         category=p.category,
         skills=[named(s) for s in p.skills],
         supervisor=supervisor_ref(p.supervisor),
         status=p.status,
+        processing_status=p.processing_status,
+        processing_error=p.processing_error,
+        generation_source=p.generation_source,
+        generated=gen,
+        deadline=p.deadline,
+        effective_deadline=p.deadline or cycle_deadline,
         stats=stats,
         created_at=p.created_at,
         updated_at=p.updated_at,
@@ -404,51 +457,6 @@ def project_ref(p: M.Project) -> ProjectRef:
 
 def factors_out(raw: list[dict[str, Any]] | None) -> list[FactorOut] | None:
     return None if raw is None else [FactorOut(**f) for f in raw]
-
-
-def recommendation_out(r: M.Recommendation) -> RecommendationOut:
-    p = r.project
-    return RecommendationOut(
-        id=r.id,
-        run_id=r.run_id,
-        trainee=trainee_ref(r.trainee),
-        project=RecProjectRef(
-            id=p.id,
-            project_code=p.project_code,
-            title=p.title,
-            difficulty=p.difficulty,
-            target_trade=named(p.target_trade),
-        ),
-        score=float(r.score),
-        rank=r.rank,
-        eligible=r.eligible,
-        ineligible_reasons=list(r.ineligible_reasons),
-        factors=factors_out(r.factors) or [],
-        source=r.source,
-        ai_explanation=r.ai_explanation,
-        created_at=r.created_at,
-    )
-
-
-def run_out(r: M.RecommendationRun) -> RunOut:
-    return RunOut(
-        id=r.id,
-        cycle_id=r.cycle_id,
-        status=r.status,
-        use_ai=r.use_ai,
-        ai_model=r.ai_model,
-        trainee_count=r.trainee_count,
-        skipped_pending_count=r.skipped_pending_count,
-        scored_pairs=r.scored_pairs,
-        ai_used_count=r.ai_used_count,
-        ai_failed_count=r.ai_failed_count,
-        progress_done=r.progress_done,
-        error_message=r.error_message,
-        started_by=user_ref(r.starter),
-        created_at=r.created_at,
-        started_at=r.started_at,
-        finished_at=r.finished_at,
-    )
 
 
 def allocation_out(a: M.Allocation, viewer: M.User) -> AllocationOut:
@@ -465,13 +473,22 @@ def allocation_out(a: M.Allocation, viewer: M.User) -> AllocationOut:
             if sup is None
             else AllocSupervisorRef(id=sup.id, full_name=sup.full_name, department=sup.department, email=sup.email),
         ),
+        status=a.status,
         source=a.source,
+        trigger=a.trigger,
         match_score=_f(a.match_score),
+        match_mode=a.match_mode,
+        min_match_score=float(p.min_match_score or 0),
+        scoring_version=a.scoring_version,
+        explanation=a.explanation,
         recommendation_id=a.recommendation_id,
-        factors=factors_out(a.recommendation.factors) if a.recommendation is not None else None,
+        factors=factors_out(a.factors)
+        if a.factors is not None
+        else (factors_out(a.recommendation.factors) if a.recommendation is not None else None),
         is_override=a.is_override,
         override_reason=a.override_reason if viewer.role == UserRole.admin else None,
-        created_by=user_ref(a.creator),
+        created_by=user_ref(a.creator) if a.creator else None,
+        rejected_at=a.rejected_at,
         created_at=a.created_at,
         updated_at=a.updated_at,
     )
@@ -501,7 +518,9 @@ def is_late(s: M.Submission, deadline: datetime) -> bool:
     return utc(s.submitted_at) > utc(deadline)  # type: ignore[operator]
 
 
-def submission_out(s: M.Submission, deadline: datetime) -> SubmissionOut:
+def submission_out(
+    s: M.Submission, deadline: datetime, report_evaluation: ReportEvaluationSummary | None = None
+) -> SubmissionOut:
     a = s.allocation
     file = (
         FileInfo(name=s.file_name, size_bytes=s.file_size_bytes, mime_type=s.file_mime_type)
@@ -514,6 +533,9 @@ def submission_out(s: M.Submission, deadline: datetime) -> SubmissionOut:
         allocation_id=s.allocation_id,
         version=s.version,
         status=s.status,
+        analysis_status=s.analysis_status,
+        report_evaluation=report_evaluation,
+        deadline=deadline,
         is_late=is_late(s, deadline),
         trainee=trainee_ref(a.trainee),
         project=project_ref(a.project),
