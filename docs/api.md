@@ -4,6 +4,7 @@
 
 **Revision log**
 - rev 0 / 1 / 1.1 (2026-10-17): generic plan (teams, preferences, milestones). **Superseded.**
+- **rev 5** (2026-10-18): §0c Autopilot alerts (ALR-01) and Project Assistant (AST-01), ADR-019/020.
 - **rev 2.1** (2026-10-17): §8 Clarifications C-1 to C-30 resolve the handbook gaps (binding).
 - **rev 2** (2026-10-17): re-scoped to the official brief and dataset ([decisions.md](decisions.md) ADR-003, ADR-011 to ADR-013). It keeps every convention from rev 1.1 (§1).
 
@@ -73,6 +74,32 @@ is no longer accepted or returned), manual `project_code` input.
 | Student writes (TRN-02, RES-01, SUB-01, ALLOC-07) | Use the student's own open cycle (`409 NO_ACTIVE_CYCLE` when they have none) |
 | INV-02 student invitation | `trainee_id` must belong to an active cycle |
 | Errors | `409 ACCOUNT_IN_OTHER_CYCLE`: linking an account to a trainee while it is linked to a trainee in another non-archived cycle (DB trigger) |
+
+## 0c. ADR-019 / ADR-020 changes (rev 5, binding: Autopilot alerts, Project Assistant)
+
+No schema change: alerts are computed on read from existing tables, and the assistant is stateless.
+
+| ID | Method | Path | Roles | Notes |
+|---|---|---|---|---|
+| ALR-01 | GET | `/me/alerts` | any (scoped) | `{data: Alert[]}`, most severe first. Each check runs only over active cycles and records the caller can already read; an empty list means nothing needs attention |
+| AST-01 | POST | `/assistant/ask` | student, supervisor | `{question (3–500), allocation_id?, history? (≤ 6 turns of {role: user\|assistant, content ≤ 1000})}` → `AssistantAnswer` |
+
+`Alert` = `{code, severity: critical|warning|info, title, detail, count, link}`. `link` is a frontend route to the screen that fixes it. Codes:
+
+| Role | Codes |
+|---|---|
+| admin | `trainees_waiting` (count, detail grouped by waiting reason) · `projects_failed` (processing `failed` / `needs_attention`) · `projects_no_supervisor` (`awaiting_supervisor`) · `jobs_failed` (last 24 h) · `deadline_risk` (allocated, no submission, deadline ≤ 7 days) |
+| supervisor (own projects) | `reviews_pending` (analysis `review_required` / `insufficient_evidence` / `failed`, not yet reviewed) · `deadline_risk` · `rework_open` |
+| student (self) | `no_project` (waiting, with reason) · `deadline_near` (≤ 7 days, nothing submitted) · `overdue` · `rework_requested` · `analysis_ready` |
+
+`AssistantAnswer` = `{answer, sources: string[], mode: "ai"|"rules", intent?}`.
+- **Scope.** A student is answered only about their own ACTIVE allocation (`allocation_id` is ignored), or 409 `NO_ACTIVE_ALLOCATION`. A supervisor must pass `allocation_id` of an active allocation on one of their projects (else 404 `NOT_FOUND`).
+- **Grounded.** The server builds a context bundle from the project brief, generated guide, deadline, allocation factors and explanation, and the latest submission's status, analysis and evaluation. The model answers only from that bundle. `sources` names the bundle sections it used. Anything outside the bundle is declined.
+- **No PII.** The bundle carries no name, trainee code, centre, gender or email. Document and report text is redacted and delimited as untrusted data.
+- **Fallback.** With no Groq key, or when Groq fails, the server gives rule-based answers for summary, deadline, why matched, status, next step, and steps/deliverables (`mode: "rules"`).
+- **Read-only and stateless.** Nothing is stored except a usage audit row (no question text). The rate limit is 20 questions per user per 10 minutes, after which the server returns 429 `RATE_LIMITED`.
+
+**Deferred (not built yet):** the daily alert digest, the admin allocation override from ADR-019, and the admin (programme-wide) assistant from ADR-020.
 
 ## 1. Conventions
 

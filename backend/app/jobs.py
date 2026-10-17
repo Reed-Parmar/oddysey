@@ -34,6 +34,7 @@ PRIORITY = {
     "process_projects": 30,
     # After project processing: pending projects become ready first, so one allocation run sees all of
     # them (otherwise it reran after every project and trainees got the first ready project, not the best).
+    "tag_concepts": 33,  # ADR-021: concept tags first, so the allocation run can use them
     "allocate_cycle": 35,
     "analyse_submission": 40,
     "send_notification": 50,

@@ -1,8 +1,17 @@
 # Student Module Handbook (Teammate A)
 
+> **ADR-019 / ADR-020 (rev 5, binding; api.md §0c).** The Dashboard shows a **Needs attention** panel (ALR-01 `/me/alerts`:
+> no project yet with the reason, deadline near, overdue, rework requested, analysis ready). Each alert links to My Project.
+> My Project has an **Ask about my project** panel (AST-01 `/assistant/ask`). It answers only from the student's own
+> allocated project (brief, guide, deadline, why it was allocated, submission status and feedback), names its sources, and
+> declines anything else. It is read-only: it never changes anything, and nothing typed into it is stored.
+
 > **ADR-018 (rev 4, binding).** Several cycles may be open. Onboarding shows the open cycles ranked by how many projects
 > match the student's trades, preselects the best and lets the student choose another (skipped when only one is open).
-> A student belongs to one open cycle at a time; their Dashboard and My Project show that cycle.
+> A student belongs to one open cycle at a time; their Dashboard, My Project and Submissions show that cycle.
+> **ADR-022:** nav is Dashboard · My Project · **Submissions** (`/student/submissions`: submit form, rework feedback, latest
+> analysis, version history). The assistant opens from a floating robot button; the "Needs attention" panel appears only
+> when a critical or warning alert exists. My Project no longer shows the generated project guide.
 
 > **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Navigation is exactly **Dashboard** (`/student`) and
 > **My Project** (`/student/project`). There is no catalogue, no suggested projects and no project request. New trainees

@@ -4,7 +4,7 @@
  * Layout: one column on phones, a 2-column serpentine on tablets, a `columns`-wide serpentine from xl.
  */
 import { CheckCircle, CircleDashed, CircleNotch, WarningCircle, XCircle } from "@phosphor-icons/react";
-import { useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { buttonStyles, cx } from "@/components/ui";
@@ -88,6 +88,26 @@ function defaultSelection(stages: PipelineStage[]) {
   return find("error", "attention") ?? find("active", "waiting") ?? stages[stages.length - 1]?.key ?? null;
 }
 
+/**
+ * Keys of stages whose status or metric changed since the previous render with data (not on first render).
+ * Used to flash a node once when a refresh brings real new numbers.
+ */
+function useChangedStages(stages: PipelineStage[]) {
+  const prev = useRef<Map<string, string> | null>(null);
+  const [changed, setChanged] = useState<{ keys: Set<string>; tick: number }>({ keys: new Set(), tick: 0 });
+  const sig = stages.map((s) => `${s.key}:${s.status}:${String(s.metric ?? "")}`).join("|");
+  useEffect(() => {
+    const now = new Map(stages.map((s) => [s.key, `${s.status}:${String(s.metric ?? "")}`]));
+    if (prev.current) {
+      const keys = new Set([...now].filter(([k, v]) => prev.current!.get(k) !== v).map(([k]) => k));
+      if (keys.size) setChanged((c) => ({ keys, tick: c.tick + 1 }));
+    }
+    prev.current = now;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures every field compared here
+  }, [sig]);
+  return changed;
+}
+
 export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
   stages: PipelineStage[];
   /** Nodes per row from the xl breakpoint. */
@@ -102,6 +122,7 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
   const [selected, setSelected] = useState<string | null>(() => defaultSelection(stages));
   const current = stages.find((s) => s.key === selected) ?? null;
   const inspectorId = `${uid}-inspector`;
+  const changed = useChangedStages(stages);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
@@ -114,6 +135,8 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
             const next = stages[i + 1];
             const m = STATUS_META[s.status];
             const isSel = s.key === selected;
+            const isChanged = changed.keys.has(s.key);
+            const nextChanged = !!next && changed.keys.has(next.key);
             const pct = s.progress == null ? null : Math.max(0, Math.min(1, s.progress));
             return (
               <li
@@ -127,11 +150,12 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
                   aria-controls={inspectorId}
                   onClick={() => setSelected(isSel ? null : s.key)}
                   className={cx(
-                    "group flex h-full w-full flex-col gap-2.5 rounded-xl border bg-surface p-3.5 text-left shadow-card",
+                    "group relative flex h-full w-full flex-col gap-2.5 rounded-xl border bg-surface p-3.5 text-left shadow-card",
                     m.border,
                     isSel && "border-primary! ring-3 ring-primary/15",
                   )}
                 >
+                  {isChanged && <span key={`c${changed.tick}`} aria-hidden className="pl-changed pointer-events-none absolute inset-0 rounded-xl" />}
                   <span className="flex items-start gap-3">
                     <span aria-hidden className={cx("tile-3d inline-flex size-9 shrink-0 items-center justify-center rounded-lg [&>svg]:size-[18px]", m.tile)}>
                       {s.icon}
@@ -148,7 +172,7 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
                     <span className="mt-auto block">
                       {s.metric != null && (
                         <span className="flex items-baseline gap-1.5">
-                          <span className="font-mono text-xl font-semibold tracking-tight text-text tabular-nums">{s.metric}</span>
+                          <span key={isChanged ? `m${changed.tick}` : "m"} className={cx("font-mono text-xl font-semibold tracking-tight text-text tabular-nums", isChanged && "pl-metric-in")}>{s.metric}</span>
                           {s.metricLabel && <span className="truncate text-xs text-muted">{s.metricLabel}</span>}
                         </span>
                       )}
@@ -167,7 +191,15 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
                   )}
                 </button>
                 {next && (
-                  <span aria-hidden className="pl-conn" data-state={next.status} data-md={direction(i, 2)} data-xl={direction(i, columns)} />
+                  <span
+                    key={nextChanged ? `p${changed.tick}` : "n"}
+                    aria-hidden
+                    className="pl-conn"
+                    data-state={next.status}
+                    data-pulse={nextChanged || undefined}
+                    data-md={direction(i, 2)}
+                    data-xl={direction(i, columns)}
+                  />
                 )}
               </li>
             );

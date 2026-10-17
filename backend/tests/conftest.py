@@ -50,6 +50,7 @@ TABLES = [
     "report_analyses",
     "notifications",
     "jobs",
+    "phrase_concepts",
     "allocation_rejections",
     "onboarding_profiles",
     "trainee_trades",
@@ -138,10 +139,13 @@ def project_storage(monkeypatch: pytest.MonkeyPatch) -> Any:
 @pytest.fixture(autouse=True)
 def no_ai_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """External services are faked: no Groq calls and no network fetches in tests."""
-    from app.automation import analysis, fetch, projects
+    from app.automation import analysis, concepts, fetch, projects
+    from app.modules import assistant
 
     monkeypatch.setattr(projects, "ai_client_factory", lambda: None)
+    monkeypatch.setattr(concepts, "ai_client_factory", lambda: None)
     monkeypatch.setattr(analysis, "ai_client_factory", lambda: None)
+    monkeypatch.setattr(assistant, "ai_client_factory", lambda: None)
 
     def _no_network(url: str) -> tuple[bytes, str]:
         raise fetch.FetchError("Network fetching is disabled in tests")

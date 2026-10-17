@@ -238,6 +238,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["ask_api_v1_assistant_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/provision": {
         parameters: {
             query?: never;
@@ -412,6 +429,23 @@ export interface paths {
         head?: never;
         /** Patch Me */
         patch: operations["patch_me_api_v1_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/me/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Alerts */
+        get: operations["my_alerts_api_v1_me_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/notifications": {
@@ -996,6 +1030,29 @@ export interface components {
             status: components["schemas"]["UserStatus"];
             trainee: components["schemas"]["TraineeRef"] | null;
         };
+        /** Alert */
+        Alert: {
+            /** Code */
+            code: string;
+            /** Count */
+            count: number;
+            /** Detail */
+            detail: string;
+            /** Link */
+            link: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "warning" | "info";
+            /** Title */
+            title: string;
+        };
+        /** AlertsOut */
+        AlertsOut: {
+            /** Data */
+            data: components["schemas"]["Alert"][];
+        };
         /** AllocProjectRef */
         AllocProjectRef: {
             /**
@@ -1210,11 +1267,34 @@ export interface components {
             /** Unassigned Trainees */
             unassigned_trainees: number;
         };
+        /** AskIn */
+        AskIn: {
+            /** Allocation Id */
+            allocation_id?: string | null;
+            /** History */
+            history?: components["schemas"]["Turn"][];
+            /** Question */
+            question: string;
+        };
         /**
          * AssessmentStatus
          * @enum {string}
          */
         AssessmentStatus: "pending" | "complete";
+        /** AssistantAnswer */
+        AssistantAnswer: {
+            /** Answer */
+            answer: string;
+            /** Intent */
+            intent?: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "ai" | "rules";
+            /** Sources */
+            sources: string[];
+        };
         /** AutomationStats */
         AutomationStats: {
             /** Ai Configured */
@@ -2738,6 +2818,16 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** Turn */
+        Turn: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
         /** UserOut */
         UserOut: {
             /**
@@ -3277,6 +3367,39 @@ export interface operations {
             };
         };
     };
+    ask_api_v1_assistant_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantAnswer"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     provision_api_v1_auth_provision_post: {
         parameters: {
             query?: never;
@@ -3654,6 +3777,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_alerts_api_v1_me_alerts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertsOut"];
                 };
             };
         };

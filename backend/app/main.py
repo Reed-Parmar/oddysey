@@ -13,6 +13,8 @@ from app.core.config import get_settings
 from app.core.errors import install_handlers
 from app.modules import (
     admin,
+    alerts,
+    assistant,
     core_routes,
     cycles,
     imports,
@@ -97,6 +99,8 @@ def create_app() -> FastAPI:
         resumes,
         progress,
         admin,
+        alerts,
+        assistant,
     ):
         api.include_router(module.router)
     app.include_router(api)

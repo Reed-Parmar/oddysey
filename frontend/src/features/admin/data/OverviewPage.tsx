@@ -18,6 +18,7 @@ import {
   DataTable, EmptyState, ErrorState, FormField, LoadingState, Meter, PageHeader, StackedBar, StatusBadge,
   useToast, type Column,
 } from "@/components/shared";
+import { Donut, Histogram } from "@/components/shared/Charts";
 import { Pipeline, PipelineLegend, PipelineStatusChip } from "@/components/shared/Pipeline";
 import { Alert, Button, Card, Dialog, Input, Textarea, cx } from "@/components/ui";
 import { formatScore } from "@/lib/format";
@@ -27,6 +28,8 @@ import {
   ApiErrorAlert, IstDateTime, MetaLine, StatTile, applyFieldErrors, formatIst, fromLocalInput, humanize, toLocalInput,
   triggerLabel, useAllCycles, useInvalidate,
 } from "./common";
+import { AlertsPanel } from "@/features/shared/Autopilot";
+
 import { buildLifecycle, workerHealth } from "./lifecycle";
 
 const GRADE_ORDER = ["A1", "A", "B+", "B", "C", "D"] as const;
@@ -79,6 +82,7 @@ export function AdminOverview() {
           <CreateCycleCard />
         </>
       )}
+      {!viewingPast && actives.length > 0 && <AlertsPanel />}
       {viewingPast ? (
         <PastCycleView cycleId={viewId} onBack={() => setViewId(null)} />
       ) : active ? (
@@ -287,11 +291,11 @@ function OverviewStats({ o }: { o: Overview }) {
         <Card title="Submissions" icon={<ChartBar />}>
           {s ? (
             <div className="flex flex-col gap-4">
-              <StackedBar label="Submissions by status" segments={[
-                { label: "Not submitted", value: s.not_submitted, className: "bg-subtle" },
-                { label: "Awaiting evaluation", value: s.submitted, className: "bg-info" },
-                { label: "Rework requested", value: s.rework_requested, className: "bg-warning" },
-                { label: "Evaluated", value: s.evaluated, className: "bg-success" },
+              <Donut label="Submissions by status" centerLabel="trainees" segments={[
+                { label: "Not submitted", value: s.not_submitted, tone: "subtle" },
+                { label: "Awaiting evaluation", value: s.submitted, tone: "info" },
+                { label: "Rework requested", value: s.rework_requested, tone: "warning" },
+                { label: "Evaluated", value: s.evaluated, tone: "success" },
               ]} />
               <p className="text-sm text-muted">{s.late} late submission{s.late === 1 ? "" : "s"}.</p>
               <CountList title="Report analysis" entries={s.by_analysis} format={(k) => label("analysis", k)[0]} />
@@ -301,7 +305,7 @@ function OverviewStats({ o }: { o: Overview }) {
 
         <Card title="Grades" icon={<CheckCircle />} description="Latest evaluated version per trainee.">
           {o.grades && Object.values(o.grades).some((n) => n > 0) ? (
-            <StackedBar label="Grade distribution" segments={GRADE_ORDER.map((g) => ({ label: g, value: o.grades?.[g] ?? 0 }))} />
+            <Histogram label="Grade distribution" segments={GRADE_ORDER.map((g, i) => ({ label: g, value: o.grades?.[g] ?? 0, tone: ["chart-2", "chart-2", "chart-1", "chart-1", "chart-3", "chart-4"][i] }))} />
           ) : <p className="text-sm text-muted">No grades yet.</p>}
         </Card>
       </div>

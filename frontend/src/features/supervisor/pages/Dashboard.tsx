@@ -18,6 +18,7 @@ import { label } from "@/lib/statusLabels";
 
 import { NoCycleState, PersonCell, SupervisorProjectCard, useCycleState, useMyProjects } from "../common";
 import type { Grade } from "../lib/grade";
+import { AlertsPanel } from "@/features/shared/Autopilot";
 
 const GRADES: Grade[] = ["A1", "A", "B+", "B", "C", "D"];
 
@@ -307,6 +308,7 @@ export function DashboardPage() {
           </Link>
         ) : undefined}
       />
+      <div className="mb-6"><AlertsPanel /></div>
       {body}
     </>
   );

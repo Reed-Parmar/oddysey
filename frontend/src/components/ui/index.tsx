@@ -27,7 +27,7 @@ const GLOSS = "bg-linear-to-b from-white/20 to-transparent shadow-btn";
 const BUTTON_VARIANTS = {
   primary: `bg-primary ${GLOSS} text-primary-fg hover:bg-primary-hover`,
   accent: `bg-accent ${GLOSS} text-white hover:bg-accent-ink`,
-  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-white",
+  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-surface-2",
   danger: `bg-danger ${GLOSS} text-white hover:bg-danger/90`,
   ghost: "text-neutral hover:bg-neutral-bg hover:text-text",
 };

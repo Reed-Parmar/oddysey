@@ -8,7 +8,8 @@ import {
   BackLink, DateTime, EmptyState, ErrorState, LoadingState, NotFound, PageHeader, ScoreBar, StatusBadge,
 } from "@/components/shared";
 import { Card } from "@/components/ui";
-import { FactorTable, TraineeProfileView, TraineeResumeCard } from "@/features/shared/views";
+import { MatchReason } from "@/features/shared/MatchReason";
+import { TraineeProfileView, TraineeResumeCard } from "@/features/shared/views";
 
 export function TraineeProfilePage() {
   const { traineeId = "" } = useParams();
@@ -70,7 +71,7 @@ export function TraineeProfilePage() {
                   <span className="text-muted">Match score</span>
                   {a.match_score == null ? <span>—</span> : <ScoreBar value={a.match_score} label="Match score" />}
                 </div>
-                {a.factors ? <FactorTable factors={a.factors} /> : <p className="text-sm text-muted">Allocated before itemised factors were recorded.</p>}
+                <MatchReason allocation={a} audience="trainee" />
               </div>
             )}
           </Card>

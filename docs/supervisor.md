@@ -1,5 +1,11 @@
 # Supervisor Module Handbook (Teammate B)
 
+> **ADR-019 / ADR-020 (rev 5, binding; api.md §0c).** The supervisor dashboard shows a **Needs attention** panel (ALR-01
+> `/me/alerts`, own projects only): reviews pending (analysis needs a human), trainees at deadline risk, open rework. Each
+> alert links to the fixing screen. The submission review screen has an **Ask about this project** panel (AST-01 with the
+> `allocation_id` of an active allocation on one of the supervisor's own projects; otherwise 404). It is grounded,
+> read-only and stateless, and no PII reaches Groq.
+
 > **ADR-018 (rev 4, binding).** Several cycles can be active. A supervisor's lists cover their projects in **all active
 > cycles** by default (each row shows its cycle); the cycle filter narrows it.
 

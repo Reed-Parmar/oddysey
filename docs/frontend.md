@@ -1,7 +1,7 @@
 # Frontend Conventions
 
 > **ADR-017 (rev 3, binding — supersedes the route map below where they differ).** Student: `/student` (Dashboard),
-> `/student/project` (My Project), `/student/onboarding` (outside the StudentGate), `/student/submissions/:id`; old student
+> `/student/project` (My Project), `/student/submissions` (Submissions, ADR-022), `/student/onboarding` (outside the StudentGate), `/student/submissions/:id`; old student
 > URLs redirect. Admin: `/admin`, `/admin/projects`, `/admin/projects/new`, `/admin/projects/:id`, `/admin/tracking`,
 > `/admin/staff`, `/admin/submissions/:id`; `/admin/cycles*`, `/admin/recommendations`, `/admin/allocations`,
 > `/admin/progress`, `/admin/trainees*` redirect to Overview/Tracking, `/admin/users` to Staff. Shared views
@@ -49,7 +49,7 @@ Non-nav routes (detail pages) are listed in each handbook. A self-registered stu
 
 ## 3. Design tokens and status labels
 
-- Tailwind v4 `@theme` tokens in `src/index.css`. Light only in the MVP (dark mode in Phase 5). The full design system (palette, type, components, layout rules) is in [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+- Tailwind v4 `@theme` tokens in `src/index.css`. Light and dark themes (dark follows the system; a header toggle overrides it). The full design system (palette, type, components, layout rules) is in [`frontend/DESIGN.md`](../frontend/DESIGN.md):
   - Navy-blue primary, navy sidebar with a coloured glow, teal accent reserved for "automation is moving", clay and violet for decoration and data; slate neutrals. Frosted-glass panels over a soft colour mesh, with light 3D depth (layered shadows, glossy buttons and icon tiles).
   - IBM Plex Sans (headings and body), IBM Plex Mono for codes and metrics, tabular figures in data.
   - `Pipeline` shows the automated lifecycle (Admin overview: whole cycle; Student dashboard: own record; Supervisor dashboard: own trainees). Stage statuses are derived only from existing API responses; no new endpoints.

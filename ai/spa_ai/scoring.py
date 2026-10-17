@@ -29,7 +29,9 @@ BELOW_MIN_MATCH = "below_min_match"
 
 MODE_FULL = "full"
 MODE_PROFILE = "profile"
-SCORING_VERSION = "scoring-2"
+SCORING_VERSION = (
+    "scoring-3"  # ADR-021: concept-aware; identical to scoring-2 when no concepts are stored
+)
 
 DIFFICULTY_REQUIREMENT: dict[str, int] = {"beginner": 50, "intermediate": 65, "advanced": 80}
 
@@ -49,6 +51,9 @@ class TraineeInput:
     background: str | None
     trade_ids: tuple[str, ...] = ()  # all trades; empty means (trade_id,)
     trade_names: tuple[str, ...] = ()
+    # ADR-021: AI concept tags (aligned with `skills`; empty = none). Matching with them is additive only.
+    skill_concepts: tuple[frozenset[str], ...] = ()
+    interest_concepts: frozenset[str] = frozenset()
 
     def trades(self) -> frozenset[str]:
         return frozenset(self.trade_ids or ((self.trade_id,) if self.trade_id else ()))
@@ -74,6 +79,9 @@ class ProjectInput:
     target_trade_ids: tuple[str, ...] = ()  # all target trades; empty means (target_trade_id,)
     target_trade_names: tuple[str, ...] = ()
     min_match_score: float = 0.0  # explicit allocation threshold; 0 = none
+    # ADR-021: AI concept tags for each prerequisite skill (aligned with `skills`) and for title/category.
+    skill_concepts: tuple[frozenset[str], ...] = ()
+    topic_concepts: frozenset[str] = frozenset()
 
     def trades(self) -> frozenset[str]:
         ids = self.target_trade_ids or ((self.target_trade_id,) if self.target_trade_id else ())
@@ -241,6 +249,8 @@ def _skill_factor(t: TraineeInput, p: ProjectInput, weight: int = 30) -> tuple[F
     for pre in prereqs:
         if any(_skill_matches(pre, s) for s in t.skills):
             matched.append(pre.strip())
+        elif shared := _concept_match(_aligned(p.skills, p.skill_concepts, pre), t.skill_concepts):
+            matched.append(f"{pre.strip()} (via AI concept: {shared})")
         else:
             missing.append(pre.strip())
     cov = len(matched) / len(prereqs)
@@ -265,14 +275,40 @@ def project_tokens(p: ProjectInput) -> frozenset[str]:
     return toks
 
 
+def _aligned(
+    skills: tuple[str, ...], concepts: tuple[frozenset[str], ...], name: str
+) -> frozenset[str]:
+    """The concept tags of `name` within an aligned (skills, concepts) pair; empty when not tagged."""
+    if len(concepts) != len(skills):
+        return frozenset()
+    return next((c for s, c in zip(skills, concepts, strict=True) if s == name), frozenset())
+
+
+def _concept_match(pre: frozenset[str], skill_concepts: tuple[frozenset[str], ...]) -> str | None:
+    """The first shared concept between a prerequisite and any trainee skill (ADR-021), else None."""
+    if not pre:
+        return None
+    for concepts in skill_concepts:
+        if shared := pre & concepts:
+            return min(shared)
+    return None
+
+
 def _interest_factor(t: TraineeInput, p: ProjectInput, weight: int = 20) -> tuple[Factor, float]:
     i_toks = interest_tokens(t)
     overlap = i_toks & project_tokens(p)
     ratio = min(1.0, 2 * len(overlap) / max(len(i_toks), 1))
+    # ADR-021: AI concept overlap can raise the ratio, never lower it.
+    shared: frozenset[str] = frozenset()
+    if t.interest_concepts:
+        shared = t.interest_concepts & p.topic_concepts.union(*p.skill_concepts)
+        ratio = max(ratio, min(1.0, 2 * len(shared) / len(t.interest_concepts)))
     if overlap:
         detail = f"Overlapping terms: {', '.join(sorted(overlap))}"
     else:
         detail = "No overlapping terms"
+    if shared:
+        detail += f". Related via AI concepts: {', '.join(sorted(shared))}"
     return (
         Factor(
             "interest_alignment",

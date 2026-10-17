@@ -4,6 +4,8 @@ import type { components } from "./schema.gen";
 type S = components["schemas"];
 
 export type User = S["UserOut"];
+export type AutopilotAlert = S["Alert"];
+export type AssistantAnswer = S["AssistantAnswer"];
 export type AdminUser = S["AdminUser"];
 export type Cycle = S["CycleOut"];
 export type CycleOption = S["CycleOption"];

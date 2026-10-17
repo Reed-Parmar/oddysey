@@ -81,6 +81,65 @@
         "title": "AdminUser",
         "type": "object"
       },
+      "Alert": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "title",
+          "detail",
+          "count",
+          "link"
+        ],
+        "title": "Alert",
+        "type": "object"
+      },
+      "AlertsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AlertsOut",
+        "type": "object"
+      },
       "AllocProjectRef": {
         "properties": {
           "id": {
@@ -737,6 +796,42 @@
         "title": "ArchivePreview",
         "type": "object"
       },
+      "AskIn": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Id"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "maxItems": 6,
+            "title": "History",
+            "type": "array"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskIn",
+        "type": "object"
+      },
       "AssessmentStatus": {
         "enum": [
           "pending",
@@ -744,6 +839,47 @@
         ],
         "title": "AssessmentStatus",
         "type": "string"
+      },
+      "AssistantAnswer": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "mode": {
+            "enum": [
+              "ai",
+              "rules"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer",
+          "sources",
+          "mode"
+        ],
+        "title": "AssistantAnswer",
+        "type": "object"
       },
       "AutomationStats": {
         "properties": {
@@ -5799,6 +5935,31 @@
         "title": "TraineeStats",
         "type": "object"
       },
+      "Turn": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Turn",
+        "type": "object"
+      },
       "UserOut": {
         "properties": {
           "created_at": {
@@ -6872,6 +7033,47 @@
         ]
       }
     },
+    "/api/v1/assistant/ask": {
+      "post": {
+        "operationId": "ask_api_v1_assistant_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantAnswer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/api/v1/auth/provision": {
       "post": {
         "operationId": "provision_api_v1_auth_provision_post",
@@ -7379,6 +7581,27 @@
         "summary": "Patch Me",
         "tags": [
           "me"
+        ]
+      }
+    },
+    "/api/v1/me/alerts": {
+      "get": {
+        "operationId": "my_alerts_api_v1_me_alerts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "My Alerts",
+        "tags": [
+          "alerts"
         ]
       }
     },

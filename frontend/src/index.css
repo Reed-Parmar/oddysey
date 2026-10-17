@@ -94,6 +94,58 @@
   }
 }
 
+/* One-shot highlight when a refresh changes a pipeline stage. */
+@keyframes changed-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 55%, transparent);
+    background-color: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+    background-color: transparent;
+  }
+}
+
+@keyframes metric-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes conn-pulse {
+  0% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  40% {
+    filter: drop-shadow(0 0 4px var(--color-accent));
+  }
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
 @keyframes pulse-ring {
   0% {
     box-shadow: 0 0 0 0 currentColor;
@@ -225,9 +277,9 @@
 
 /* 3D icon tile: glossy top light and a soft coloured drop under the tile (inherits the tile's text colour). */
 @utility tile-3d {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0) 60%);
+  background-image: linear-gradient(180deg, var(--gloss, rgb(255 255 255 / 0.75)), transparent 60%);
   box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.9),
+    inset 0 1px 0 0 var(--gloss, rgb(255 255 255 / 0.9)),
     inset 0 -1px 0 0 color-mix(in oklab, currentColor 18%, transparent),
     0 4px 10px -4px color-mix(in oklab, currentColor 45%, transparent);
 }
@@ -422,12 +474,20 @@
  * Glass and depth (unlayered so they sit on top of the utilities).
  * Page: a soft four-colour mesh. Panels: frosted glass. Sidebar: navy with a coloured glow.
  */
+:root {
+  --gloss: rgb(255 255 255 / 0.75);
+  --mesh-a: rgb(47 104 184 / 0.20);
+  --mesh-b: rgb(20 149 139 / 0.16);
+  --mesh-c: rgb(196 98 63 / 0.15);
+  --mesh-d: rgb(98 71 184 / 0.14);
+}
+
 body {
   background-image:
-    radial-gradient(1100px 620px at -5% -10%, rgb(47 104 184 / 0.20), transparent 62%),
-    radial-gradient(900px 560px at 105% -5%, rgb(20 149 139 / 0.16), transparent 60%),
-    radial-gradient(900px 700px at 100% 105%, rgb(196 98 63 / 0.15), transparent 62%),
-    radial-gradient(800px 640px at -5% 100%, rgb(98 71 184 / 0.14), transparent 60%);
+    radial-gradient(1100px 620px at -5% -10%, var(--mesh-a), transparent 62%),
+    radial-gradient(900px 560px at 105% -5%, var(--mesh-b), transparent 60%),
+    radial-gradient(900px 700px at 100% 105%, var(--mesh-c), transparent 62%),
+    radial-gradient(800px 640px at -5% 100%, var(--mesh-d), transparent 60%);
   background-attachment: fixed;
 }
 
@@ -479,5 +539,213 @@ a.shadow-card:hover,
   a.shadow-card:hover,
   .pl-node > button:hover {
     transform: none;
+  }
+}
+
+/*
+ * Dark theme: follows the system setting; `data-theme` on <html> (set by the header toggle) overrides it.
+ * On dark surfaces `text-primary` / `text-accent` use their light "ink" shades to keep AA contrast.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --color-bg: #0a1222;
+  --color-surface: rgb(22 33 54 / 0.62);
+  --color-surface-2: rgb(30 43 68 / 0.55);
+  --color-surface-strong: rgb(20 30 50 / 0.94);
+  --color-border: rgb(255 255 255 / 0.09);
+  --color-border-strong: rgb(255 255 255 / 0.2);
+  --color-text: #e8eef8;
+  --color-muted: #a3b0c4;
+  --color-subtle: #8794aa;
+  --color-primary: #3a6fc0;
+  --color-primary-light: #4f84d6;
+  --color-primary-hover: #2f5ea6;
+  --color-primary-soft: rgb(79 132 214 / 0.18);
+  --color-primary-ink: #8db4f0;
+  --color-accent: #0f766e;
+  --color-accent-light: #14958b;
+  --color-accent-soft: rgb(20 149 139 / 0.18);
+  --color-accent-ink: #6fd9cb;
+  --color-clay: #e08a68;
+  --color-clay-soft: rgb(224 138 104 / 0.16);
+  --color-clay-ink: #f0ab8e;
+  --color-violet: #9f8cf0;
+  --color-violet-soft: rgb(159 140 240 / 0.16);
+  --color-violet-ink: #c1b3fb;
+  --color-canvas: rgb(10 18 34 / 0.35);
+  --color-canvas-dot: rgb(255 255 255 / 0.10);
+  --color-info: #86b6ff;
+  --color-info-bg: rgb(134 182 255 / 0.13);
+  --color-success: #5fd08f;
+  --color-success-bg: rgb(95 208 143 / 0.13);
+  --color-warning: #f0b45a;
+  --color-warning-bg: rgb(240 180 90 / 0.13);
+  --color-danger: #ff8f85;
+  --color-danger-bg: rgb(255 143 133 / 0.13);
+  --color-neutral: #cbd5e1;
+  --color-neutral-bg: rgb(255 255 255 / 0.07);
+  --color-chart-1: #4f84d6;
+  --color-chart-2: #14a397;
+  --color-chart-3: #e08a68;
+  --color-chart-4: #9f8cf0;
+  --color-chart-5: #8794aa;
+  --gloss: rgb(255 255 255 / 0.10);
+  --shadow-card:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 10px 24px -12px rgb(0 0 0 / 0.55),
+    0 24px 48px -28px rgb(47 104 184 / 0.35);
+  --shadow-raised:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08), 0 2px 4px 0 rgb(0 0 0 / 0.35), 0 18px 36px -14px rgb(0 0 0 / 0.6),
+    0 36px 72px -36px rgb(47 104 184 / 0.45);
+  --shadow-overlay: inset 0 1px 0 0 rgb(255 255 255 / 0.08), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 0 rgb(0 0 0 / 0.25), 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 6px 14px -6px rgb(0 0 0 / 0.6);
+  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.07), 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 4px 10px -6px rgb(0 0 0 / 0.5);
+  --mesh-a: rgb(47 104 184 / 0.32);
+  --mesh-b: rgb(20 149 139 / 0.22);
+  --mesh-c: rgb(196 98 63 / 0.16);
+  --mesh-d: rgb(98 71 184 / 0.26);
+  }
+  :root:not([data-theme="light"]) {
+    .text-primary {
+      color: var(--color-primary-ink);
+    }
+    .text-accent {
+      color: var(--color-accent-ink);
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0a1222;
+  --color-surface: rgb(22 33 54 / 0.62);
+  --color-surface-2: rgb(30 43 68 / 0.55);
+  --color-surface-strong: rgb(20 30 50 / 0.94);
+  --color-border: rgb(255 255 255 / 0.09);
+  --color-border-strong: rgb(255 255 255 / 0.2);
+  --color-text: #e8eef8;
+  --color-muted: #a3b0c4;
+  --color-subtle: #8794aa;
+  --color-primary: #3a6fc0;
+  --color-primary-light: #4f84d6;
+  --color-primary-hover: #2f5ea6;
+  --color-primary-soft: rgb(79 132 214 / 0.18);
+  --color-primary-ink: #8db4f0;
+  --color-accent: #0f766e;
+  --color-accent-light: #14958b;
+  --color-accent-soft: rgb(20 149 139 / 0.18);
+  --color-accent-ink: #6fd9cb;
+  --color-clay: #e08a68;
+  --color-clay-soft: rgb(224 138 104 / 0.16);
+  --color-clay-ink: #f0ab8e;
+  --color-violet: #9f8cf0;
+  --color-violet-soft: rgb(159 140 240 / 0.16);
+  --color-violet-ink: #c1b3fb;
+  --color-canvas: rgb(10 18 34 / 0.35);
+  --color-canvas-dot: rgb(255 255 255 / 0.10);
+  --color-info: #86b6ff;
+  --color-info-bg: rgb(134 182 255 / 0.13);
+  --color-success: #5fd08f;
+  --color-success-bg: rgb(95 208 143 / 0.13);
+  --color-warning: #f0b45a;
+  --color-warning-bg: rgb(240 180 90 / 0.13);
+  --color-danger: #ff8f85;
+  --color-danger-bg: rgb(255 143 133 / 0.13);
+  --color-neutral: #cbd5e1;
+  --color-neutral-bg: rgb(255 255 255 / 0.07);
+  --color-chart-1: #4f84d6;
+  --color-chart-2: #14a397;
+  --color-chart-3: #e08a68;
+  --color-chart-4: #9f8cf0;
+  --color-chart-5: #8794aa;
+  --gloss: rgb(255 255 255 / 0.10);
+  --shadow-card:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 10px 24px -12px rgb(0 0 0 / 0.55),
+    0 24px 48px -28px rgb(47 104 184 / 0.35);
+  --shadow-raised:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08), 0 2px 4px 0 rgb(0 0 0 / 0.35), 0 18px 36px -14px rgb(0 0 0 / 0.6),
+    0 36px 72px -36px rgb(47 104 184 / 0.45);
+  --shadow-overlay: inset 0 1px 0 0 rgb(255 255 255 / 0.08), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 0 rgb(0 0 0 / 0.25), 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 6px 14px -6px rgb(0 0 0 / 0.6);
+  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.07), 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 4px 10px -6px rgb(0 0 0 / 0.5);
+  --mesh-a: rgb(47 104 184 / 0.32);
+  --mesh-b: rgb(20 149 139 / 0.22);
+  --mesh-c: rgb(196 98 63 / 0.16);
+  --mesh-d: rgb(98 71 184 / 0.26);
+}
+
+:root[data-theme="dark"] .text-primary {
+  color: var(--color-primary-ink);
+}
+
+:root[data-theme="dark"] .text-accent {
+  color: var(--color-accent-ink);
+}
+
+.pl-changed {
+  animation: changed-flash 1.4s ease-out 1;
+}
+
+.pl-metric-in {
+  display: inline-block;
+  animation: metric-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 1;
+}
+
+.pl-conn[data-pulse] {
+  animation: conn-pulse 1.2s ease-out 1;
+}
+
+.pl-conn[data-pulse][data-state="active"] {
+  animation: var(--animate-flow), conn-pulse 1.2s ease-out 1;
+}
+
+/* Route change: the new page fades in. */
+#main > * {
+  animation: page-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Skeleton shimmer. */
+.skeleton-shimmer {
+  background-image: linear-gradient(90deg, var(--color-neutral-bg) 0%, color-mix(in oklab, var(--color-neutral-bg) 40%, transparent) 50%, var(--color-neutral-bg) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Assistant robot (features/shared/Autopilot.tsx): wave, blink and look; all stop under reduced motion. */
+@keyframes robot-wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(-22deg); }
+  20%, 40% { transform: rotate(14deg); }
+}
+
+@keyframes robot-blink {
+  0%, 92%, 100% { opacity: 1; }
+  96% { opacity: 0.35; }
+}
+
+@keyframes robot-eye {
+  0%, 94%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.15); }
+}
+
+.robot-wave {
+  animation: robot-wave 2.6s ease-in-out infinite;
+}
+
+.robot-blink {
+  animation: robot-blink 3s ease-in-out infinite;
+}
+
+.robot-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: robot-eye 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot-wave,
+  .robot-blink,
+  .robot-eye {
+    animation: none;
   }
 }

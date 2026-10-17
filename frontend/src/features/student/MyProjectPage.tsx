@@ -1,7 +1,7 @@
 /** /student/project: the trainee's own allocated project only (ADR-017). No catalogue, no choice; rejection before work starts. */
 import {
-  Archive, BookOpen, CalendarBlank, ClockCounterClockwise, EnvelopeSimple, Hourglass, Lightbulb, ProhibitInset,
-  UserCircle, WarningCircle,
+  Archive, ClockCounterClockwise, EnvelopeSimple, FileText, Hourglass, Lightbulb, ProhibitInset, Target,
+  UploadSimple, UserCircle, WarningCircle,
 } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -9,18 +9,20 @@ import { useState } from "react";
 import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { Allocation, HistoryEntry } from "@/api/types";
-import { Avatar, DateTime, EmptyState, ErrorState, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
+import type { Allocation, HistoryEntry, Submission } from "@/api/types";
+import { Avatar, DateTime, EmptyState, ErrorState, FormField, LoadingState, PageHeader, StatusBadge, useToast } from "@/components/shared";
 import { Alert, Button, Card, Dialog, Textarea } from "@/components/ui";
-import { MatchExplanation, ProjectDetailView, ProjectDocumentButton, ProjectGuide, SubmissionDetailView } from "@/features/shared/views";
+import { AssistantLauncher } from "@/features/shared/Autopilot";
+import { MatchReason } from "@/features/shared/MatchReason";
+import { ProjectDetailView, ProjectDocumentButton } from "@/features/shared/views";
 
 import {
   REJECT_CONFLICT_TEXT, REJECT_MAX, REJECT_MIN, WAITING_AFTER_REJECT_TEXT, WAITING_TEXT, canReject, lastRejected,
   newIdempotencyKey, rejectReasonError, submitBlockedReason,
 } from "./forms";
+import { DeadlineChip, MatchGauge } from "./MatchVisuals";
 import { useMyAllocationHistory, useMySubmissionHistory, useProject, useStudentContext } from "./hooks";
-import { AnalysisCard, ReworkFeedback, SubmitBlocked, SubmitForm, VersionTimeline } from "./SubmissionPage";
-import { Fact } from "./ui";
+import { LinkButton } from "./ui";
 
 export function MyProjectPage() {
   const { cycle, me } = useStudentContext();
@@ -31,7 +33,7 @@ export function MyProjectPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="My project" description="Your allocated project, its guide, your submissions and their evaluation." />
+      <PageHeader title="My project" description="Your allocated project, why it was chosen for you and its document." />
       {archived && (
         <Alert variant="info" icon={<Archive />} title="This cycle is archived">
           Everything is kept read-only: you can view your project and results, but you can't submit or reject.
@@ -65,97 +67,146 @@ function AllocatedProject({ allocation: a, rejected }: { allocation: Allocation;
   const late = !!deadline && Date.now() > new Date(deadline).getTime();
   const blocked = submitBlockedReason(cycle, me, latest);
   const rejectable = subs.isSuccess && canReject(cycle, me, versions.length);
-  const sup = a.project.supervisor;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
-      <div className="flex min-w-0 flex-col gap-6">
-        {project.isLoading ? (
-          <LoadingState label="Loading your project…" />
-        ) : project.error || !project.data ? (
-          <ErrorState error={project.error} onRetry={() => void project.refetch()} />
-        ) : (
-          <>
-            <ProjectDetailView project={project.data.data} />
-            <Card title="Project guide" icon={<BookOpen />} description="Step-by-step plan prepared from the project document.">
-              <ProjectGuide project={project.data.data} />
-            </Card>
-          </>
-        )}
-
-        <section aria-labelledby="submission-title" className="flex flex-col gap-4">
-          <h2 id="submission-title" className="font-heading text-xl font-semibold text-text">Submission</h2>
-          {subs.isLoading ? (
-            <LoadingState />
-          ) : subs.error ? (
-            <ErrorState error={subs.error} onRetry={() => void subs.refetch()} />
+    <div className="flex flex-col gap-6">
+      <ProjectHero allocation={a} deadline={deadline} late={late && !latest} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-6">
+          {project.isLoading ? (
+            <LoadingState label="Loading your project…" />
+          ) : project.error || !project.data ? (
+            <ErrorState error={project.error} onRetry={() => void project.refetch()} />
           ) : (
-            <>
-              {latest?.status === "rework_requested" && (
-                <ReworkFeedback
-                  title={`Rework requested on version ${latest.version}`}
-                  feedback={latest.evaluation?.feedback ?? "The automated report evaluation or your supervisor asked for changes. Read the analysis below, then submit a new version."}
-                />
-              )}
-              {blocked ? <SubmitBlocked reason={blocked} pending={latest?.status === "submitted"} /> : <SubmitForm nextVersion={(latest?.version ?? 0) + 1} late={late} />}
-              {latest && (
-                <>
-                  <SubmissionDetailView submission={latest} />
-                  <AnalysisCard submissionId={latest.id} />
-                </>
-              )}
-            </>
+            <ProjectDetailView project={project.data.data} />
           )}
-        </section>
+
+          <SubmissionSummary latest={latest} loading={subs.isLoading} error={subs.error} onRetry={() => void subs.refetch()} blocked={!!blocked} />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6">
+          {project.data && (
+            <Card title="Project document" icon={<FileText />} description="The original document your project was prepared from.">
+              <ProjectDocumentButton project={project.data.data} />
+            </Card>
+          )}
+
+          <Card title="Why this project was allocated to me" icon={<Lightbulb />}>
+            <MatchReason allocation={a} audience="trainee" />
+          </Card>
+
+          {rejectable && <RejectCard allocation={a} />}
+
+          {(rejected.length > 0 || history.error) && (
+            <RejectionHistory entries={rejected} loading={history.isLoading} error={history.error} onRetry={() => void history.refetch()} />
+          )}
+        </div>
       </div>
-
-      <div className="flex min-w-0 flex-col gap-6">
-        <Card title="Supervisor and deadline" icon={<UserCircle />}>
-          <dl className="flex flex-col gap-4">
-            <Fact label="Supervisor">
-              {sup ? (
-                <span className="flex items-start gap-2.5">
-                  <Avatar name={sup.full_name} size="sm" />
-                  <span className="min-w-0">
-                    <span className="block">
-                      {sup.full_name}
-                      {sup.department && <span className="font-normal text-muted"> · {sup.department}</span>}
-                    </span>
-                    <a className="inline-flex min-h-9 items-center gap-1 font-normal break-all text-primary hover:underline" href={`mailto:${sup.email}`}>
-                      <EnvelopeSimple aria-hidden size={14} className="shrink-0" />
-                      {sup.email}
-                    </a>
-                  </span>
-                </span>
-              ) : (
-                <span className="text-muted">A supervisor is being assigned</span>
-              )}
-            </Fact>
-            <Fact label="Submission deadline" icon={<CalendarBlank />}>
-              {deadline ? <DateTime value={deadline} /> : "—"}
-              {late && !latest && <span className="mt-1 block text-xs font-medium text-warning">The deadline has passed; late submissions are marked Late.</span>}
-            </Fact>
-            {project.data && (
-              <Fact label="Project document">
-                <ProjectDocumentButton project={project.data.data} />
-              </Fact>
-            )}
-          </dl>
-        </Card>
-
-        <Card title="Why this project was allocated to me" icon={<Lightbulb />}>
-          <MatchExplanation allocation={a} />
-        </Card>
-
-        {rejectable && <RejectCard allocation={a} />}
-
-        {versions.length > 0 && <VersionTimeline versions={versions} currentId={latest?.id} />}
-
-        {(rejected.length > 0 || history.error) && (
-          <RejectionHistory entries={rejected} loading={history.isLoading} error={history.error} onRetry={() => void history.refetch()} />
-        )}
-      </div>
+      <AssistantLauncher allocationId={a.id} />
     </div>
+  );
+}
+
+function ProjectHero({ allocation: a, deadline, late }: { allocation: Allocation; deadline: string | null; late: boolean }) {
+  const sup = a.project.supervisor;
+  return (
+    <section
+      aria-label="Allocated project"
+      className="relative overflow-hidden rounded-2xl border border-border bg-surface p-5 shadow-raised sm:p-7"
+    >
+      <div aria-hidden className="pointer-events-none absolute -top-24 -right-24 size-64 rounded-full bg-primary-soft opacity-70 blur-3xl" />
+      <div className="relative flex flex-col-reverse gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="tile-3d inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary-ink">
+              <Target size={20} weight="duotone" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-mono text-xs font-medium tracking-wide text-muted">{a.project.project_code}</p>
+              <p className="text-xs text-subtle">Your allocated project</p>
+            </div>
+          </div>
+          <h2 className="font-heading text-2xl leading-tight font-semibold text-balance text-text [overflow-wrap:anywhere] sm:text-3xl">
+            {a.project.title}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {deadline ? (
+              <>
+                <DeadlineChip deadline={deadline} />
+                <span className="text-muted">Due <DateTime value={deadline} /></span>
+              </>
+            ) : (
+              <span className="text-muted">No submission deadline set</span>
+            )}
+          </div>
+          {late && <p className="text-xs font-medium text-warning">The deadline has passed; late submissions are marked Late.</p>}
+          <div className="flex items-start gap-3 rounded-xl bg-surface-2 p-3">
+            {sup ? (
+              <>
+                <Avatar name={sup.full_name} />
+                <div className="min-w-0 text-sm">
+                  <p className="text-xs text-muted">Supervisor</p>
+                  <p className="font-semibold text-text">
+                    {sup.full_name}
+                    {sup.department && <span className="font-normal text-muted"> · {sup.department}</span>}
+                  </p>
+                  <a className="inline-flex min-h-9 items-center gap-1 break-all text-primary hover:underline" href={`mailto:${sup.email}`}>
+                    <EnvelopeSimple aria-hidden size={14} className="shrink-0" />
+                    {sup.email}
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-surface text-muted">
+                  <UserCircle size={20} />
+                </span>
+                <div className="text-sm">
+                  <p className="text-xs text-muted">Supervisor</p>
+                  <p className="text-muted">A supervisor is being assigned</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 justify-center">
+          <MatchGauge score={a.match_score} mode={a.match_mode} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Short status of the latest version, linking to the Submissions page (ADR-022). */
+function SubmissionSummary({ latest, loading, error, onRetry, blocked }: {
+  latest: Submission | undefined; loading: boolean; error: unknown; onRetry: () => void; blocked: boolean;
+}) {
+  return (
+    <Card title="Submission" icon={<UploadSimple />}>
+      {loading ? (
+        <div className="h-12 skeleton-shimmer rounded-lg bg-neutral-bg" aria-hidden />
+      ) : error ? (
+        <ErrorState error={error} onRetry={onRetry} />
+      ) : (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 text-sm">
+            {latest ? (
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-text">Version {latest.version}</span>
+                <StatusBadge kind="submission" value={latest.status} />
+                <span className="text-muted">submitted <DateTime value={latest.submitted_at} /></span>
+              </p>
+            ) : (
+              <p className="text-text">You haven't submitted your report yet.</p>
+            )}
+            <p className="mt-1 text-xs text-muted">The form, your evaluation and every version are on the Submissions page.</p>
+          </div>
+          <LinkButton to="/student/submissions" variant={!latest || (!blocked && latest.status === "rework_requested") ? "primary" : "secondary"} size="sm" trailing className="shrink-0">
+            {!latest ? "Submit report" : latest.status === "rework_requested" && !blocked ? "Submit new version" : "Open submissions"}
+          </LinkButton>
+        </div>
+      )}
+    </Card>
   );
 }
 

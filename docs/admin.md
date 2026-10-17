@@ -1,5 +1,10 @@
 # Admin Module Handbook (Teammate C)
 
+> **ADR-019 (rev 5, binding; api.md §0c).** The Overview shows a **Needs attention** panel (ALR-01 `/me/alerts`): trainees
+> waiting (by reason), projects failed or needing attention, projects without a supervisor, failed background jobs in the
+> last 24 h, and trainees at deadline risk. Alerts are computed on read, never act on their own, and link to the fixing
+> screen. Deferred: the daily digest, the admin allocation override and the admin assistant.
+
 > **ADR-018 (rev 4, binding).** Several cycles can be active at once. Overview has a switcher between active cycles and
 > "New cycle" is always available. List filters default to **All active cycles** (rows show their cycle). Admins never
 > configure cycle trades or intake: students are placed by trade match and their own choice.

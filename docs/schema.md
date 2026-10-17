@@ -470,6 +470,14 @@ Implemented in `backend/migrations/versions/0004_multi_cycle.py` (reversible; th
 | `trainees` | Trigger `trainees_one_open_cycle_per_user` (BEFORE INSERT / UPDATE OF user_id, cycle_id): a user may be linked to at most one trainee whose cycle is not archived → constraint name `trainees_one_open_cycle_per_user` → `409 ACCOUNT_IN_OTHER_CYCLE`. `trainees_cycle_user_key` stays |
 | `onboarding_profiles.data` | May hold `cycle_id` (the student's choice); JSON, no column |
 
+### 4.4 Migration 0005 (ADR-021: AI concept tags)
+
+Implemented in `backend/migrations/versions/0005_phrase_concepts.py` (reversible: drops the table).
+
+| Object | Change |
+|---|---|
+| `phrase_concepts` | `phrase_key` text PK (lower-cased, whitespace-collapsed phrase, ≤ 300), `concepts` text[] (0–3, most specific first; `{}` = the AI gave none, not asked again), `source` ('ai'), `model`, `prompt_version`, `created_at`. Written only by the `tag_concepts` job; read additively by the scorer |
+
 ## 5. Ownership and access
 
 | Table | Written by | Read scope |

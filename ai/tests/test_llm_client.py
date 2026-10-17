@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from spa_ai.llm import AIClient, AIError, FakeAIClient, GroqClient
+from spa_ai.llm import AIClient, AIError, FakeAIClient, FallbackClient, GroqClient, OllamaClient
 
 
 def _completion(content: str) -> dict:
@@ -130,3 +130,66 @@ def test_fake_client_modes():
     assert FakeAIClient(lambda s, u: {"echo": u}).chat_json("s", "x") == {"echo": "x"}
     with pytest.raises(AIError):
         FakeAIClient(AIError("boom")).chat_json("s", "u")
+
+
+# ---------------------------------------------------------------- ADR-022: Ollama fallback (no network: MockTransport)
+
+
+def _ollama(handler):
+    return OllamaClient(
+        model="llama3.1:8b",
+        base_url="http://ollama.local:11434",
+        transport=httpx.MockTransport(handler),
+    )
+
+
+def test_ollama_client_sends_json_chat_and_parses_the_answer():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200, json={"message": {"role": "assistant", "content": '{"ok": true}'}}
+        )
+
+    assert _ollama(handler).chat_json("sys", "user") == {"ok": True}
+    assert seen["url"] == "http://ollama.local:11434/api/chat"
+    body = seen["body"]
+    assert (
+        body["format"] == "json"
+        and body["stream"] is False
+        and body["options"] == {"temperature": 0}
+    )
+    assert [m["role"] for m in body["messages"]] == ["system", "user"]
+
+
+@pytest.mark.parametrize(
+    ("response", "code"),
+    [
+        (httpx.Response(500, json={}), "http_500"),
+        (httpx.Response(200, json={"message": {"content": "not json"}}), "invalid_json"),
+        (httpx.Response(200, json={"message": {"content": "[1]"}}), "not_an_object"),
+        (httpx.Response(200, json={"nope": 1}), "malformed_completion"),
+    ],
+)
+def test_ollama_client_errors_are_ai_errors(response, code):
+    with pytest.raises(AIError, match=code):
+        _ollama(lambda request: response).chat_json("s", "u")
+
+
+def test_fallback_uses_ollama_only_when_the_primary_fails_and_reports_the_model():
+    groq = FakeAIClient(AIError("http_429"), model="groq-model")
+    local = FakeAIClient({"a": 1}, model="local-model")
+    client = FallbackClient(groq, local)
+    assert client.chat_json("s", "u") == {"a": 1} and client.model == "local-model"
+
+    ok = FallbackClient(FakeAIClient({"b": 2}, model="groq-model"), local)
+    assert ok.chat_json("s", "u") == {"b": 2} and ok.model == "groq-model"
+    assert len(local.calls) == 1  # not called when the primary answers
+
+
+def test_fallback_raises_the_primary_error_when_both_fail():
+    client = FallbackClient(FakeAIClient(AIError("http_400")), FakeAIClient(AIError("timeout")))
+    with pytest.raises(AIError, match="http_400"):
+        client.chat_json("s", "u")

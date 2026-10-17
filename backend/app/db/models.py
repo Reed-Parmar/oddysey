@@ -508,3 +508,15 @@ class AnalysisReview(Base):
 
     analysis: Mapped[ReportAnalysis] = relationship(back_populates="reviews")
     reviewer: Mapped[User] = relationship(lazy="joined")
+
+
+class PhraseConcept(Base):
+    """ADR-021: AI concept tags per distinct phrase (skill, career interest, project title/category)."""
+
+    __tablename__ = "phrase_concepts"
+    phrase_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    concepts: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    source: Mapped[str] = mapped_column(Text, server_default="ai")
+    model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

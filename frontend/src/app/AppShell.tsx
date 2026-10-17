@@ -10,6 +10,7 @@ import { Avatar } from "@/components/shared";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
 import { HOME, NAV, ROLE_LABEL } from "./nav";
+import { ThemeToggle } from "./theme";
 
 /** The caller's default cycle (CYC-01): a student's own cycle; for staff the newest active one (a UI default). */
 export function useCurrentCycle() {
@@ -192,6 +193,7 @@ export function AppShell() {
             </span>
           )}
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <Link
               to="/account"
               className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-neutral-bg sm:px-2"

@@ -34,6 +34,7 @@
 | `FRONTEND_BASE_URL` | `https://spa-web.vercel.app` | Builds invite links |
 | `LOG_LEVEL` | `INFO` | |
 | `GROQ_API_KEY` | `<groq key>` | Optional. Unset means rule-only recommendations. **Server only** |
+| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` / `OLLAMA_TIMEOUT_SECONDS` | empty / `llama3.1:8b` / `120` | Optional local fallback (ADR-022), e.g. `http://localhost:11434`. Self-hosted machines only; leave empty on Render (no GPU). **Server only** |
 | `GROQ_MODEL` | `<a current Groq model id with JSON mode>` | Chosen at build time (D-6) |
 | `AI_TIMEOUT_SECONDS` | `10` | Per Groq call |
 | `AI_CONCURRENCY` | `4` | Parallel Groq calls per run |

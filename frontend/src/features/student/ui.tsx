@@ -7,7 +7,7 @@ import { cx } from "@/components/ui";
 
 const LINK_VARIANTS = {
   primary: "bg-primary bg-linear-to-b from-white/20 to-transparent text-primary-fg shadow-btn hover:bg-primary-hover",
-  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-white",
+  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-surface-2",
   ghost: "text-primary hover:bg-primary-soft",
 };
 

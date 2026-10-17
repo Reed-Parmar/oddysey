@@ -356,18 +356,18 @@ export function nextStep(
   if (!me?.allocation) return { text: opts.rejectedBefore ? WAITING_AFTER_REJECT_TEXT : WAITING_TEXT };
   switch (latest?.status) {
     case "submitted":
-      return { text: `Version ${latest.version} is being evaluated`, to: "/student/project", cta: "View my submission" };
+      return { text: `Version ${latest.version} is being evaluated`, to: "/student/submissions", cta: "View my submission" };
     case "rework_requested":
-      return { text: "Rework requested: read the feedback and submit a new version", to: "/student/project", cta: "Submit a new version" };
+      return { text: "Rework requested: read the feedback and submit a new version", to: "/student/submissions", cta: "Submit a new version" };
     case "evaluated": {
       const grade = latest.evaluation?.grade ?? latest.report_evaluation?.effective_grade ?? latest.report_evaluation?.grade;
       return { text: grade ? `Evaluated: grade ${grade}` : "Your project has been evaluated", to: `/student/submissions/${latest.id}`, cta: "View evaluation" };
     }
     default:
       return {
-        text: `Read your project guide and submit your report before ${fmtDate(opts.deadline ?? cycle.submission_deadline)}`,
-        to: "/student/project",
-        cta: "Open my project",
+        text: `Read your project brief and submit your report before ${fmtDate(opts.deadline ?? cycle.submission_deadline)}`,
+        to: "/student/submissions",
+        cta: "Submit my report",
       };
   }
 }

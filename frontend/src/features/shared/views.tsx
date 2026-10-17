@@ -22,13 +22,14 @@ import { Link } from "react-router-dom";
 import { API_BASE, api, authHeaders, call } from "@/api/client";
 import { errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { Allocation, Analysis, Factor, PageMeta, ProgressRow, Project, Resume, Submission, Trainee } from "@/api/types";
+import type { Allocation, Analysis, PageMeta, ProgressRow, Project, Resume, Submission, Trainee } from "@/api/types";
 import {
   Avatar, DataTable, DateTime, EmptyState, ErrorState, KeyValue, LoadingState, Pagination, ScoreBar, SkillChips,
   StatusBadge, useToast, type Column,
 } from "@/components/shared";
 import { Button, Card, cx } from "@/components/ui";
 import { formatBytes, formatInr, formatScore } from "@/lib/format";
+import { MatchReason } from "./MatchReason";
 
 const Tag = ({ children }: { children: ReactNode }) => (
   <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs font-medium text-neutral">{children}</span>
@@ -209,78 +210,9 @@ export function TraineeProfileView({ trainee, showSensitive }: { trainee: Traine
 
 // ---------------------------------------------------------------- matching explanation
 
-/** Itemised factors; the points always sum to the match score. */
-export function FactorTable({ factors }: { factors: Factor[] }) {
-  const total = factors.reduce((s, f) => s + (f.max_points === 0 ? 0 : f.points), 0);
-  return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-xs text-muted">
-          <tr>
-            <th scope="col" className="pb-2 font-semibold">Factor</th>
-            <th scope="col" className="pb-2 pl-3 font-semibold">Points</th>
-            <th scope="col" className="pb-2 pl-3 font-semibold">Why</th>
-          </tr>
-        </thead>
-        <tbody>
-          {factors.map((f) => {
-            const pct = f.max_points > 0 ? Math.max(0, Math.min(100, (f.points / f.max_points) * 100)) : 0;
-            return (
-              <tr key={f.key} className="border-t border-border">
-                <td className="py-2.5 pr-2 align-top font-medium">{f.label}</td>
-                <td className="py-2.5 pl-3 align-top whitespace-nowrap">
-                  {f.max_points === 0 ? (
-                    <span className="text-muted">gate</span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <span aria-hidden className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-neutral-bg sm:block">
-                        <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                      </span>
-                      <span className="tabular-nums"><span className="font-semibold">{formatScore(f.points, 2)}</span><span className="text-muted"> / {f.max_points}</span></span>
-                    </span>
-                  )}
-                </td>
-                <td className="py-2.5 pl-3 align-top text-muted">{f.detail}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-border-strong">
-            <th scope="row" className="pt-2.5 text-left font-semibold">Total</th>
-            <td className="pt-2.5 pl-3 font-semibold tabular-nums">{formatScore(total, 2)}</td>
-            <td className="pt-2.5 pl-3 text-xs text-muted">Sum of the factor points (match score out of 100)</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  );
-}
-
-const MODE_NOTE = {
-  full: "Full assessment mode: verified practical 35, skills 30, interest 20, theory and safety 15.",
-  profile: "Profile-based mode (no complete verified assessment): skills 60, interest 40. This is profile fit, not practical competence.",
-} as const;
-
 /** "Why this project was allocated": the persisted factors, mode and constraints of one allocation. */
 export function MatchExplanation({ allocation }: { allocation: Allocation }) {
-  const mode = (allocation.match_mode ?? "full") as keyof typeof MODE_NOTE;
-  return (
-    <div className="flex flex-col gap-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-heading text-lg font-semibold tabular-nums">{formatScore(allocation.match_score)} / 100</span>
-        <span className="text-xs text-muted">match score</span>
-        {allocation.match_mode && <StatusBadge kind="matchMode" value={allocation.match_mode} />}
-        <StatusBadge kind="allocationSource" value={allocation.trigger === "replacement" ? "replacement" : allocation.source} />
-      </div>
-      {allocation.explanation && <p className="leading-relaxed">{allocation.explanation}</p>}
-      <p className="text-xs text-muted">
-        {MODE_NOTE[mode] ?? ""} Minimum match threshold for this project: {allocation.min_match_score > 0 ? `${formatScore(allocation.min_match_score)} / 100` : "none"}.
-        The match score is a heuristic fit, not a grade or a prediction.
-      </p>
-      {allocation.factors ? <FactorTable factors={allocation.factors} /> : <p className="text-muted">Allocated before itemised factors were recorded.</p>}
-    </div>
-  );
+  return <MatchReason allocation={allocation} audience="staff" />;
 }
 
 // ---------------------------------------------------------------- resumes (ADR-015)

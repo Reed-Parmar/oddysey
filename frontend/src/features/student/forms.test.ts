@@ -189,8 +189,8 @@ describe("state derivation", () => {
     expect(waiting.to).toBeUndefined();
     expect(waiting.text).toMatch(/automatically/);
     expect(nextStep(cycle, { ...me, allocation: null }, undefined, { rejectedBefore: true }).text).toMatch(/different eligible project/);
-    expect(nextStep(cycle, me, undefined).text).toMatch(/^Read your project guide and submit your report before/);
-    expect(nextStep(cycle, me, sub("rework_requested")).to).toBe("/student/project");
+    expect(nextStep(cycle, me, undefined).text).toMatch(/^Read your project brief and submit your report before/);
+    expect(nextStep(cycle, me, sub("rework_requested")).to).toBe("/student/submissions");
     expect(nextStep(cycle, me, sub("evaluated", 1, { evaluation: { grade: "A" } }))).toMatchObject({ text: "Evaluated: grade A", to: "/student/submissions/s1" });
     for (const s of [undefined, sub("submitted"), sub("rework_requested")]) {
       const step = nextStep(cycle, me, s);

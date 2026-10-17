@@ -187,3 +187,79 @@ Status values: **Approved** (source of truth), **Proposed** (awaiting owner appr
 - **Automation** is unchanged and per cycle: each active cycle gets its own `allocate_cycle` schedule, rejections/replacements stay inside their cycle, and the rejection exclusion (person + canonical project) still spans cycles.
 
 **Consequences:** migration `0004_multi_cycle` (drops `cycles_single_active`; adds the trigger). API: CYC-01 semantics change, `GET /cycles/active`, `cycle_options` and `data.cycle_id` on ONB, `cycle` on progress rows; `ACTIVE_CYCLE_EXISTS` is retired. Frontend: "All active cycles" filter default, Overview cycle switcher, onboarding cycle card, sidebar lists active cycles. Handbooks carry an ADR-018 note.
+
+## ADR-019: Autopilot alerts — staff and trainees handle only exceptions
+**Status:** Approved (owner instruction, 2026-10-18: "lock this USP in"). Implementation pending; the api.md/schema.md/handbook changes are written before code.
+
+**Problem.** Matching, allocation, project processing and report analysis now run on their own (ADR-017), but people still have to go looking for what went wrong. The brief also requires that the programme team *can* review and modify AI allocations.
+
+**Decision.** The system watches itself and tells each role only what needs that role, with a one-click route to the fix. Nothing destructive happens automatically.
+
+| Audience | Exceptions (raised only when they occur) |
+|---|---|
+| Admin (programme) | trainees waiting, grouped by `waiting_reason` and trade; projects `failed` / `needs_attention` / `awaiting_supervisor` for longer than a threshold; failed jobs; a cycle near its submission deadline with many trainees not yet submitted; supervisor overload; outcome gaps across centre or gender beyond a threshold (reporting only, never a scoring input) |
+| Supervisor (own projects only) | submissions whose analysis needs a human (`review_required`, `insufficient_evidence`, originality attention band, analysis `failed`); trainees at deadline risk; overdue rework; newly assigned projects |
+| Trainee (self) | deadline near with no submission; rework requested; new allocation or replacement |
+
+- Delivered as a "Needs attention" panel per dashboard and **one daily digest** per person through the existing notification outbox (in-app; emailed when SMTP is configured). No digest on a day with nothing to report.
+- Checks are deterministic, thresholded and self-explaining ("why am I seeing this"). Each alert carries a deep link to the fixing screen; the system never auto-deletes, auto-rejects or changes marks.
+- An **optional, audited admin override** of an allocation (with reason, score difference and factors) satisfies the brief's "review and modify" consideration without adding a mandatory approval gate.
+- Object-level scoping as everywhere else: supervisors see only their projects' alerts, trainees only their own; no PII in logs or prompts.
+
+**Trade-offs.** Thresholds need sensible defaults (configurable) to avoid alert fatigue; the override re-opens a manual path that ADR-017 removed, so it is admin-only, reasoned and audited, and it respects rejection exclusions and one-active-allocation.
+
+**Consequences.** A scheduler kind for the daily digest; alert computation from existing tables (no new table expected beyond what the override needs); new endpoints for alerts and the override, to be specified in api.md first.
+
+## ADR-020: Project Assistant — a grounded, role-scoped chatbot
+**Status:** Approved (owner instruction, 2026-10-18: "add a chatbot for users which can answer their questions about everything related to their project"). Implementation pending; api.md/handbooks first. Build order: trainee + supervisor (project-scoped), then admin (programme-wide).
+
+**Decision.** An "Ask about this project" chat panel. The server assembles a context bundle from records the caller may already read, and the model answers only from it.
+
+| Role | Context the server may include |
+|---|---|
+| Trainee | own allocated project: brief, document text, generated guide/deliverables, effective deadline, allocation factors and explanation, missing prerequisites, own submissions, analysis and evaluation feedback, rubric |
+| Supervisor | own projects and their trainees' allocations, submissions, analyses and evaluations |
+| Admin | programme aggregates: cycle status, waiting reasons, project processing states, ADR-019 alerts |
+
+Rules:
+1. **Grounded.** Answers cite the source section of the bundle; questions it cannot answer from the bundle are declined, never guessed.
+2. **Server-side scoping** with the same object-level checks as the read endpoints; the model has no database or tool access.
+3. **No PII to Groq.** People are pseudonymised (`Trainee A`) before the prompt and re-identified in the response on the server. No name, trainee code, centre, gender or email in prompts or logs.
+4. **Prompt-injection safe.** Document and report text is delimited as quoted data; instructions inside it are ignored.
+5. **Read-only.** Responses may deep-link to screens; the assistant never changes allocations, marks, submissions or settings.
+6. **Fallback.** Without Groq, rule-based answers for common intents (summary, deadline, why matched, status, next step); otherwise "AI unavailable".
+7. **Privacy and cost.** Stateless (the client sends the last few turns; transcripts are not stored); per-user rate limit; bundle size capped; only usage counts are audited.
+
+**Trade-offs.** Stateless chat loses history across sessions but avoids storing personal conversations. Pseudonymisation costs a little answer naturalness. Admin questions need aggregates rather than raw records, so they come second.
+
+**Consequences.** New `spa_ai` module (prompt, bundle formatter, pseudonymiser, rule fallback), one chat endpoint per scope, a shared chat panel in the frontend. Tests: scoping (no cross-trainee leakage), no-PII-in-prompt, injection fixtures, fallback without Groq.
+
+## ADR-021: AI concept grouping for skill and interest matching
+**Status:** Approved (owner instruction, 2026-10-18: "do the embeddings thing, but can the AI model do that instead? if yes make it do it"). Extends ADR-003 / ADR-017 matching; keeps every non-negotiable (deterministic, itemised factors, Σ factor points = score, gender never an input, no PII to Groq).
+
+**Problem.** Skill coverage (30 / 60 points) and interest alignment (20 / 40) compare text. "Rooftop solar wiring" and "Solar PV installation" do not match, so good pairs score low.
+
+**Options.** (a) Embedding model (fastembed/bge-small, or Ollama): a new runtime dependency, and Groq has no embedding endpoint. (b) LLM judges every trainee × project pair: slow, rate-limited, non-repeatable, and it turns the score into a black box. (c) **Chosen:** the LLM (Groq) maps each distinct *phrase* to 1–3 short shared **concepts** once; the result is stored and matching stays deterministic.
+
+**Rules**
+- Phrases: skill names, a trainee's career interest (redacted: name, trainee code, centre, emails, URLs, phones removed), a project's title and category. Never background, descriptions, documents, gender or identifiers. Key = lower-cased, whitespace-collapsed text (≤ 300 chars).
+- `app.phrase_concepts(phrase_key, concepts[], source, model, prompt_version, created_at)`. The job `tag_concepts` (priority after project processing, before allocation; on every scheduler tick, deduplicated) tags untagged phrases in batches of 20, passing the existing concept vocabulary so wording converges. A phrase the model returns no valid concept for is stored with an empty list, so it is not resent on every tick. No AI configured or AI failure → nothing is stored and matching is exactly the old rule.
+- Concepts come most specific first: the first is the canonical name synonyms share, the rest are broader domains. Matching is **additive**: a prerequisite counts as covered if the old text rule matches *or* its canonical (first) concept equals a trainee skill's canonical concept (a shared broad domain is not coverage). Interest ratio = max(old token ratio, concept ratio) where concept ratio = min(1, 2·|shared| / |interest concepts|), using all concepts of the interest and of the project's title, category and skills. AI grouping can only add matches; it never removes one. Factor details name AI-grouped matches ("via AI concept: solar pv installation").
+- Existing allocations are not re-scored; new allocations and replacements use the concepts available at the time (`SCORING_VERSION` becomes `scoring-3`: the concept-aware rule, which gives exactly the `scoring-2` result when no concepts are stored).
+
+**Consequences:** migration `0005_phrase_concepts`; `spa_ai.concepts` (prompt, validation); `TraineeInput`/`ProjectInput` gain optional concept fields (empty by default: identical behaviour). Deferred: CP-SAT optimiser, Ollama provider, CatBoost advisory model.
+
+## ADR-022: Trainee Submissions page, floating assistant, alerts only when urgent
+**Status:** Approved (owner instruction, 2026-10-18: "make a new page for submissions so the user has 3 pages - dashboard, my project, submissions"; assistant "like an overlay with a cute robot waving on bottom right"; "only if there is a urgent message show needs attention"). Amends ADR-017 (student nav) and the presentation in ADR-019 / ADR-020. Frontend only: no API, schema or authorisation change.
+
+- **Student nav:** Dashboard `/student` · My Project `/student/project` · **Submissions** `/student/submissions`. My Project keeps the project, why it was allocated, the document and the reject flow, with a short submission summary that links to Submissions. Submissions holds the submit form, the rework feedback, the latest analysis and the version history. Students still only ever see their own submissions (enforced on the server, unchanged).
+- The trainee My Project page no longer shows the generated step-by-step project guide (it stays available to the assistant as a source, and to staff on the project page).
+- **Assistant (ADR-020):** a floating launcher (robot, bottom-right) that opens a chat panel, on the pages where the assistant applies (trainee My Project and Submissions; supervisor submission review). Same AST-01 calls.
+- **Alerts (ADR-019):** the "Needs attention" panel renders only when at least one *critical* or *warning* alert exists; otherwise nothing is shown. Same ALR-01 call.
+
+## ADR-022: Optional local Ollama fallback for the LLM
+**Status:** Approved (owner instruction, 2026-10-18: "just keep ollama fallback implemented"). Groq stays the primary provider and the deployment target (Render has no GPU); Ollama is for self-hosted / offline machines.
+
+**Rules.** `OLLAMA_BASE_URL` empty (default) = off, no behaviour change. When set: Groq is tried first and Ollama answers if the Groq call fails (rate limit, timeout, 5xx, invalid JSON); with no `GROQ_API_KEY`, Ollama is the only provider. Every AI feature uses the same factory (`app.ai.default_ai_client`), so the fallback covers resume extraction, project processing, report analysis, concept tagging and the assistant. The same redacted inputs are sent (no PII rule unchanged). Stored provenance (`model`) names the model that actually answered. Settings: `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (default `llama3.1:8b`), `OLLAMA_TIMEOUT_SECONDS` (120).
+
+**Consequences:** `spa_ai.llm.OllamaClient` (native `/api/chat`, JSON format, temperature 0) and `FallbackClient`. Unit-tested with a mocked transport only; **not yet run against a real Ollama server** (to be done on the owner's machine).

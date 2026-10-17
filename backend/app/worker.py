@@ -25,7 +25,7 @@ log = logging.getLogger("spa.worker")
 
 def _register_handlers() -> None:
     # Importing the modules registers their @jobs.handler functions.
-    from app.automation import allocation, analysis, archive, notify, onboarding, projects  # noqa: F401
+    from app.automation import allocation, analysis, archive, concepts, notify, onboarding, projects  # noqa: F401
 
 
 def schedule_tick(db: Session, now: datetime | None = None) -> None:
@@ -41,6 +41,8 @@ def schedule_tick(db: Session, now: datetime | None = None) -> None:
             jobs.enqueue(
                 db, "archive_due", {"cycle_id": str(cycle.id)}, dedupe_key=f"archive:{cycle.id}", trigger="schedule"
             )
+    if s.ai_configured:  # ADR-021: tag new phrases (cheap no-op when everything is tagged)
+        jobs.enqueue(db, "tag_concepts", {}, dedupe_key="tag_concepts", trigger="schedule")
     # Sweep: work that should have a job but does not (e.g. created before the worker existed).
     # One deduplicated batch job (not one job per project): process_projects hands any project that still
     # needs AI generation to its own process_project job.

@@ -11,7 +11,8 @@ import {
   BackLink, DataTable, EmptyState, ErrorState, LoadingState, NotFound, PageHeader, ScoreBar, StatusBadge, type Column,
 } from "@/components/shared";
 import { Alert, Card } from "@/components/ui";
-import { FactorTable, ProjectDetailView } from "@/features/shared/views";
+import { MatchReason } from "@/features/shared/MatchReason";
+import { ProjectDetailView } from "@/features/shared/views";
 
 import { ContributorSummary, NotPublishedState, PersonCell, SupervisorProgressTable, useCycleState } from "../common";
 
@@ -20,7 +21,7 @@ export function AllocationFactors({ allocation }: { allocation: Allocation }) {
   return (
     <details className="group text-sm">
       <summary className="cursor-pointer font-medium text-primary hover:underline">Why this match?</summary>
-      <FactorTable factors={allocation.factors} />
+      <div className="mt-3"><MatchReason allocation={allocation} audience="trainee" /></div>
     </details>
   );
 }

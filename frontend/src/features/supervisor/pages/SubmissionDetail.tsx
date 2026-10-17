@@ -23,6 +23,7 @@ import {
   computeTotal, emptyEvaluationForm, evaluationFormSchema, FEEDBACK_MAX, gradeFor, parseScore, toEvaluationBody,
   type EvaluationFormValues, type Grade,
 } from "../lib/grade";
+import { AssistantLauncher } from "@/features/shared/Autopilot";
 
 function EvaluationReasonPanel({ submission, cycle }: { submission: Submission; cycle: Cycle | null }) {
   let text: string;
@@ -289,6 +290,7 @@ export function SubmissionDetailPage() {
         </div>
         <div className="min-w-0 space-y-4">
           <SupervisorAnalysis submissionId={s.id} />
+          <AssistantLauncher allocationId={s.allocation_id} title="Ask about this project" />
         </div>
       </div>
       {activeQ.error && <p className="mt-3 text-sm text-danger">Could not load the cycle status: {errorMessage(activeQ.error)}</p>}

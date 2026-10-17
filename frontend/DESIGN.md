@@ -30,6 +30,8 @@ Derived with the UI/UX Pro Max skill (`.claude/skills/ui-ux-pro-max`). Its sugge
 | Fill / capacity / rate | `Meter` |
 | Score 0–100 | `ScoreBar` (`tone="auto"` colours by band) |
 | Journey | `Steps` |
+| Donut / histogram | `Donut`, `Histogram` (`@/components/shared/Charts`): text summary + legend with numbers |
+| Animated number | `CountUp` (StatCard uses it for numeric values; screen readers get only the final value) |
 | Automated lifecycle | `Pipeline` (`@/components/shared/Pipeline`): stages with `status` (`done` / `active` / `waiting` / `attention` / `error` / `idle`), metric, detail rows and a link. Status is always text + icon, never colour alone. Every status must be derived from API data. |
 | Person | `Avatar` + the visible name |
 | Buttons | `Button` variants `primary` / `secondary` / `ghost` / `danger` / `accent`, sizes `sm` / `md` / `lg`, `icon` prop for a leading icon |
@@ -44,4 +46,6 @@ Derived with the UI/UX Pro Max skill (`.claude/skills/ui-ux-pro-max`). Its sugge
 - **Content width:** the shell caps it at `max-w-7xl`. Long text has a max width of about 70 characters (`max-w-3xl`).
 - **Touch targets:** at least 40px high (the inputs are 44px on mobile).
 - **Focus:** the global `:focus-visible` ring must stay. Never remove outlines.
-- **Motion:** 150–200ms colour/opacity transitions. The only looping motion is the pipeline: a dash flow on connectors into an `active` stage and a soft pulse on `waiting` dots. Both stop under `prefers-reduced-motion` (respected globally).
+- **Themes:** light and dark. Dark follows the system setting; the header toggle stores an override (`data-theme` on `<html>`). In dark, `text-primary` / `text-accent` map to their light ink shades for contrast.
+- **Tables:** `DataTable` renders a table from md up and one card per row on phones (first column = card title, sortable columns become chips).
+- **Motion:** 150–200ms colour/opacity transitions. The only looping motion is the pipeline: a dash flow on connectors into an `active` stage and a soft pulse on `waiting` dots. A refresh that changes a stage flashes that node once and pulses its incoming connector; pages fade in on route change; skeletons shimmer. All stop under `prefers-reduced-motion` (respected globally).

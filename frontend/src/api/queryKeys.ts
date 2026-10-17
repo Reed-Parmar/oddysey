@@ -38,6 +38,7 @@ export const qk = {
   },
   onboarding: { me: () => ["onboarding", "me"], cycleOptions: (tradeIds: string[]) => ["onboarding", "cycle-options", ...tradeIds] },
   notifications: { me: () => ["notifications", "me"] },
+  alerts: { me: () => ["alerts", "me"] },
   allocationHistory: {
     all: () => ["allocationHistory"],
     me: () => ["allocationHistory", "me"],

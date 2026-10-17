@@ -5,11 +5,13 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.errors import AppError, conflict, invalid_state, not_found
 from app.db import models as M
 from app.db.enums import CycleStatus, SubmissionStatus, TraineeProgress
+from spa_ai.concepts import phrase_key
+from spa_ai.resume.redact import redact
 from spa_ai.scoring import ProjectInput, TraineeInput
 
 ACTIVE = (CycleStatus.draft, CycleStatus.published)
@@ -149,9 +151,49 @@ def _num(v: object) -> float | None:
     return None if v is None else float(v)  # type: ignore[arg-type]
 
 
+def concept_map(db: Session | None) -> dict[str, tuple[str, ...]]:
+    """ADR-021: every stored phrase → concepts, loaded once per session (the table is small). The tagging job
+    calls `forget_concepts` after writing, so a later job in the same session sees the new tags."""
+    if db is None:
+        return {}
+    cached = db.info.get("phrase_concepts")
+    if cached is None:
+        rows = db.execute(select(M.PhraseConcept.phrase_key, M.PhraseConcept.concepts)).all()
+        cached = db.info["phrase_concepts"] = {k: tuple(v) for k, v in rows}
+    return cached
+
+
+def forget_concepts(db: Session) -> None:
+    db.info.pop("phrase_concepts", None)
+
+
+def interest_key(interest: str | None, *identifiers: str | None) -> str:
+    """The career interest as sent to the AI and used as its key: personal identifiers redacted (ADR-021)."""
+    if not (interest or "").strip():
+        return ""
+    return phrase_key(redact(interest or "", identifiers))
+
+
+def interest_phrase(t: M.Trainee) -> str:
+    return interest_key(t.career_interest, t.full_name, t.trainee_code, t.centre_name)
+
+
+def _tags(cmap: dict[str, tuple[str, ...]], text: str | None) -> frozenset[str]:
+    """All concepts of a phrase (interest and project topic: broad domains count)."""
+    return frozenset(cmap.get(phrase_key(text), ())) if text else frozenset()
+
+
+def _skill_tag(cmap: dict[str, tuple[str, ...]], name: str) -> frozenset[str]:
+    """Skills match on the canonical (first) concept only, so a shared broad domain is not coverage."""
+    concepts = cmap.get(phrase_key(name), ())
+    return frozenset(concepts[:1])
+
+
 def trainee_input(t: M.Trainee) -> TraineeInput:
     """Only verified/imported marks are scorer inputs; resume-reported marks never are (ADR-017)."""
     trades = t.all_trades
+    cmap = concept_map(object_session(t))
+    skills = tuple(s.name for s in t.skills)
     return TraineeInput(
         id=str(t.id),
         trade_id=str(t.trade_id),
@@ -159,16 +201,20 @@ def trainee_input(t: M.Trainee) -> TraineeInput:
         theory=_num(t.theory_score),
         practical=_num(t.practical_score),
         safety=_num(t.safety_score),
-        skills=tuple(s.name for s in t.skills),
+        skills=skills,
         career_interest=t.career_interest,
         background=t.background,
         trade_ids=tuple(str(x.id) for x in trades),
         trade_names=tuple(x.name for x in trades),
+        skill_concepts=tuple(_skill_tag(cmap, s) for s in skills) if cmap else (),
+        interest_concepts=frozenset(cmap.get(interest_phrase(t), ())) if cmap else frozenset(),
     )
 
 
 def project_input(p: M.Project) -> ProjectInput:
     trades = p.all_trades
+    cmap = concept_map(object_session(p))
+    skills = tuple(s.name for s in p.skills)
     return ProjectInput(
         id=str(p.id),
         project_code=p.project_code,
@@ -179,10 +225,12 @@ def project_input(p: M.Project) -> ProjectInput:
         target_trade_id=str(p.target_trade_id) if p.target_trade_id else "",
         target_trade_name=p.target_trade.name if p.target_trade else "",
         min_practical_score=float(p.min_practical_score),
-        skills=tuple(s.name for s in p.skills),
+        skills=skills,
         target_trade_ids=tuple(str(x.id) for x in trades),
         target_trade_names=tuple(x.name for x in trades),
         min_match_score=float(p.min_match_score or 0),
+        skill_concepts=tuple(_skill_tag(cmap, s) for s in skills) if cmap else (),
+        topic_concepts=(_tags(cmap, p.title) | _tags(cmap, p.category)) if cmap else frozenset(),
     )
 
 

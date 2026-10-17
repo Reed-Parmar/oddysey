@@ -29,6 +29,7 @@ import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
 import { BrandMark } from "@/app/AppShell";
 import { HOME, ROLE_LABEL } from "@/app/nav";
+import { ThemeToggle } from "@/app/theme";
 import { useAuth } from "@/auth/AuthProvider";
 import { INVITE_KEY, supabase } from "@/auth/supabase";
 import { Avatar, FormError, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
@@ -43,6 +44,7 @@ function PublicHeader() {
           <span className="font-heading text-[0.95rem] font-semibold text-text">Smart Project Allocation</span>
         </Link>
         <nav aria-label="Account" className="ml-auto flex items-center gap-1 sm:gap-2">
+          <ThemeToggle />
           <Link to="/login" className={buttonStyles("ghost", "sm")}>Log in</Link>
           <Link to="/register" className={buttonStyles("primary", "sm")}>Register</Link>
         </nav>

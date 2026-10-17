@@ -101,7 +101,7 @@ export function buildJourney(me: TraineeMe, allocation: Allocation | null, lates
       status: !a ? "idle" : !latest ? "attention" : latest.status === "rework_requested" ? "attention" : "done",
       statusLabel: !a ? "Not started" : !latest ? "Your turn: submit report" : latest.status === "rework_requested" ? "Rework requested" : `Version ${latest.version} submitted`,
       summary: "Submit a written report (a video alone is not enough). If rework is requested, you submit a new version.",
-      link: a ? { to: "/student/project", label: latest ? "View submission" : "Submit report" } : undefined,
+      link: a ? { to: "/student/submissions", label: latest ? "View submissions" : "Submit report" } : undefined,
     },
     {
       key: "evaluation",

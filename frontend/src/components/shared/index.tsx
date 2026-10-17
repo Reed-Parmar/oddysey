@@ -9,7 +9,7 @@ import {
   Tray,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError, errorMessage } from "@/api/errors";
@@ -55,7 +55,53 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cx("animate-pulse rounded-md bg-neutral-bg", className)} />;
+  return <div aria-hidden className={cx("skeleton-shimmer rounded-md bg-neutral-bg", className)} />;
+}
+
+/** True when the media query matches; without matchMedia (tests, old browsers) it returns `fallback`. */
+export function useMediaQuery(query: string, fallback = true) {
+  const get = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : fallback);
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const m = window.matchMedia(query);
+    const on = () => setMatches(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, [query]);
+  return matches;
+}
+
+/** Counts a number up when it first appears or changes. Assistive tech reads only the final value. */
+export function CountUp({ value, duration = 700 }: { value: number; duration?: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(0);
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || typeof requestAnimationFrame === "undefined") {
+      setShown(value);
+      from.current = value;
+      return;
+    }
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - start) / duration);
+      setShown(Math.round(a + (value - a) * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = requestAnimationFrame(step);
+      else from.current = value;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return (
+    <>
+      <span aria-hidden>{shown}</span>
+      <span className="sr-only">{value}</span>
+    </>
+  );
 }
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
@@ -68,11 +114,27 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
     <div role="status" className="space-y-4 py-2">
       <span className="sr-only">{slow ? "Waking the server… this can take up to a minute." : label}</span>
       <div className="grid gap-4 sm:grid-cols-3">
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} aria-hidden className="rounded-xl border border-border bg-surface p-5 shadow-card">
+            <div className="flex items-start justify-between">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="size-9 rounded-lg" />
+            </div>
+            <Skeleton className="mt-3 h-7 w-16" />
+            <Skeleton className="mt-2 h-3 w-32" />
+          </div>
+        ))}
       </div>
-      <Skeleton className="h-48 rounded-xl" />
+      <div aria-hidden className="space-y-3 rounded-xl border border-border bg-surface p-5 shadow-card">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-11/12" />
+        <Skeleton className="h-3 w-3/4" />
+        <Skeleton className="h-3 w-5/6" />
+      </div>
       {slow && <p aria-hidden className="text-sm text-muted">Waking the server… this can take up to a minute.</p>}
     </div>
   );
@@ -90,13 +152,29 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-border-strong bg-surface px-6 py-12 text-center">
-      <span aria-hidden className="mb-3 inline-flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary [&>svg]:size-6">
-        {icon ?? <Tray />}
-      </span>
+    <div className="relative flex flex-col items-center overflow-hidden rounded-xl border border-dashed border-border-strong bg-surface px-6 py-12 text-center">
+      <EmptyArt>{icon ?? <Tray />}</EmptyArt>
       <p className="font-heading text-base font-semibold text-text">{title}</p>
       {description && <p className="mt-1 max-w-md text-sm text-muted">{description}</p>}
       {action && <div className="mt-5 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
+/** Decorative illustration for empty states: a glossy icon tile on a soft colour halo with orbiting nodes. */
+function EmptyArt({ children }: { children: ReactNode }) {
+  return (
+    <div aria-hidden className="relative mb-4 grid size-28 place-items-center">
+      <svg viewBox="0 0 112 112" className="absolute inset-0 size-full">
+        <circle cx="56" cy="56" r="54" fill="var(--color-primary)" fillOpacity="0.07" />
+        <circle cx="56" cy="56" r="40" fill="var(--color-violet)" fillOpacity="0.06" stroke="var(--color-border-strong)" strokeDasharray="3 5" />
+        <circle cx="96" cy="56" r="4" fill="var(--color-accent)" />
+        <circle cx="28" cy="28" r="3" fill="var(--color-clay)" />
+        <circle cx="34" cy="90" r="3.5" fill="var(--color-violet)" />
+      </svg>
+      <span className="tile-3d relative inline-flex size-14 items-center justify-center rounded-2xl bg-primary-soft text-primary [&>svg]:size-7">
+        {children}
+      </span>
     </div>
   );
 }
@@ -203,11 +281,17 @@ export function Pagination({ meta, onPageChange }: { meta?: PageMeta; onPageChan
 
 export type Column<T> = { key: string; header: ReactNode; cell: (row: T) => ReactNode; className?: string; sort?: string };
 
-/** Table with optional sort headers emitting exact sort strings. Scrolls horizontally on small screens. */
-export function DataTable<T>({ rows, columns, rowKey, sort, onSortChange, onRowClick, caption }: {
+/**
+ * Table with optional sort headers emitting exact sort strings. From md up it is a table (horizontal scroll if
+ * needed); on phones each row becomes a card: the first column is the card title, the rest are labelled fields.
+ */
+export function DataTable<T>(props: {
   rows: T[]; columns: Column<T>[]; rowKey: (row: T) => string; sort?: string; onSortChange?: (s: string) => void;
   onRowClick?: (row: T) => void; caption?: string;
 }) {
+  const { rows, columns, rowKey, sort, onSortChange, onRowClick, caption } = props;
+  const wide = useMediaQuery("(min-width: 48rem)");
+  if (!wide) return <DataCards {...props} />;
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
       <table className="w-full text-left text-sm">
@@ -226,7 +310,7 @@ export function DataTable<T>({ rows, columns, rowKey, sort, onSortChange, onRowC
                   {c.sort && onSortChange ? (
                     <button
                       type="button"
-                      className={cx("-mx-1 inline-flex items-center gap-1 rounded px-1 uppercase transition-colors hover:text-text", active && "text-text")}
+                      className={cx("-mx-1 inline-flex items-center gap-1 rounded px-1 uppercase transition-colors hover:text-text", active && "text-primary")}
                       onClick={() => onSortChange(c.sort!)}
                     >
                       {c.header}
@@ -243,13 +327,65 @@ export function DataTable<T>({ rows, columns, rowKey, sort, onSortChange, onRowC
             <tr
               key={rowKey(r)}
               onClick={onRowClick ? () => onRowClick(r) : undefined}
-              className={cx("transition-colors", onRowClick ? "cursor-pointer hover:bg-primary-soft/50" : "hover:bg-surface-2")}
+              className={cx("transition-colors even:bg-surface-2", onRowClick ? "cursor-pointer hover:bg-primary-soft" : "hover:bg-primary-soft/60")}
             >
               {columns.map((c) => <td key={c.key} className={cx("px-4 py-3 align-middle", c.className)}>{c.cell(r)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function DataCards<T>({ rows, columns, rowKey, sort, onSortChange, onRowClick, caption }: {
+  rows: T[]; columns: Column<T>[]; rowKey: (row: T) => string; sort?: string; onSortChange?: (s: string) => void;
+  onRowClick?: (row: T) => void; caption?: string;
+}) {
+  const [first, ...rest] = columns;
+  const sortable = onSortChange ? columns.filter((c) => c.sort) : [];
+  return (
+    <div className="space-y-3">
+      {sortable.length > 0 && (
+        <div role="group" aria-label="Sort by" className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-semibold text-muted">Sort:</span>
+          {sortable.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              aria-pressed={sort === c.sort}
+              onClick={() => onSortChange!(c.sort!)}
+              className={cx(
+                "min-h-8 rounded-full border px-3 font-semibold transition-colors",
+                sort === c.sort ? "border-primary bg-primary-soft text-primary-ink" : "border-border-strong bg-surface text-muted hover:text-text",
+              )}
+            >
+              {c.header}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul aria-label={caption} className="space-y-3">
+        {rows.map((r) => (
+          <li
+            key={rowKey(r)}
+            onClick={onRowClick ? () => onRowClick(r) : undefined}
+            className={cx("rounded-xl border border-border bg-surface p-4 shadow-card", onRowClick && "cursor-pointer")}
+          >
+            {first && <div className="text-sm font-semibold text-text [overflow-wrap:anywhere]">{first.cell(r)}</div>}
+            {rest.length > 0 && (
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+                {rest.map((c) => (
+                  <div key={c.key} className="min-w-0">
+                    <dt className="text-[0.7rem] font-semibold tracking-wide text-subtle uppercase">{c.header}</dt>
+                    <dd className="mt-0.5 min-w-0 [overflow-wrap:anywhere]">{c.cell(r)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -370,7 +506,7 @@ export function StatCard({ label, value, hint, icon, tone = "primary", to }: {
           </span>
         )}
       </div>
-      <p className="mt-1 font-heading text-3xl font-semibold tracking-tight text-text tabular-nums">{value}</p>
+      <p className="mt-1 font-heading text-3xl font-semibold tracking-tight text-text tabular-nums">{typeof value === "number" ? <CountUp value={value} /> : value}</p>
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </>
   );
@@ -430,11 +566,11 @@ export function StackedBar({ segments, label }: {
   const summary = segments.map((s) => `${s.label} ${s.value}`).join(", ");
   return (
     <figure>
-      <div role="img" aria-label={`${label}: ${summary}`} className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-neutral-bg">
+      <div role="img" aria-label={`${label}: ${summary}`} className="flex h-3.5 w-full gap-0.5 overflow-hidden rounded-full bg-neutral-bg shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)]">
         {total > 0 &&
           segments.map((s, i) =>
             s.value > 0 ? (
-              <div key={s.label} className={cx("h-full first:rounded-l-full last:rounded-r-full", s.className ?? SERIES[i % SERIES.length])} style={{ width: `${(s.value / total) * 100}%` }} />
+              <div key={s.label} className={cx("h-full bg-linear-to-b from-white/25 to-transparent transition-[width] duration-700 first:rounded-l-full last:rounded-r-full", s.className ?? SERIES[i % SERIES.length])} style={{ width: `${(s.value / total) * 100}%` }} />
             ) : null,
           )}
       </div>

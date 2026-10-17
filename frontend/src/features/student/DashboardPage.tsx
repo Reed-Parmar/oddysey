@@ -15,6 +15,7 @@ import { buildJourney } from "./journey";
 import { useMyAllocationHistory, useMyNotifications, useMySubmissionHistory, useProject, useStudentContext } from "./hooks";
 import { ProfileSection } from "./ProfileSection";
 import { Fact, LinkButton } from "./ui";
+import { AlertsPanel } from "@/features/shared/Autopilot";
 
 export function DashboardPage() {
   const { cycle, me } = useStudentContext();
@@ -36,11 +37,13 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader eyebrow={cycle.name} title={`Welcome, ${me.full_name}`} description="Your project journey in this programme cycle at a glance." />
 
+      <AlertsPanel />
+
       {cycle.status === "archived" && (
         <Alert variant="info" icon={<Archive />} title="This cycle is archived">Your project and results are kept read-only.</Alert>
       )}
 
-      <section className="rounded-xl border border-primary/25 bg-primary-soft bg-linear-to-br from-primary-soft via-white/60 to-violet-soft p-5 shadow-card" aria-labelledby="next-step-title">
+      <section className="rounded-xl border border-primary/25 bg-primary-soft bg-linear-to-br from-primary-soft via-surface to-violet-soft p-5 shadow-card" aria-labelledby="next-step-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary bg-linear-to-b from-white/20 to-transparent text-primary-fg shadow-btn">

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-20b"
     ai_timeout_seconds: float = 10.0
+    # ADR-022: optional local Ollama, used when Groq is not configured or a Groq call fails. Empty = off.
+    ollama_base_url: str = ""
+    ollama_model: str = "llama3.1:8b"
+    ollama_timeout_seconds: float = 120.0
     ai_concurrency: int = 4
     run_inline: bool = False  # tests: jobs are drained synchronously after each request
     # ADR-017 automation
@@ -71,7 +75,7 @@ class Settings(BaseSettings):
 
     @property
     def ai_configured(self) -> bool:
-        return bool(self.groq_api_key)
+        return bool(self.groq_api_key or self.ollama_base_url)
 
     @property
     def jwt_issuer(self) -> str:
