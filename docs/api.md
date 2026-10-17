@@ -477,7 +477,7 @@ These resolve the gaps reported by the three handbooks. Where a rule here is mor
 | Domain | Keys |
 |---|---|
 | F | `qk.me()`, `qk.cycles.current()`, `qk.trades.list()`, `qk.skills.list(q?)`, `qk.projects.all()`, `qk.projects.list(p)`, `qk.projects.detail(id)` |
-| A | `qk.trainees.all()`, `qk.trainees.me()`, `qk.trainees.list(p)`, `qk.trainees.detail(id)`, `qk.submissions.all()`, `qk.submissions.list(p)`, `qk.submissions.detail(id)` |
+| A | `qk.trainees.all()`, `qk.trainees.me()`, `qk.trainees.list(p)`, `qk.trainees.detail(id)`, `qk.submissions.all()`, `qk.submissions.list(p)`, `qk.submissions.detail(id)`, `qk.resumes.all()`, `qk.resumes.me()`, `qk.resumes.trainee(traineeId)` (ADR-015) |
 | B | `qk.recommendations.all()`, `qk.recommendations.list(p)`, `qk.recommendationRuns.latest(cycleId, status?)`, `qk.allocations.all()`, `qk.allocations.list(p)`, `qk.allocationRuns.latest(cycleId)`, `qk.progress.all()`, `qk.progress.list(p)` |
 | F (roots) | `qk.skills.all()`, `qk.trades.all()` |
 | C | `qk.cycles.all()`, `qk.cycles.list(p)`, `qk.cycles.detail(id)`, `qk.users.all()`, `qk.users.list(p)`, `qk.invitations.all()`, `qk.invitations.list(p)`, `qk.reports.all()`, `qk.reports.overview(cycleId?)` |

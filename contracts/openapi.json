@@ -566,6 +566,20 @@
         "title": "Body_import_trainees_api_v1_admin_imports_trainees_post",
         "type": "object"
       },
+      "Body_upload_resume_api_v1_trainees_me_resumes_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_resume_api_v1_trainees_me_resumes_post",
+        "type": "object"
+      },
       "CycleBrief": {
         "properties": {
           "id": {
@@ -983,6 +997,28 @@
         "title": "Envelope[ProjectOut]",
         "type": "object"
       },
+      "Envelope_ResumeOut_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResumeOut"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[ResumeOut]",
+        "type": "object"
+      },
       "Envelope_RunOut_": {
         "properties": {
           "data": {
@@ -1076,6 +1112,35 @@
           "data"
         ],
         "title": "Envelope[Union[CycleOut, NoneType]]",
+        "type": "object"
+      },
+      "Envelope_Union_ResumeOut__NoneType__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResumeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[Union[ResumeOut, NoneType]]",
         "type": "object"
       },
       "Envelope_Union_TraineeMe__NoneType__": {
@@ -1248,6 +1313,14 @@
           "rework_requested"
         ],
         "title": "EvaluationOutcome",
+        "type": "string"
+      },
+      "ExtractionSource": {
+        "enum": [
+          "rule",
+          "ai"
+        ],
+        "title": "ExtractionSource",
         "type": "string"
       },
       "FactorOut": {
@@ -2780,6 +2853,192 @@
         "title": "RecommendationSource",
         "type": "string"
       },
+      "ResumeExtracted": {
+        "properties": {
+          "career_interest_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Career Interest Hint"
+          },
+          "certifications": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Certifications",
+            "type": "array"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "skills",
+          "projects",
+          "certifications",
+          "tools",
+          "career_interest_hint"
+        ],
+        "title": "ResumeExtracted",
+        "type": "object"
+      },
+      "ResumeOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "extracted": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResumeExtracted"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "file_mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Mime Type"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size Bytes"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "skill_matches": {
+            "items": {
+              "$ref": "#/components/schemas/SkillMatch"
+            },
+            "title": "Skill Matches",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResumeStatus"
+          },
+          "trainee_id": {
+            "format": "uuid",
+            "title": "Trainee Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trainee_id",
+          "file_name",
+          "file_size_bytes",
+          "file_mime_type",
+          "status",
+          "source",
+          "error_code",
+          "extracted",
+          "skill_matches",
+          "created_at"
+        ],
+        "title": "ResumeOut",
+        "type": "object"
+      },
+      "ResumeProject": {
+        "properties": {
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "summary"
+        ],
+        "title": "ResumeProject",
+        "type": "object"
+      },
+      "ResumeStatus": {
+        "enum": [
+          "extracted",
+          "failed"
+        ],
+        "title": "ResumeStatus",
+        "type": "string"
+      },
       "RowError": {
         "properties": {
           "column": {
@@ -3272,6 +3531,29 @@
           }
         },
         "title": "ScoresIn",
+        "type": "object"
+      },
+      "SkillMatch": {
+        "properties": {
+          "already_on_profile": {
+            "title": "Already On Profile",
+            "type": "boolean"
+          },
+          "known_skill": {
+            "title": "Known Skill",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "known_skill",
+          "already_on_profile"
+        ],
+        "title": "SkillMatch",
         "type": "object"
       },
       "SubStats": {
@@ -6420,6 +6702,49 @@
         ]
       }
     },
+    "/api/v1/resumes/{resume_id}/file-url": {
+      "get": {
+        "operationId": "resume_file_url_api_v1_resumes__resume_id__file_url_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Resume Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_FileUrl_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume File Url",
+        "tags": [
+          "resumes"
+        ]
+      }
+    },
     "/api/v1/skills": {
       "get": {
         "operationId": "list_skills_api_v1_skills_get",
@@ -7053,6 +7378,68 @@
         ]
       }
     },
+    "/api/v1/trainees/me/resumes": {
+      "post": {
+        "operationId": "upload_resume_api_v1_trainees_me_resumes_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_resume_api_v1_trainees_me_resumes_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ResumeOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Resume",
+        "tags": [
+          "resumes"
+        ]
+      }
+    },
+    "/api/v1/trainees/me/resumes/latest": {
+      "get": {
+        "operationId": "my_latest_resume_api_v1_trainees_me_resumes_latest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Union_ResumeOut__NoneType__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "My Latest Resume",
+        "tags": [
+          "resumes"
+        ]
+      }
+    },
     "/api/v1/trainees/{trainee_id}": {
       "get": {
         "operationId": "get_trainee_api_v1_trainees__trainee_id__get",
@@ -7144,6 +7531,49 @@
         "summary": "Patch Trainee",
         "tags": [
           "trainees"
+        ]
+      }
+    },
+    "/api/v1/trainees/{trainee_id}/resume": {
+      "get": {
+        "operationId": "trainee_resume_api_v1_trainees__trainee_id__resume_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trainee_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trainee Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Union_ResumeOut__NoneType__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trainee Resume",
+        "tags": [
+          "resumes"
         ]
       }
     }

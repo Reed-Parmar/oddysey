@@ -27,6 +27,7 @@
 | `STORAGE_BUCKET` | `submissions` | |
 | `RESUME_BUCKET` | `resumes` | ADR-015 |
 | `MAX_RESUME_BYTES` | `5242880` | RES-01 |
+| `RESUME_UPLOADS_PER_HOUR` | `5` | RES-01 rate limit per trainee |
 | `MAX_UPLOAD_BYTES` | `10485760` | |
 | `CORS_ALLOWED_ORIGINS` | `https://spa-web.vercel.app,http://localhost:5173` | Exact origins, comma-separated |
 | `CORS_ALLOWED_ORIGIN_REGEX` | `^https://spa-web-[a-z0-9-]+-<team>\.vercel\.app$` | Previews (optional) |

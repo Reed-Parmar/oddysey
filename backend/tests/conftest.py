@@ -44,6 +44,7 @@ os.environ.update(
 
 TABLES = [
     "audit_events",
+    "trainee_resumes",
     "evaluations",
     "submissions",
     "allocations",
@@ -104,7 +105,17 @@ def fake_storage(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 @pytest.fixture
-def client(fake_storage: Any) -> Iterator[Any]:
+def resume_storage(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from app.modules import resumes
+    from app.storage import FakeStorage
+
+    fake = FakeStorage()
+    monkeypatch.setattr(resumes, "get_resume_storage", lambda: fake)
+    return fake
+
+
+@pytest.fixture
+def client(fake_storage: Any, resume_storage: Any) -> Iterator[Any]:
     from fastapi.testclient import TestClient
 
     from app.main import app

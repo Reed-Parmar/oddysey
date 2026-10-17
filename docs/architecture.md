@@ -190,7 +190,7 @@ ADR-014 layout:
 │   │   ├── text.py               # shared tokenizer (C-13)
 │   │   ├── scoring.py            # rule scorer + eligibility() (ADR-003; pure)
 │   │   ├── refiner.py            # Groq refinement of skill coverage / interest alignment + explanation
-│   │   └── resume/               # extract_text.py (pypdf, python-docx), redact.py, extract.py (Groq + rule fallback) (ADR-015)
+│   │   └── resume/               # extract_text.py (pypdf; DOCX via stdlib zipfile/XML), redact.py, extract.py (Groq + rule fallback) (ADR-015)
 │   ├── tests/
 │   └── pyproject.toml
 ├── contracts/openapi.json        # generated; committed; CI fails if stale

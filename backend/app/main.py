@@ -11,7 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.errors import install_handlers
-from app.modules import admin, core_routes, cycles, imports, progress, projects, recommendations, submissions, trainees
+from app.modules import (
+    admin,
+    core_routes,
+    cycles,
+    imports,
+    progress,
+    projects,
+    recommendations,
+    resumes,
+    submissions,
+    trainees,
+)
 from app.modules.allocations import router as allocations
 
 log = logging.getLogger("spa.access")
@@ -83,6 +94,7 @@ def create_app() -> FastAPI:
         recommendations,
         allocations,
         submissions,
+        resumes,
         progress,
         admin,
     ):

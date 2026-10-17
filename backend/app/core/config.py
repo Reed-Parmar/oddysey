@@ -19,8 +19,11 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""  # legacy HS256 projects and tests only
     auth_jwt_audience: str = "authenticated"
     storage_bucket: str = "submissions"
+    resume_bucket: str = "resumes"
     max_upload_bytes: int = 10 * 1024 * 1024
     max_import_bytes: int = 5 * 1024 * 1024
+    max_resume_bytes: int = 5 * 1024 * 1024
+    resume_uploads_per_hour: int = 5
     cors_allowed_origins: str = "http://localhost:5173"
     cors_allowed_origin_regex: str = ""
     frontend_base_url: str = "http://localhost:5173"

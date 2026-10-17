@@ -33,6 +33,7 @@
 | Progress derivation | every `trainee_progress` value |
 | Import parser | header detection below a title row; column matching is case/space-insensitive; gender mapping; comma-split skills; numeric validation; unknown columns ignored; `Allocation Status`/`Current Allocations` ignored; CSV and XLSX produce identical results |
 | Files | allowed types pass; renamed binary rejected; 10 MB boundary |
+| Resume extraction (`ai/tests/test_resume.py`) | PDF and DOCX text; malformed PDF/DOCX → `parse_error`; text-less (scanned) PDF → `no_text`; redaction of email/phone/URL/name/code/centre; the prompt carries no PII and wraps the text as data; ungrounded AI items dropped; limits clipped; timeout/429/malformed output → rule fallback; prompt injection cannot add items absent from the text |
 
 ## 3. Integration tests (minimum, per owner)
 
@@ -47,6 +48,8 @@
 - Supervisor TRN-04 on an unallocated trainee → 404; on an allocated one → 200 with gender null.
 
 **Submissions (A):** link-only, file-only, both, neither → 422; not allocated → 409; cycle draft → 409; pending exists → 409; concurrent submits → one 201; after evaluated → 409; `is_late`; storage failure → 503 with no row; DB failure after upload → object deleted.
+
+**Resumes (A, `backend/tests/integration/test_resumes.py`):** rule and fake-AI extraction; nothing applied until TRN-02; `skill_matches` reflect the profile after TRN-02; the AI prompt has no PII; 415 for wrong type / mismatched signature / empty; 413; scanned and malformed files store a `failed` row; a newer upload becomes current; 429 rate limit; storage failure → 503 with no row; 409 `NO_ACTIVE_CYCLE` / `NO_TRAINEE_RECORD`; staff cannot upload (403); another student → 404; supervisor sees the extraction only after publish, never the file (RES-04 → 404); another supervisor → 404.
 
 **Recommendations, allocation, evaluation (B):**
 - A run over the imported dataset completes; every complete trainee has rows; Σ factors = score in the DB rows.

@@ -97,3 +97,9 @@ class FakeStorage:
 def get_storage() -> StorageClient:
     s = get_settings()
     return SupabaseStorage(s.supabase_url, s.supabase_secret_key, s.storage_bucket)
+
+
+@lru_cache
+def get_resume_storage() -> StorageClient:
+    s = get_settings()
+    return SupabaseStorage(s.supabase_url, s.supabase_secret_key, s.resume_bucket)

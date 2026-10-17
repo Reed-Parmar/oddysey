@@ -284,3 +284,20 @@ class AuditEvent(Base):
     entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, server_default="{}")
     created_at: Mapped[datetime] = _ts()
+
+
+class TraineeResume(Base):
+    __tablename__ = "trainee_resumes"
+    id: Mapped[uuid.UUID] = _pk()
+    trainee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("app.trainees.id", ondelete="CASCADE"))
+    uploaded_by: Mapped[uuid.UUID] = _fk("app.users.id")
+    file_path: Mapped[str] = mapped_column(Text)
+    file_name: Mapped[str] = mapped_column(Text)
+    file_size_bytes: Mapped[int] = mapped_column(Integer)
+    file_mime_type: Mapped[str] = mapped_column(Text)
+    status: Mapped[E.ResumeStatus] = mapped_column(_enum(E.ResumeStatus, "resume_status"))
+    source: Mapped[E.ExtractionSource | None] = mapped_column(_enum(E.ExtractionSource, "extraction_source"))
+    ai_model: Mapped[str | None] = mapped_column(Text)
+    extracted: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    error_code: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()

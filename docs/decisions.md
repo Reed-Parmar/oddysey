@@ -97,19 +97,22 @@ Status values: **Approved** (source of truth), **Proposed** (awaiting owner appr
 - `contracts/openapi.json` and `docs/` stay at the root.
 
 ## ADR-015: Students upload a resume; AI extracts skills and projects as suggestions
-**Status:** Proposed. The feature is an owner requirement (2026-10-17); the design below awaits owner approval. Migration `0002_trainee_resumes` implements it.
+**Status:** Approved (owner, 2026-10-17: "keep 3 roles, ship resume"; no separate Student/Trainee role). Migration `0002_trainee_resumes` implements it; RES-01..04 are built.
 
 - A student uploads a resume (PDF or DOCX, ≤ 5 MB) for their own trainee record. It goes through the API into a private Storage bucket `resumes`, the same pattern as ADR-008.
 - The server extracts the text (`spa_ai.resume`). It sends Groq only the redacted, relevant sections (skills, projects, experience, training, certifications). Emails, phone numbers, URLs, and the trainee's name, code and centre are stripped first. The output is JSON-validated: skills, projects, certifications, tools, and a career-interest hint.
 - **Fallback:** with no key, or on a timeout or invalid output, a rule extractor matches the text against the existing `skills` vocabulary (`source = "rule"`). A scanned PDF with no text layer gives `status = failed` and `error_code = no_text`.
 - **Nothing is applied automatically.** The result is a suggestion. The student picks the skills to keep and saves them through TRN-02. Only confirmed skills (`trainee_skills`) feed recommendation scoring, so scoring stays deterministic and under the trainee's control. Scores, trade, code and centre are never written from a resume.
 - Visibility: student (own record, file and extraction) · admin (all) · supervisor (extraction only, for trainees allocated to their projects in a published cycle; **never the file**, which contains contact details).
+- **Grounding (anti-fabrication):** the model's skills, tools and certifications are kept only when at least half of their words occur in the resume text, and project titles only when they share a word with it. Lists are clipped to the RES limits and control characters stripped. Output that is not an object with a `skills` list falls back to rules. The resume travels as a JSON-escaped string inside `<resume>` tags, and the system prompt marks it untrusted.
+- **Implementation:** `ai/spa_ai/resume/` (pure): `extract_text.py` uses pypdf (≤ 20 pages) and the standard library for DOCX (`word/document.xml`, ≤ 5 MB uncompressed, so no python-docx/lxml dependency); `redact.py`; `extract.py`. Fewer than 20 characters of text → `no_text`; any parser failure → `parse_error`. Both still store a row (`201`), so the UI can explain it. Extraction is synchronous inside RES-01 (Groq timeout 10 s, one retry), so there is no polling. The rate limit is `RESUME_UPLOADS_PER_HOUR` (default 5).
+- Not built (no contract): deleting a resume. Uploading again replaces the current suggestions; older rows stay as history and cascade with the trainee.
 - Trade-off: redaction is best-effort. A resume can contain PII the patterns miss, such as a home address in free text. Section filtering limits what is sent, and the prompt tells the model to ignore personal details. Residual risk is accepted for the demo. The alternative, rule-only extraction, is much weaker on free-text project descriptions.
 
 ## ADR-016: MVP build scope and implementation notes
 **Status:** Approved (owner instruction to build the MVP, 2026-10-17)
 
-- **Cut line applied** (roadmap.md §2): not built are TRN-05/07 (trainee create/delete; import is the way to create trainees), TRN-08 self-onboarding (students join by trainee-bound invite), REF-02, ALLOC-06, RES-01..04 (ADR-015 stays Proposed). RPT-01 is implemented in full.
+- **Cut line applied** (roadmap.md §2): not built are TRN-05/07 (trainee create/delete; import is the way to create trainees), TRN-08 self-onboarding (students join by trainee-bound invite), REF-02, ALLOC-06. RES-01..04 were cut at first and built on 2026-10-17 once ADR-015 was approved. RPT-01 is implemented in full.
 - **Groq model:** `openai/gpt-oss-20b` (D-6; the account's model list has no Llama 3.3). Verified live with JSON mode.
 - **Code layout:** the backend keeps router, schemas and service together per module (`app/modules/<name>.py`) and one `app/db/models.py`, instead of the five files per module in architecture.md §5. Object-level checks live in each module's scope functions (`scope_trainees`, `scope_submissions`, …).
 - **Seed accounts without a secret key:** `scripts/_auth_users.py` uses the Supabase Admin API when `SUPABASE_SECRET_KEY` is set, otherwise it writes confirmed users to `auth.users`/`auth.identities` through the owner connection (dev/demo only).

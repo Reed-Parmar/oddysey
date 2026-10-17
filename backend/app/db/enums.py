@@ -44,6 +44,16 @@ class RecommendationSource(StrEnum):
     rule_ai = "rule_ai"
 
 
+class ResumeStatus(StrEnum):
+    extracted = "extracted"
+    failed = "failed"
+
+
+class ExtractionSource(StrEnum):
+    rule = "rule"
+    ai = "ai"
+
+
 class AllocationSource(StrEnum):
     auto = "auto"
     manual = "manual"

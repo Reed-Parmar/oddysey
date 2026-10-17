@@ -209,7 +209,7 @@ Nav (declared in F's `app/nav.ts`): Dashboard `/supervisor` · My projects `/sup
 | Components | `TraineeProfileView` (A) with `showSensitive={false}`, "Submissions" list, `NotFound` |
 | Data / API | `GET /api/v1/trainees/{traineeId}` (TRN-04) · `GET /api/v1/allocations?trainee_id={traineeId}&page_size=1` (ALLOC-01, C-23) · `GET /api/v1/submissions?trainee_id={traineeId}&sort=-submitted_at` (SUB-02) |
 | Rendering | Profile (scores as `ScoreBar`s, assessment badge, skills, interest, background). "Allocation" card: project code + title (link `/supervisor/projects/{id}`), match score, source and Override badges, and the `allocation.factors` breakdown when non-null (same table rules as §14.1; "Manual allocation, no recommendation factors" when null, C-22). Submissions: version, status badge, submitted date, Late badge, link to `/supervisor/submissions/{id}` |
-| Resume (ADR-015) | `GET /api/v1/trainees/{traineeId}/resume` (RES-03): a "From resume" card with extracted skills, projects, certifications and tools. **No download**: supervisors never get the file (RES-04 → 404). |
+| Resume (ADR-015) | `GET /api/v1/trainees/{traineeId}/resume` (RES-03): a "From resume" card with extracted skills, projects, certifications and tools. **No download**: supervisors never get the file (RES-04 → 404). Component: `TraineeResumeCard` without `canDownload`, key `qk.resumes.trainee(traineeId)`. |
 | Errors | TRN-04 `404` → `NotFound` (trainee not allocated to own project, or does not exist) |
 | Acceptance | `gender` and `account` are never shown (they arrive null). An unallocated trainee id renders `NotFound`. |
 

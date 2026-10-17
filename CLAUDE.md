@@ -33,6 +33,7 @@ If a contract must change, state the impact on DB, backend, frontend, tests, dep
 - ADR-011: Individual trainees are allocated (no teams). Capacity counts trainees. A cycle is `draft → published → archived`.
 - ADR-012: Evaluation uses the dataset's 5-criterion rubric (25/25/15/15/20) with a computed total and grade, plus a rework loop with versioned submissions.
 - ADR-013: Trainee records are owned by the programme team (admin edit + XLSX/CSV import, admins write scores) and can exist without a login. Student accounts link via trainee-bound invites or self-onboarding.
+- ADR-015: Students (= ITI trainees) upload a resume (PDF/DOCX ≤ 5 MB). The server extracts suggested skills (Groq on redacted text, or a rule fallback). Nothing is applied until the student saves it through TRN-02. Supervisors see the extraction only, never the file.
 
 ## Repo layout (ADR-014)
 
