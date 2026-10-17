@@ -1,0 +1,54 @@
+[project]
+name = "spa-api"
+version = "0.1.0"
+description = "Smart Project Allocation API (FastAPI)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "spa-ai",
+    "openpyxl>=3.1.5",
+    "scipy>=1.18.1",
+    "httpx>=0.28.1",
+    "pyjwt[crypto]>=2.15.1",
+    "python-multipart>=0.0.32",
+    "email-validator>=2.2",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "httpx>=0.28.1",
+]
+
+[tool.uv.sources]
+spa-ai = { path = "../ai", editable = true }
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "UP046"]
+
+[tool.ruff.lint.per-file-ignores]
+"migrations/*" = ["E501"]
+"tests/*" = ["E501", "F841"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests", "scripts", "spa_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

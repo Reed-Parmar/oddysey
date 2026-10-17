@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: AI library tests
+        working-directory: ai
+        run: uv run pytest -q
+      - name: Lint
+        working-directory: backend
+        run: uv run ruff check app tests scripts migrations
+      - name: Tests (real Postgres, migrations applied from scratch)
+        working-directory: backend
+        env:
+          TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:54329/postgres
+        run: uv run pytest -q
+      - name: Contract drift check
+        working-directory: backend
+        run: |
+          uv run python -m scripts.export_openapi
+          git diff --exit-code ../contracts/openapi.json
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: https://spa-api.example.com/api/v1
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Generated API types are current
+        run: pnpm gen:api && git diff --exit-code src/api/schema.gen.ts
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
