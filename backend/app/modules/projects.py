@@ -34,7 +34,7 @@ from app.domain import (
     lock_cycle,
     project_input,
     require_not_archived,
-    resolve_cycle,
+    resolve_cycles,
     resolve_skill_names,
     set_project_trades,
     trainee_input,
@@ -119,10 +119,10 @@ def list_projects(
     check_sort(sort, set(SORTS))
     stmt = _visible(select(M.Project), viewer)
     if viewer.role == UserRole.admin:
-        cycle = resolve_cycle(db, cycle_id)
-        if cycle is None:
+        cycles = resolve_cycles(db, cycle_id)
+        if not cycles:
             return empty_page(params)
-        stmt = stmt.where(M.Project.cycle_id == cycle.id)
+        stmt = stmt.where(M.Project.cycle_id.in_([c.id for c in cycles]))
     elif cycle_id:
         stmt = stmt.where(M.Project.cycle_id == cycle_id)
     if (pattern := clean_q(q)) is not None:

@@ -18,12 +18,16 @@ from pathlib import Path
 from typing import Any
 
 from app.automation.allocation import waiting_reason
+from app.core.config import Settings
+from app.modules.imports import MAX_ROWS, parse_upload
 from scripts.synthetic import GENERATOR_VERSION, catalog
+from scripts.synthetic.ingest import PARSE_ARGS
 from scripts.synthetic.llm import validate_example
 from scripts.synthetic.reference import load_reference
 from scripts.synthetic.submissions import RUBRIC
 from spa_ai.report_eval import grade_for
 from spa_ai.scoring import ProjectInput, TraineeInput, score_pair
+from spa_ai.text import tokenize
 
 MAX_LISTED = 25
 
@@ -402,6 +406,9 @@ def validate(out: Path, workbook: Path | None = None) -> dict[str, Any]:
             "total_score": _dist([float(e["total_score"]) for e in EV]),
         }
 
+    # ------------------------------------------------ ingestion files (what the admin import screens accept)
+    ingest_stats = check_ingest(rep, out, files, T, P)
+
     # ------------------------------------------------ LLM examples
     known_codes = set(code_to_pid)
     llm_counts: dict[str, dict[str, int]] = defaultdict(dict)
@@ -509,11 +516,106 @@ def validate(out: Path, workbook: Path | None = None) -> dict[str, Any]:
             "llm_examples": {k: dict(v) for k, v in llm_counts.items()},
         },
         "submissions": sub_stats,
+        "ingest": ingest_stats,
     }
     (out / "validation_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
     )
     return report
+
+
+def _ingest_kind(rel: str) -> str:
+    name = Path(rel).stem
+    for kind in PARSE_ARGS:
+        if name.startswith(kind) or f"_{kind}" in name:
+            return kind
+    raise ValueError(rel)
+
+
+def check_ingest(
+    rep: Report, out: Path, files: dict[str, Any], T: list[dict[str, str]], P: list[dict[str, str]]
+) -> dict[str, Any]:
+    """Each ingest file is parsed with the endpoint's own parse_upload arguments and checked against the
+    importer's row rules that need no database, then cross-checked with the canonical tables."""
+    limit = Settings.model_fields["max_import_bytes"].default
+    trade_names = {t.name.lower() for t in catalog.TRADES}
+    t_ids, p_codes = {r["trainee_id"] for r in T}, {r["project_code"] for r in P}
+    seen: dict[str, set[str]] = {"trainees": set(), "projects": set()}
+    departments: list[frozenset[str]] = []
+    stats: dict[str, int] = {}
+    rels = [rel for rel in files if rel.startswith("ingest/") and rel.endswith(".csv")]
+    rep.check(
+        "ingest_files_present",
+        {"trainees", "projects", "supervisors", "admins"} <= {_ingest_kind(r) for r in rels},
+        "ingest/ must hold supervisors, trainees and projects files",
+    )
+    for rel in rels:
+        kind = _ingest_kind(rel)
+        data = (out / rel).read_bytes()
+        sheet_name, marker, required = PARSE_ARGS[kind]
+        sheet = parse_upload(Path(rel).name, data, sheet_name, marker, required)
+        rep.check("ingest_header_accepted", not sheet.errors, f"{rel}: {[e.message for e in sheet.errors]}")
+        rep.check("ingest_within_limits", len(data) <= limit and len(sheet.rows) <= MAX_ROWS, rel)
+        stats[rel] = len(sheet.rows)
+        top_level = rel.count("/") == 1
+        for number, r in sheet.rows:
+            tag = f"{rel}:{number}"
+            if kind == "trainees":
+                code = str(r["trainee id"])
+                trades = [x.strip().lower() for x in str(r["iti trade"]).split(",")]
+                skills = [x for x in str(r["core skills demonstrated"] or "").split(",") if x.strip()]
+                rep.check(
+                    "ingest_trainee_row",
+                    code in t_ids
+                    and set(trades) <= trade_names
+                    and len(skills) <= 20
+                    and all(len(x.strip()) <= 80 for x in skills)
+                    and str(r["gender"] or "") in ("", "Male", "Female", "Other"),
+                    tag,
+                )
+                if top_level:
+                    seen["trainees"].add(code)
+            elif kind == "projects":
+                code = str(r["project id"])
+                trades = [x.strip().lower() for x in str(r["target trade"]).split(",")]
+                skills = [x for x in str(r["required prerequisite skills"]).split(",") if x.strip()]
+                rep.check(
+                    "ingest_project_row",
+                    code in p_codes
+                    and set(trades) <= trade_names
+                    and str(r["difficulty level"]).lower() in ("beginner", "intermediate", "advanced")
+                    and 5 <= len(str(r["project title"])) <= 200
+                    and 0 < len(skills) <= 15
+                    and len(str(r["project category / sponsor goal"])) <= 120
+                    and str(r["problem statement doc"]).startswith("https://")
+                    and 0 <= float(r["min practical score required (%)"]) <= 100,
+                    tag,
+                )
+                if top_level:
+                    seen["projects"].add(code)
+            else:
+                email, dept = str(r["email"] or ""), str(r["department"] or "")
+                rep.check(
+                    "ingest_staff_row",
+                    "@" in email
+                    and str(r["role"]).lower() == kind.removesuffix("s")
+                    and 0 < len(str(r["full name"] or "")) <= 120
+                    and 0 < len(dept) <= 120,
+                    tag,
+                )
+                if kind == "supervisors":
+                    departments.append(tokenize(dept))
+    rep.check("ingest_covers_all_trainees", seen["trainees"] == t_ids, "ingest trainees != trainees.csv")
+    rep.check("ingest_covers_all_projects", seen["projects"] == p_codes, "ingest projects != projects.csv")
+    # pick_supervisor ranks by overlap of the department with title, category, trades and skills.
+    for r in P:
+        words = tokenize(
+            " ".join(
+                [r["title"], r["category"], *json.loads(r["target_trade_names"]), *json.loads(r["required_skills"])]
+            )
+        )
+        rep.check("every_project_has_a_matching_supervisor", any(d & words for d in departments), r["project_code"])
+    return stats
 
 
 def main(argv: list[str] | None = None) -> int:

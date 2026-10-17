@@ -1,20 +1,22 @@
-"""ONB-01..03 (ADR-017): resumable self-service onboarding, plus the user's in-app notifications."""
+"""ONB-01..03 (ADR-017, ADR-018): resumable self-service onboarding with a ranked cycle choice, plus the user's
+in-app notifications."""
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
 from app import audit
-from app.automation.onboarding import OnboardingData, enrol
+from app.automation.onboarding import CycleOption, OnboardingData, cycle_options, enrol
 from app.core.deps import DB, CurrentUser, Student
-from app.core.errors import AppError, conflict
+from app.core.errors import AppError, conflict, field_error
 from app.core.responses import Envelope, ListEnvelope
 from app.db import models as M
-from app.domain import active_cycle, now_utc
+from app.domain import now_utc, student_trainee
+from app.schemas import CycleRef
 
 router = APIRouter(tags=["onboarding"])
 
@@ -37,6 +39,8 @@ class OnboardingOut(BaseModel):
     missing: list[str]
     enrolled: bool
     cycle_open: bool
+    cycle: CycleRef | None  # the student's own open cycle once enrolled
+    cycle_options: list[CycleOption]  # open cycles, best match first (ADR-018); empty once enrolled
     completed_at: datetime | None
     has_history: bool  # enrolled in an earlier (e.g. archived) cycle: own past projects stay viewable read-only
 
@@ -52,18 +56,19 @@ def _profile(db: DB, user: M.User, lock: bool = False) -> M.OnboardingProfile:
 
 
 def _out(db: DB, user: M.User, p: M.OnboardingProfile) -> OnboardingOut:
-    cycle = active_cycle(db)
-    enrolled = cycle is not None and (
-        db.scalar(select(M.Trainee.id).where(M.Trainee.cycle_id == cycle.id, M.Trainee.user_id == user.id)) is not None
-    )
+    cycle, trainee = student_trainee(db, user.id)
+    enrolled = trainee is not None
     status = "enrolled" if enrolled else p.status
+    options = [] if enrolled else cycle_options(db, OnboardingData.model_validate(p.data).trade_ids)
     return OnboardingOut(
         status=status,
         message=STATUS_TEXT[status],
         data=p.data,
         missing=OnboardingData.model_validate(p.data).missing(),
         enrolled=enrolled,
-        cycle_open=cycle is not None,
+        cycle_open=enrolled or bool(options),
+        cycle=CycleRef(id=cycle.id, name=cycle.name) if cycle else None,
+        cycle_options=options,
         completed_at=p.completed_at,
         has_history=db.scalar(select(M.Trainee.id).where(M.Trainee.user_id == user.id).limit(1)) is not None,
     )
@@ -74,6 +79,17 @@ def get_onboarding(user: Student, db: DB) -> Envelope[OnboardingOut]:
     p = _profile(db, user)
     db.commit()
     return Envelope(data=_out(db, user, p))
+
+
+@router.get("/onboarding/cycle-options")
+def get_cycle_options(
+    user: Student,
+    db: DB,
+    trade_ids: Annotated[list[uuid.UUID], Query(max_length=5)] = [],  # noqa: B006
+) -> ListEnvelope[CycleOption]:
+    """Live ranking while the student edits trades (ADR-018). Read-only; reveals only cycle names and counts."""
+    del user
+    return ListEnvelope(data=cycle_options(db, trade_ids))
 
 
 @router.put("/onboarding")
@@ -87,6 +103,8 @@ def save_onboarding(body: OnboardingData, user: Student, db: DB) -> Envelope[Onb
             raise AppError(
                 422, "VALIDATION_ERROR", "Validation failed", [{"field": "body.trade_ids", "message": "unknown trade"}]
             )
+    if body.cycle_id is not None and body.cycle_id not in {o.id for o in cycle_options(db, body.trade_ids)}:
+        raise field_error("body.cycle_id", "this cycle is not open for enrolment")
     p.data = body.model_dump(mode="json")
     if p.status == "identity_conflict":
         p.status = "draft"

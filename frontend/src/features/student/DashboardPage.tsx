@@ -1,4 +1,4 @@
-import { Archive, Bell, CaretRight, ChartLineUp, Checks, Compass, Hourglass, Kanban } from "@phosphor-icons/react";
+import { Archive, Bell, CaretRight, Checks, Compass, Hourglass, Kanban } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -6,10 +6,12 @@ import { api, call } from "@/api/client";
 import { errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Allocation, Submission } from "@/api/types";
-import { DateTime, ErrorState, LoadingState, PageHeader, Skeleton, StatusBadge, Steps, useToast } from "@/components/shared";
+import { DateTime, ErrorState, LoadingState, PageHeader, Skeleton, StatusBadge, useToast } from "@/components/shared";
+import { Pipeline } from "@/components/shared/Pipeline";
 import { Alert, Button, Card, cx } from "@/components/ui";
 
 import { WAITING_AFTER_REJECT_TEXT, WAITING_TEXT, lastRejected, nextStep } from "./forms";
+import { buildJourney } from "./journey";
 import { useMyAllocationHistory, useMyNotifications, useMySubmissionHistory, useProject, useStudentContext } from "./hooks";
 import { ProfileSection } from "./ProfileSection";
 import { Fact, LinkButton } from "./ui";
@@ -28,19 +30,7 @@ export function DashboardPage() {
   const deadline = project.data?.data.effective_deadline ?? cycle.submission_deadline;
   const step = nextStep(cycle, me, latest, { deadline, rejectedBefore });
 
-  // Journey (presentation only): derived from data this page already loads.
-  const profileDone = me.skills.length > 0 && !!me.career_interest;
-  const submittedDone = !!latest;
-  const evaluatedDone = latest?.status === "evaluated";
-  const doneFlags = [profileDone, !!allocation, submittedDone, evaluatedDone];
-  const firstOpen = doneFlags.findIndex((d) => !d);
-  const stateAt = (i: number) => (doneFlags[i] ? "done" : i === firstOpen ? "current" : "todo") as "done" | "current" | "todo";
-  const journey = [
-    { label: "Profile", hint: profileDone ? "Skills and interest added" : "Add skills and a career interest" },
-    { label: "Allocated", hint: allocation ? allocation.project.project_code : "Automatic, about every 15 minutes" },
-    { label: "Submitted", hint: latest?.status === "rework_requested" ? "Rework requested" : latest ? `Version ${latest.version}` : "Upload your report" },
-    { label: "Evaluated", hint: evaluatedDone ? "Final" : "Automated report evaluation" },
-  ].map((s, i) => ({ ...s, state: stateAt(i) }));
+  const journey = buildJourney(me, allocation, latest, { rejectedBefore });
 
   return (
     <div className="space-y-6">
@@ -50,10 +40,10 @@ export function DashboardPage() {
         <Alert variant="info" icon={<Archive />} title="This cycle is archived">Your project and results are kept read-only.</Alert>
       )}
 
-      <section className="rounded-xl border border-primary/30 bg-primary-soft p-5 shadow-card" aria-labelledby="next-step-title">
+      <section className="rounded-xl border border-primary/25 bg-primary-soft bg-linear-to-br from-primary-soft via-white/60 to-violet-soft p-5 shadow-card" aria-labelledby="next-step-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-fg">
+            <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary bg-linear-to-b from-white/20 to-transparent text-primary-fg shadow-btn">
               <Compass size={20} />
             </span>
             <div className="min-w-0">
@@ -70,9 +60,19 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <Card title="Your journey" icon={<ChartLineUp />}>
-        <Steps steps={journey} />
-      </Card>
+      <section aria-labelledby="journey-title">
+        <Pipeline
+          label="Your project journey"
+          stages={journey}
+          columns={4}
+          toolbar={
+            <div className="min-w-0">
+              <h2 id="journey-title" className="text-base font-semibold text-text">Your journey</h2>
+              <p className="text-xs text-muted">Each stage updates on its own as the programme's automation runs. Select a stage to learn more.</p>
+            </div>
+          }
+        />
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
         <MyProjectCard

@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import func, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -28,12 +28,16 @@ log = logging.getLogger("spa.jobs")
 # Lower number = sooner. Replacement before ordinary allocation (ADR-017 §rejection).
 PRIORITY = {
     "replace_rejection": 10,
-    "allocate_cycle": 20,
     "archive_due": 5,
     "enrol_waiting": 15,
     "process_project": 30,
+    "process_projects": 30,
+    # After project processing: pending projects become ready first, so one allocation run sees all of
+    # them (otherwise it reran after every project and trainees got the first ready project, not the best).
+    "allocate_cycle": 35,
     "analyse_submission": 40,
     "send_notification": 50,
+    "enrich_project": 60,  # guide/deliverables for imported projects that are already ready
 }
 
 Handler = Callable[[Session, dict[str, Any]], dict[str, Any] | None]
@@ -77,6 +81,25 @@ def enqueue(
     db.execute(stmt)
 
 
+def enqueue_many(
+    db: Session, kind: str, items: list[tuple[dict[str, Any], str | None]], *, trigger: str | None = None
+) -> None:
+    """enqueue() for many (payload, dedupe_key) pairs in one INSERT (same dedupe semantics)."""
+    if not items:
+        return
+    rows = [
+        {"kind": kind, "payload": payload, "dedupe_key": key, "trigger": trigger, "priority": PRIORITY.get(kind, 100)}
+        for payload, key in items
+    ]
+    db.execute(
+        insert(M.Job)
+        .values(rows)
+        .on_conflict_do_nothing(
+            index_elements=["dedupe_key"], index_where=text("status = 'queued' AND dedupe_key IS NOT NULL")
+        )
+    )
+
+
 CLAIM = text(
     """
     UPDATE app.jobs SET status = 'running', locked_by = :worker, attempts = attempts + 1,
@@ -101,14 +124,18 @@ def claim(db: Session, kinds: set[str] | None = None) -> M.Job | None:
 
 
 def _finish(db: Session, job_id: int, status: JobStatus, result: dict[str, Any] | None, error: str | None) -> None:
-    job = db.get(M.Job, job_id)
-    if job is None:
-        return
-    job.status = status
-    job.result = result
-    job.last_error = error[:1000] if error else None
-    job.locked_until = None
-    db.execute(text("UPDATE app.jobs SET finished_at = now() WHERE id = :id"), {"id": job_id})
+    db.execute(
+        update(M.Job)
+        .where(M.Job.id == job_id)
+        .values(
+            status=status,
+            result=result,
+            last_error=error[:1000] if error else None,
+            locked_until=None,
+            finished_at=func.now(),
+        )
+        .execution_options(synchronize_session=False)
+    )
     db.commit()
 
 

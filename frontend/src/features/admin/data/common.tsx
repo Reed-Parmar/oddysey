@@ -8,7 +8,7 @@ import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Cycle } from "@/api/types";
-import { useCurrentCycle } from "@/app/AppShell";
+import { useActiveCycles } from "@/app/AppShell";
 import { Alert, Button, Input, Select, cx } from "@/components/ui";
 
 // ---------------------------------------------------------------- reference data
@@ -43,33 +43,61 @@ export function useDebounced<T>(value: T, ms = 300): T {
 }
 
 /**
- * The cycle a list page is scoped to: the explicit selection, else the active cycle (CYC-01).
- * Returns the resolved Cycle object (from CYC-02) so pages can check `archived`.
+ * The cycle scope of a list page (ADR-018). `selectedId` = "" means **all active cycles** (lists omit `cycle_id`);
+ * otherwise one cycle, which may be archived (read-only). `cycle` is that cycle, else null.
+ * `target` is where a write with no explicit choice goes: the selected cycle, else the newest active one.
  */
 export function useScopedCycle(selectedId: string) {
-  const current = useCurrentCycle();
+  const activeQ = useActiveCycles();
   const all = useAllCycles();
-  const active = current.data?.data ?? null;
+  const actives = activeQ.data?.data ?? [];
   const cycles = all.data?.data ?? [];
-  const id = selectedId || active?.id || "";
-  const cycle: Cycle | null = cycles.find((c) => c.id === id) ?? (active && active.id === id ? active : null);
-  return { id, cycle, active, cycles, isLoading: current.isLoading || all.isLoading, error: current.error ?? all.error };
+  const cycle: Cycle | null = selectedId ? (cycles.find((c) => c.id === selectedId) ?? actives.find((c) => c.id === selectedId) ?? null) : null;
+  const allActive = !selectedId;
+  const target = cycle && cycle.status !== "archived" ? cycle.id : (actives[0]?.id ?? "");
+  return {
+    id: selectedId, cycle, actives, cycles, allActive, target,
+    /** Show a cycle column: the rows may come from more than one cycle. */
+    multi: allActive && actives.length > 1,
+    /** Anything to list at all: a chosen cycle, or at least one active cycle. */
+    ready: !!selectedId || actives.length > 0,
+    nameOf: (id: string) => cycles.find((c) => c.id === id)?.name ?? actives.find((c) => c.id === id)?.name ?? "",
+    isLoading: activeQ.isLoading || all.isLoading, error: activeQ.error ?? all.error,
+  };
 }
 
-export function CycleSelect({ value, onChange, cycles, activeId, id = "cycle-select" }: {
-  value: string; onChange: (v: string) => void; cycles: Cycle[]; activeId?: string; id?: string;
+/** List filter: "All active cycles" (value "") plus every cycle, active ones first. */
+export function CycleSelect({ value, onChange, cycles, actives, id = "cycle-select" }: {
+  value: string; onChange: (v: string) => void; cycles: Cycle[]; actives: Cycle[]; id?: string;
 }) {
   if (!cycles.length) return null;
+  const activeIds = new Set(actives.map((c) => c.id));
+  const ordered = [...actives, ...cycles.filter((c) => !activeIds.has(c.id))];
   return (
     <label htmlFor={id} className="flex min-w-0 flex-col gap-1.5 text-sm">
       <span className={FILTER_LABEL}>Cycle</span>
       <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-        {!activeId && <option value="">Select a cycle</option>}
-        {cycles.map((c) => (
+        {actives.length > 0 ? <option value="">All active cycles ({actives.length})</option> : <option value="">Select a cycle</option>}
+        {ordered.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}{c.id === activeId ? " (active)" : c.status === "archived" ? " (archived)" : ""}
+            {c.name}{activeIds.has(c.id) ? " (active)" : c.status === "archived" ? " (archived)" : ""}
           </option>
         ))}
+      </Select>
+    </label>
+  );
+}
+
+/** Target cycle for a write (create/import) when several cycles are active. Hidden when there is only one. */
+export function TargetCycleField({ value, onChange, actives, id = "target-cycle" }: {
+  value: string; onChange: (v: string) => void; actives: Cycle[]; id?: string;
+}) {
+  if (actives.length < 2) return null;
+  return (
+    <label htmlFor={id} className="flex min-w-0 flex-col gap-1.5 text-sm">
+      <span className="font-medium text-text">Cycle</span>
+      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+        {actives.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </Select>
     </label>
   );

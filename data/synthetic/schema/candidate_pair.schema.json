@@ -1,0 +1,293 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "trainee_id": {
+      "title": "Trainee Id",
+      "type": "string"
+    },
+    "project_id": {
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_code": {
+      "title": "Project Code",
+      "type": "string"
+    },
+    "enrolment_wave": {
+      "maximum": 3,
+      "minimum": 1,
+      "title": "Enrolment Wave",
+      "type": "integer"
+    },
+    "trade_match": {
+      "title": "Trade Match",
+      "type": "boolean"
+    },
+    "assessment_complete": {
+      "title": "Assessment Complete",
+      "type": "boolean"
+    },
+    "score_mode": {
+      "enum": [
+        "full",
+        "profile"
+      ],
+      "title": "Score Mode",
+      "type": "string"
+    },
+    "theory_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Theory Score"
+    },
+    "practical_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Practical Score"
+    },
+    "safety_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Safety Score"
+    },
+    "min_practical_score": {
+      "title": "Min Practical Score",
+      "type": "number"
+    },
+    "min_match_score": {
+      "title": "Min Match Score",
+      "type": "number"
+    },
+    "difficulty": {
+      "title": "Difficulty",
+      "type": "string"
+    },
+    "required_skill_count": {
+      "title": "Required Skill Count",
+      "type": "integer"
+    },
+    "skill_overlap_ratio": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Skill Overlap Ratio",
+      "type": "number"
+    },
+    "interest_alignment_ratio": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Interest Alignment Ratio",
+      "type": "number"
+    },
+    "skill_evidence_ratio": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Skill Evidence Ratio"
+    },
+    "project_status": {
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ],
+      "title": "Project Status",
+      "type": "string"
+    },
+    "processing_status": {
+      "title": "Processing Status",
+      "type": "string"
+    },
+    "project_allocatable": {
+      "title": "Project Allocatable",
+      "type": "boolean"
+    },
+    "scorer_eligible": {
+      "title": "Scorer Eligible",
+      "type": "boolean"
+    },
+    "scorer_reasons": {
+      "title": "Scorer Reasons",
+      "type": "string"
+    },
+    "eligible": {
+      "title": "Eligible",
+      "type": "boolean"
+    },
+    "ineligible_reasons": {
+      "title": "Ineligible Reasons",
+      "type": "string"
+    },
+    "factor_trade_match": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Factor Trade Match"
+    },
+    "factor_practical_readiness": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Factor Practical Readiness"
+    },
+    "factor_skill_coverage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Factor Skill Coverage"
+    },
+    "factor_interest_alignment": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Factor Interest Alignment"
+    },
+    "factor_theory_safety_readiness": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Factor Theory Safety Readiness"
+    },
+    "total_compatibility_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Total Compatibility Score",
+      "type": "number"
+    },
+    "recommendation_rank": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Recommendation Rank"
+    },
+    "recommended": {
+      "title": "Recommended",
+      "type": "boolean"
+    },
+    "excluded_by_rejection": {
+      "title": "Excluded By Rejection",
+      "type": "boolean"
+    },
+    "allocated_final": {
+      "title": "Allocated Final",
+      "type": "boolean"
+    },
+    "scoring_version": {
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "synthetic_record": {
+      "const": true,
+      "title": "Synthetic Record",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "split",
+    "trainee_id",
+    "project_id",
+    "project_code",
+    "enrolment_wave",
+    "trade_match",
+    "assessment_complete",
+    "score_mode",
+    "theory_score",
+    "practical_score",
+    "safety_score",
+    "min_practical_score",
+    "min_match_score",
+    "difficulty",
+    "required_skill_count",
+    "skill_overlap_ratio",
+    "interest_alignment_ratio",
+    "skill_evidence_ratio",
+    "project_status",
+    "processing_status",
+    "project_allocatable",
+    "scorer_eligible",
+    "scorer_reasons",
+    "eligible",
+    "ineligible_reasons",
+    "factor_trade_match",
+    "factor_practical_readiness",
+    "factor_skill_coverage",
+    "factor_interest_alignment",
+    "factor_theory_safety_readiness",
+    "total_compatibility_score",
+    "recommendation_rank",
+    "recommended",
+    "excluded_by_rejection",
+    "allocated_final",
+    "scoring_version",
+    "synthetic_record"
+  ],
+  "title": "CandidatePairRow",
+  "type": "object"
+}

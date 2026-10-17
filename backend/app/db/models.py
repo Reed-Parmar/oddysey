@@ -37,7 +37,15 @@ def _enum(cls: type[StrEnum], name: str) -> Enum:
 
 
 def _pk() -> Mapped[uuid.UUID]:
-    return mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    # Client-side uuid4 + insert_sentinel lets SQLAlchemy batch ORM INSERT ... RETURNING into multi-row
+    # statements; with only the server default every row was its own round trip. The DB default stays.
+    return mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=func.gen_random_uuid(),
+        insert_sentinel=True,
+    )
 
 
 def _ts() -> Mapped[datetime]:

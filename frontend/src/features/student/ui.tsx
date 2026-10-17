@@ -6,8 +6,8 @@ import { Link } from "react-router-dom";
 import { cx } from "@/components/ui";
 
 const LINK_VARIANTS = {
-  primary: "bg-primary text-primary-fg shadow-card hover:bg-primary-hover",
-  secondary: "border border-border-strong bg-surface text-text shadow-card hover:border-subtle hover:bg-surface-2",
+  primary: "bg-primary bg-linear-to-b from-white/20 to-transparent text-primary-fg shadow-btn hover:bg-primary-hover",
+  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-white",
   ghost: "text-primary hover:bg-primary-soft",
 };
 
@@ -26,7 +26,7 @@ export function LinkButton({ to, children, variant = "primary", size = "md", ico
     <Link
       to={to}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-lg py-1.5 text-center font-semibold transition-colors duration-150",
+        "inline-flex items-center justify-center gap-2 rounded-lg py-1.5 text-center font-semibold transition-[color,background-color,box-shadow,transform] duration-150 active:translate-y-px",
         size === "sm" ? "min-h-9 px-3 text-sm" : "min-h-10 px-4 text-sm",
         LINK_VARIANTS[variant],
         className,

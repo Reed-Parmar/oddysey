@@ -10,6 +10,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
+import { useActiveCycles } from "@/app/AppShell";
 import type { Cycle, EvaluationIn, Submission } from "@/api/types";
 import {
   BackLink, ConfirmDialog, ErrorState, FormError, FormField, LoadingState, NotFound, PageHeader, StatusBadge, useToast,
@@ -18,7 +19,6 @@ import { Alert, Button, Card, Input, Textarea, buttonStyles, cx } from "@/compon
 import { AnalysisReport, CRITERIA, ReviewActions, SubmissionDetailView, useAnalysis } from "@/features/shared/views";
 import { label } from "@/lib/statusLabels";
 
-import { useCycleState } from "../common";
 import {
   computeTotal, emptyEvaluationForm, evaluationFormSchema, FEEDBACK_MAX, gradeFor, parseScore, toEvaluationBody,
   type EvaluationFormValues, type Grade,
@@ -233,7 +233,7 @@ function EvaluationForm({ submission, onDone }: { submission: Submission; onDone
 
 export function SubmissionDetailPage() {
   const { submissionId = "" } = useParams();
-  const cycleState = useCycleState();
+  const activeQ = useActiveCycles();
   const sub = useQuery({
     queryKey: qk.submissions.detail(submissionId),
     queryFn: () => call(api.GET("/api/v1/submissions/{submission_id}", { params: { path: { submission_id: submissionId } } })),
@@ -246,15 +246,16 @@ export function SubmissionDetailPage() {
     enabled: Boolean(hq),
   });
 
-  if (sub.isLoading || cycleState.isLoading) return <LoadingState />;
+  if (sub.isLoading || activeQ.isLoading) return <LoadingState />;
   if (sub.error) return <ErrorState error={sub.error} onRetry={() => void sub.refetch()} />;
   if (!s) return <NotFound />;
 
-  const cycle = cycleState.cycle;
+  // ADR-018: several cycles can be active; evaluation is open while the submission's own cycle is active.
+  const cycle = activeQ.data?.data.find((c) => c.id === s.cycle_id) ?? null;
   const latestVersion = Math.max(s.version, ...(history.data?.data ?? []).map((h) => h.version));
   // Verified practical evaluation is optional and separate from the automated report evaluation (ADR-017).
   const canEvaluate = !s.evaluation && s.version === latestVersion && s.status !== "rework_requested"
-    && cycle?.status !== "archived" && cycle?.id === s.cycle_id;
+    && cycle != null;
 
   return (
     <>
@@ -290,7 +291,7 @@ export function SubmissionDetailPage() {
           <SupervisorAnalysis submissionId={s.id} />
         </div>
       </div>
-      {cycleState.error && <p className="mt-3 text-sm text-danger">Could not load the cycle status: {errorMessage(cycleState.error)}</p>}
+      {activeQ.error && <p className="mt-3 text-sm text-danger">Could not load the cycle status: {errorMessage(activeQ.error)}</p>}
     </>
   );
 }

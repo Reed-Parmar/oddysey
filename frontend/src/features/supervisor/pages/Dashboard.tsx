@@ -1,5 +1,6 @@
 import {
-  ArrowCounterClockwise, ArrowRight, ChartBar, CheckCircle, Clock, FolderSimple, Hourglass, Info, ListChecks, UsersThree,
+  ArrowCounterClockwise, ArrowRight, ChartBar, CheckCircle, ClipboardText, Clock, FileMagnifyingGlass, FlagCheckered, FolderSimple,
+  Hourglass, Info, ListChecks, Target, UploadSimple, UsersThree,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -7,10 +8,11 @@ import { Link } from "react-router-dom";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
-import type { ProgressRow } from "@/api/types";
+import type { Project, ProgressRow } from "@/api/types";
 import {
   DateTime, EmptyState, ErrorState, LoadingState, Meter, PageHeader, Skeleton, StackedBar, StatCard, StatusBadge,
 } from "@/components/shared";
+import { Pipeline, type PipelineStage, type PipelineStatus } from "@/components/shared/Pipeline";
 import { Alert, Card, buttonStyles } from "@/components/ui";
 import { label } from "@/lib/statusLabels";
 
@@ -74,6 +76,81 @@ function ProjectsHeading() {
         All projects <ArrowRight aria-hidden size={14} />
       </Link>
     </div>
+  );
+}
+
+type FlowCounts = { allocated: number; notSubmitted: number; awaiting: number; rework: number; evaluated: number; late: number };
+
+/** The supervisor's slice of the automated lifecycle, from the same counts the KPI tiles use. Presentation only. */
+function buildFlow(projects: Project[], c: FlowCounts): PipelineStage[] {
+  const ready = projects.filter((p) => p.processing_status === "ready").length;
+  const failed = projects.filter((p) => p.processing_status === "failed").length;
+  const running = projects.filter((p) => p.processing_status === "queued" || p.processing_status === "processing").length;
+  const blocked = projects.length - ready - failed - running;
+  const projStatus: PipelineStatus = !projects.length ? "idle" : failed ? "error" : running ? "active" : blocked ? "attention" : "done";
+  const submittedAny = c.awaiting + c.rework + c.evaluated;
+  const subStatus: PipelineStatus = !c.allocated ? "idle" : c.notSubmitted ? "waiting" : "done";
+  const evalStatus: PipelineStatus = !submittedAny ? "idle" : c.awaiting ? "attention" : c.rework ? "waiting" : "done";
+  const open = Math.max(0, c.allocated - c.evaluated);
+  return [
+    {
+      key: "projects", title: "Project Analysis", icon: <FileMagnifyingGlass />, status: projStatus,
+      statusLabel: { idle: "No projects yet", error: `${failed} failed`, active: `${running} processing`, attention: `${blocked} need input`, done: "All ready", waiting: undefined }[projStatus],
+      metric: projects.length ? `${ready}/${projects.length}` : undefined, metricLabel: "ready",
+      progress: projects.length ? ready / projects.length : undefined,
+      summary: "Your projects are processed from their documents in the background. Only ready projects take part in allocation.",
+      link: { to: "/supervisor/projects", label: "Open my projects" },
+    },
+    {
+      key: "allocation", title: "Automated Allocation", icon: <Target />,
+      status: c.allocated ? "done" : ready ? "waiting" : "idle",
+      statusLabel: c.allocated ? `${c.allocated} allocated` : ready ? "Waiting for the next run" : "Not started",
+      metric: c.allocated, metricLabel: "trainees",
+      summary: "Trainees are allocated to your projects automatically, each with an itemised match explanation. A trainee can reject once before submitting and is replaced by the next-ranked match.",
+      link: { to: "/supervisor/progress", label: "View progress" },
+    },
+    {
+      key: "submission", title: "Student Submission", icon: <UploadSimple />, status: subStatus,
+      statusLabel: { idle: "Not started", waiting: `${c.notSubmitted} not submitted`, done: "All submitted", active: undefined, attention: undefined, error: undefined }[subStatus],
+      metric: c.allocated ? `${submittedAny}/${c.allocated}` : undefined, metricLabel: "submitted",
+      progress: c.allocated ? submittedAny / c.allocated : undefined,
+      summary: "Trainees submit a written report; versions continue through the rework loop.",
+      details: [{ label: "Late", value: c.late }],
+      link: { to: "/supervisor/progress", label: "View progress" },
+    },
+    {
+      key: "evaluation", title: "Evaluation", icon: <ClipboardText />, status: evalStatus,
+      statusLabel: { idle: "Not started", attention: `${c.awaiting} to evaluate`, waiting: `${c.rework} in rework`, done: "Up to date", active: undefined, error: undefined }[evalStatus],
+      metric: c.awaiting, metricLabel: "in your queue",
+      summary: "Each report arrives with an automated evaluation and an originality analysis. Review them, then finalise or request rework.",
+      details: [{ label: "Awaiting evaluation", value: c.awaiting }, { label: "Rework requested", value: c.rework }],
+      link: { to: "/supervisor/submissions", label: "Open evaluation queue" },
+    },
+    {
+      key: "completion", title: "Completion", icon: <FlagCheckered />,
+      status: !c.allocated || !c.evaluated ? "idle" : open ? "waiting" : "done",
+      statusLabel: !c.allocated || !c.evaluated ? "No results yet" : open ? `${open} still open` : "All evaluated",
+      metric: c.allocated ? `${Math.round((c.evaluated / c.allocated) * 100)}%` : undefined, metricLabel: "complete",
+      progress: c.allocated ? c.evaluated / c.allocated : undefined,
+      summary: "A trainee is complete once their latest version is evaluated.",
+    },
+  ];
+}
+
+function FlowSection({ counts }: { counts: FlowCounts | null }) {
+  const projects = useMyProjects();
+  if (!counts || projects.isLoading) return <Skeleton className="h-56 rounded-2xl" />;
+  if (projects.error) return null;
+  return (
+    <section aria-labelledby="flow-title">
+      <Pipeline label="Your trainees through the lifecycle" stages={buildFlow(projects.data?.data ?? [], counts)} columns={5}
+        toolbar={
+          <div className="min-w-0">
+            <h2 id="flow-title" className="text-base font-semibold text-text">Your trainees in the pipeline</h2>
+            <p className="text-xs text-muted">Allocation and report analysis run automatically. Your step is evaluation.</p>
+          </div>
+        } />
+    </section>
   );
 }
 
@@ -163,6 +240,11 @@ export function DashboardPage() {
         {cycle.status === "archived" && (
           <Alert variant="info" icon={<Info />}>This cycle is archived. Evaluations are closed; records are read-only.</Alert>
         )}
+        <FlowSection counts={
+          [allocated, notSubmitted, pending, rework, late].some((q) => q.data == null) || grades.data == null ? null : {
+            allocated: allocated.data ?? 0, notSubmitted: notSubmitted.data ?? 0, awaiting: pending.data ?? 0,
+            rework: rework.data ?? 0, evaluated: evaluatedTotal, late: late.data ?? 0,
+          }} />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <CountTile label="Pending evaluations" query={pending} to="/supervisor/submissions" icon={<Hourglass />} tone="primary" hint="Open evaluation queue" />
           <CountTile label="Rework requested" query={rework} to="/supervisor/submissions?status=rework_requested" icon={<ArrowCounterClockwise />} tone="warning" hint="View rework" />

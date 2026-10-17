@@ -1,6 +1,7 @@
-/** Self-service onboarding (ADR-017): save a draft, then finish to be enrolled in the open cycle (or wait for one). */
+/** Self-service onboarding (ADR-017, ADR-018): save a draft, then finish to be enrolled in the chosen or best-matching
+ * open cycle (or wait for one). */
 import {
-  Archive, CheckCircle, FileText, FloppyDisk, Hourglass, IdentificationCard, Info, LockKey, PaperPlaneTilt, WarningCircle,
+  Archive, CalendarCheck, CheckCircle, FileText, FloppyDisk, Hourglass, IdentificationCard, Info, LockKey, PaperPlaneTilt, WarningCircle,
 } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { Onboarding } from "@/api/types";
+import type { CycleOption, Onboarding } from "@/api/types";
 import { DateTime, ErrorState, FormField, LoadingState, PageHeader, StatusBadge, useToast } from "@/components/shared";
 import { Alert, Button, Card, Input, Textarea, cx } from "@/components/ui";
 
@@ -326,6 +327,9 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
             </div>
           </Card>
 
+          <CycleChoice tradeIds={values.trade_ids} value={values.cycle_id}
+            onChange={(v) => setValue("cycle_id", v, { shouldDirty: true })} />
+
           <Card title="Skills and interests" icon={<CheckCircle />}>
             <div className="flex flex-col gap-4">
               <FormField label="Skills" htmlFor="skills" required>
@@ -371,7 +375,7 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
           <SectionProgress values={values} />
           <Card title="After you finish" icon={<Info />}>
             <ul className="list-disc space-y-2 pl-5 text-sm text-muted">
-              <li>You are enrolled in the open programme cycle and a suitable project is allocated to you automatically.</li>
+              <li>You are enrolled in the programme cycle that best matches your trades (or the one you choose), and a suitable project is allocated to you automatically.</li>
               <li>Right after enrolment you can upload your resume on the Dashboard. Skills found there are suggestions only; nothing changes until you choose to add them.</li>
               <li>Your programme team adds verified assessment marks. You can't edit those.</li>
             </ul>
@@ -379,5 +383,48 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * ADR-018: when several cycles are open, show them ranked by how many projects match the selected trades.
+ * "Automatic" (the default) lets the server pick the best match at enrolment; hidden when only one cycle is open.
+ */
+function CycleChoice({ tradeIds, value, onChange }: { tradeIds: string[]; value: string; onChange: (v: string) => void }) {
+  const ids = [...new Set(tradeIds)].sort();
+  const q = useQuery({
+    queryKey: qk.onboarding.cycleOptions(ids),
+    queryFn: () => call(api.GET("/api/v1/onboarding/cycle-options", { params: { query: { trade_ids: ids } } })),
+    placeholderData: (prev) => prev,
+  });
+  const options: CycleOption[] = q.data?.data ?? [];
+  if (options.length < 2) return null;
+  const best = options[0];
+  const selected = options.some((o) => o.id === value) ? value : "";
+  const choice = (id: string, title: string, detail: string, badge?: string) => (
+    <label key={id || "auto"} className={cx(
+      "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors focus-within:ring-2 focus-within:ring-primary/40",
+      selected === id ? "border-primary bg-primary-soft" : "border-border-strong bg-surface hover:border-primary",
+    )}>
+      <input type="radio" name="cycle_id" className="mt-0.5 accent-[var(--color-primary)]" checked={selected === id} onChange={() => onChange(id)} />
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-2 font-semibold text-text">
+          {title}
+          {badge && <span className="rounded bg-success-bg px-1.5 py-0.5 text-xs font-semibold text-success">{badge}</span>}
+        </span>
+        <span className="block text-xs text-muted">{detail}</span>
+      </span>
+    </label>
+  );
+  const describe = (o: CycleOption) =>
+    `${o.matching_projects} of ${o.total_projects} projects match your trades · submission deadline ${new Date(o.submission_deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+  return (
+    <Card title="Programme cycle" icon={<CalendarCheck />}
+      description="Several cycles are open. We recommend the one with the most projects for your trades; you can pick another.">
+      <fieldset className="flex flex-col gap-2" aria-label="Programme cycle">
+        {choice("", `Automatic: best match (${best.name})`, ids.length ? "Updated as you change your trades." : "Choose your trades first for a better match.")}
+        {options.map((o) => choice(o.id, o.name, describe(o), o.recommended ? "Recommended" : undefined))}
+      </fieldset>
+    </Card>
   );
 }

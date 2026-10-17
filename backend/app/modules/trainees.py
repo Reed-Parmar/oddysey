@@ -27,15 +27,16 @@ from app.db.enums import AssessmentStatus, UserRole
 from app.domain import (
     VISIBLE_ALLOC,
     active_allocation,
-    active_cycle,
     clean_names,
     lock_cycle,
+    no_student_record,
     now_utc,
     project_input,
     require_not_archived,
-    resolve_cycle,
+    resolve_cycles,
     resolve_skill_names,
     set_trainee_trades,
+    student_trainee,
     trainee_input,
 )
 from app.schemas import AllocationOut, TraineeOut, allocation_out, trainee_out
@@ -74,11 +75,8 @@ def get_visible_trainee(db: DB, trainee_id: uuid.UUID, viewer: M.User) -> M.Trai
 
 
 def my_trainee(db: DB, user: M.User) -> tuple[M.Cycle | None, M.Trainee | None]:
-    cycle = active_cycle(db)
-    if cycle is None:
-        return None, None
-    t = db.scalar(select(M.Trainee).where(M.Trainee.cycle_id == cycle.id, M.Trainee.user_id == user.id))
-    return cycle, t
+    """The student's record in their own open cycle (ADR-018: one at a time)."""
+    return student_trainee(db, user.id)
 
 
 @router.get("/trainees/me")
@@ -160,9 +158,9 @@ def _replace_skills(db: DB, t: M.Trainee, names: list[str]) -> bool:
 
 @router.patch("/trainees/me")
 def patch_my_trainee(body: TraineeSelfPatch, user: Student, db: DB) -> Envelope[TraineeOut]:
-    cycle = active_cycle(db)
+    cycle = student_trainee(db, user.id)[0]
     if cycle is None:
-        raise conflict("NO_ACTIVE_CYCLE", "There is no active programme cycle")
+        raise no_student_record(db)
     lock_cycle(db, cycle.id)
     t = db.scalar(
         select(M.Trainee)
@@ -209,10 +207,10 @@ def list_trainees(
     sort: str = "full_name",
 ) -> PageEnvelope[TraineeOut]:
     check_sort(sort, set(SORTS))
-    cycle = resolve_cycle(db, cycle_id)
-    if cycle is None:
+    cycles = resolve_cycles(db, cycle_id)
+    if not cycles:
         return empty_page(params)
-    stmt = scope_trainees(select(M.Trainee).where(M.Trainee.cycle_id == cycle.id), viewer)
+    stmt = scope_trainees(select(M.Trainee).where(M.Trainee.cycle_id.in_([c.id for c in cycles])), viewer)
     if trade_id:
         stmt = stmt.where(M.Trainee.trade_id == trade_id)
     if assessment_status is not None:

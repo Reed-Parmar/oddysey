@@ -1,5 +1,9 @@
 # Student Module Handbook (Teammate A)
 
+> **ADR-018 (rev 4, binding).** Several cycles may be open. Onboarding shows the open cycles ranked by how many projects
+> match the student's trades, preselects the best and lets the student choose another (skipped when only one is open).
+> A student belongs to one open cycle at a time; their Dashboard and My Project show that cycle.
+
 > **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Navigation is exactly **Dashboard** (`/student`) and
 > **My Project** (`/student/project`). There is no catalogue, no suggested projects and no project request. New trainees
 > self-register at `/student/onboarding` (ONB-01..03: name, gender incl. "prefer not to say" (private, never a matching input),

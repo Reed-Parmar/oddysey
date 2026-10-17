@@ -20,6 +20,7 @@ from app.core.errors import AppError, conflict, not_found
 from app.core.responses import Envelope
 from app.db import models as M
 from app.db.enums import ExtractionSource, ResumeStatus, UserRole
+from app.domain import no_student_record
 from app.modules.submissions import FileUrl, _safe_name
 from app.modules.trainees import get_visible_trainee, my_trainee
 from app.storage import get_resume_storage
@@ -126,7 +127,7 @@ def upload_resume(user: Student, db: DB, file: Annotated[UploadFile, File()]) ->
     settings = get_settings()
     cycle, trainee = my_trainee(db, user)
     if cycle is None:
-        raise conflict("NO_ACTIVE_CYCLE", "There is no active programme cycle")
+        raise no_student_record(db)
     if trainee is None:
         raise conflict("NO_TRAINEE_RECORD", "No trainee record is linked to your account")
     since = datetime.now(UTC) - timedelta(hours=1)

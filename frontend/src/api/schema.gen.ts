@@ -32,7 +32,8 @@ export interface paths {
         put?: never;
         /**
          * Run Now
-         * @description Optional nudge: queue an allocation run now (the schedule runs it anyway).
+         * @description Optional nudge: queue an allocation run now (the schedule runs it anyway). Without `cycle_id`: every
+         *     active cycle (ADR-018).
          */
         post: operations["run_now_api_v1_admin_automation_run_now_post"];
         delete?: never;
@@ -272,6 +273,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cycles/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Active Cycles */
+        get: operations["list_active_cycles_api_v1_cycles_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cycles/current": {
         parameters: {
             query?: never;
@@ -279,7 +297,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current Cycle */
+        /**
+         * Current Cycle
+         * @description The caller's default cycle: a student's own open cycle; for staff the newest active one (a UI default).
+         */
         get: operations["current_cycle_api_v1_cycles_current_get"];
         put?: never;
         post?: never;
@@ -459,6 +480,26 @@ export interface paths {
         put?: never;
         /** Complete Onboarding */
         post: operations["complete_onboarding_api_v1_onboarding_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding/cycle-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cycle Options
+         * @description Live ranking while the student edits trades (ADR-018). Read-only; reveals only cycle names and counts.
+         */
+        get: operations["get_cycle_options_api_v1_onboarding_cycle_options_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1301,6 +1342,27 @@ export interface components {
              */
             submission_deadline: string;
         };
+        /** CycleOption */
+        CycleOption: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Matching Projects */
+            matching_projects: number;
+            /** Name */
+            name: string;
+            /** Recommended */
+            recommended: boolean;
+            /**
+             * Submission Deadline
+             * Format: date-time
+             */
+            submission_deadline: string;
+            /** Total Projects */
+            total_projects: number;
+        };
         /** CycleOut */
         CycleOut: {
             /** Archive At */
@@ -1349,6 +1411,16 @@ export interface components {
             name?: string | null;
             /** Submission Deadline */
             submission_deadline?: string | null;
+        };
+        /** CycleRef */
+        CycleRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /**
          * CycleStatus
@@ -1477,6 +1549,12 @@ export interface components {
         /** Envelope[UserOut] */
         Envelope_UserOut_: {
             data: components["schemas"]["UserOut"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[list[CycleOut]] */
+        Envelope_list_CycleOut__: {
+            /** Data */
+            data: components["schemas"]["CycleOut"][];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** EvaluationIn */
@@ -1704,6 +1782,11 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ListEnvelope[CycleOption] */
+        ListEnvelope_CycleOption_: {
+            /** Data */
+            data: components["schemas"]["CycleOption"][];
+        };
         /** ListEnvelope[HistoryEntry] */
         ListEnvelope_HistoryEntry_: {
             /** Data */
@@ -1780,6 +1863,8 @@ export interface components {
             career_interest?: string | null;
             /** Centre Name */
             centre_name?: string | null;
+            /** Cycle Id */
+            cycle_id?: string | null;
             /** Full Name */
             full_name?: string | null;
             /** Gender */
@@ -1795,8 +1880,11 @@ export interface components {
         OnboardingOut: {
             /** Completed At */
             completed_at: string | null;
+            cycle: components["schemas"]["CycleRef"] | null;
             /** Cycle Open */
             cycle_open: boolean;
+            /** Cycle Options */
+            cycle_options: components["schemas"]["CycleOption"][];
             /** Data */
             data: {
                 [key: string]: unknown;
@@ -1902,6 +1990,7 @@ export interface components {
             analysis_status: components["schemas"]["AnalysisStatus"] | null;
             /** Archived */
             archived: boolean;
+            cycle: components["schemas"]["CycleRef"];
             /** Deadline */
             deadline: string | null;
             evaluation: components["schemas"]["GradeRef"] | null;
@@ -2752,7 +2841,9 @@ export interface operations {
     };
     run_now_api_v1_admin_automation_run_now_post: {
         parameters: {
-            query?: never;
+            query?: {
+                cycle_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2766,6 +2857,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_AutomationStats_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2875,6 +2975,7 @@ export interface operations {
                 status?: components["schemas"]["InvitationStatus"] | null;
                 role?: components["schemas"]["UserRole"] | null;
                 sort?: "-created_at";
+                staff?: boolean;
                 page?: number;
                 page_size?: number;
             };
@@ -3037,6 +3138,7 @@ export interface operations {
                 status?: components["schemas"]["UserStatus"] | null;
                 q?: string | null;
                 sort?: string;
+                staff?: boolean;
                 page?: number;
                 page_size?: number;
             };
@@ -3280,6 +3382,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_active_cycles_api_v1_cycles_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_CycleOut__"];
                 };
             };
         };
@@ -3643,6 +3765,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_OnboardingOut_"];
+                };
+            };
+        };
+    };
+    get_cycle_options_api_v1_onboarding_cycle_options_get: {
+        parameters: {
+            query?: {
+                trade_ids?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEnvelope_CycleOption_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

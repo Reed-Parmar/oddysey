@@ -1,0 +1,180 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "trainee_id": {
+      "pattern": "^SYN-TRN-\\d{5}$",
+      "title": "Trainee Id",
+      "type": "string"
+    },
+    "full_name": {
+      "description": "Fictional; reporting only, never a scoring or prompt input",
+      "title": "Full Name",
+      "type": "string"
+    },
+    "gender": {
+      "anyOf": [
+        {
+          "enum": [
+            "female",
+            "male",
+            "other"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Reporting only, never a scoring input",
+      "title": "Gender"
+    },
+    "centre_id": {
+      "title": "Centre Id",
+      "type": "string"
+    },
+    "centre_name": {
+      "title": "Centre Name",
+      "type": "string"
+    },
+    "primary_trade_id": {
+      "title": "Primary Trade Id",
+      "type": "string"
+    },
+    "primary_trade_name": {
+      "title": "Primary Trade Name",
+      "type": "string"
+    },
+    "trade_ids": {
+      "title": "Trade Ids",
+      "type": "string"
+    },
+    "trade_names": {
+      "title": "Trade Names",
+      "type": "string"
+    },
+    "theory_score": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Theory Score"
+    },
+    "practical_score": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Practical Score"
+    },
+    "safety_score": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Safety Score"
+    },
+    "assessment_status": {
+      "enum": [
+        "complete",
+        "pending"
+      ],
+      "title": "Assessment Status",
+      "type": "string"
+    },
+    "marks_on_record": {
+      "maximum": 3,
+      "minimum": 0,
+      "title": "Marks On Record",
+      "type": "integer"
+    },
+    "skills": {
+      "title": "Skills",
+      "type": "string"
+    },
+    "skill_evidence": {
+      "title": "Skill Evidence",
+      "type": "string"
+    },
+    "career_interest": {
+      "title": "Career Interest",
+      "type": "string"
+    },
+    "background": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Background"
+    },
+    "education": {
+      "title": "Education",
+      "type": "string"
+    },
+    "profile_archetype": {
+      "title": "Profile Archetype",
+      "type": "string"
+    },
+    "home_split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Home Split",
+      "type": "string"
+    },
+    "synthetic_record": {
+      "const": true,
+      "title": "Synthetic Record",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "trainee_id",
+    "full_name",
+    "gender",
+    "centre_id",
+    "centre_name",
+    "primary_trade_id",
+    "primary_trade_name",
+    "trade_ids",
+    "trade_names",
+    "theory_score",
+    "practical_score",
+    "safety_score",
+    "assessment_status",
+    "marks_on_record",
+    "skills",
+    "skill_evidence",
+    "career_interest",
+    "background",
+    "education",
+    "profile_archetype",
+    "home_split",
+    "synthetic_record"
+  ],
+  "title": "TraineeRow",
+  "type": "object"
+}

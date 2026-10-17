@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
+from functools import lru_cache
 
 from spa_ai.text import jaccard, tokenize
 
@@ -53,7 +54,9 @@ class TraineeInput:
         return frozenset(self.trade_ids or ((self.trade_id,) if self.trade_id else ()))
 
     def trade_label(self) -> str:
-        return ", ".join(self.trade_names or ((self.trade_name,) if self.trade_name else ())) or "none"
+        return (
+            ", ".join(self.trade_names or ((self.trade_name,) if self.trade_name else ())) or "none"
+        )
 
 
 @dataclass(frozen=True)
@@ -77,7 +80,9 @@ class ProjectInput:
         return frozenset(ids)
 
     def trade_label(self) -> str:
-        names = self.target_trade_names or ((self.target_trade_name,) if self.target_trade_name else ())
+        names = self.target_trade_names or (
+            (self.target_trade_name,) if self.target_trade_name else ()
+        )
         return ", ".join(names) or "none"
 
     @property
@@ -146,6 +151,7 @@ def _norm(name: str) -> str:
     return name.strip().lower()
 
 
+@lru_cache(maxsize=65536)  # pure; (prerequisite, skill) pairs repeat across every trainee x project
 def _skill_matches(prereq: str, skill: str) -> bool:
     a, b = _norm(prereq), _norm(skill)
     if not a or not b:
@@ -196,9 +202,13 @@ def _trade_factor(t: TraineeInput, p: ProjectInput) -> Factor:
         if trades_overlap(t, p):
             detail = f"{t.trade_name} matches the project trade"
         else:
-            detail = f"Trainee trade {t.trade_name} differs from project trade {p.target_trade_name}"
+            detail = (
+                f"Trainee trade {t.trade_name} differs from project trade {p.target_trade_name}"
+            )
     elif trades_overlap(t, p):
-        detail = f"Trainee trades ({t.trade_label()}) overlap the project trades ({p.trade_label()})"
+        detail = (
+            f"Trainee trades ({t.trade_label()}) overlap the project trades ({p.trade_label()})"
+        )
     else:
         detail = (
             f"Trainee trades ({t.trade_label()}) do not include a project trade ({p.trade_label()})"
@@ -215,7 +225,9 @@ def _practical_factor(practical: float, minimum: float) -> tuple[Factor, bool]:
         raw = 20 * practical / max(minimum, 1)
         detail = f"Practical {_pct(practical)}% vs required {_pct(minimum)}% (−{_pct(minimum - practical)})"
         below = True
-    f = Factor("practical_readiness", "Practical score vs requirement", float(_round2(raw)), 35, detail)
+    f = Factor(
+        "practical_readiness", "Practical score vs requirement", float(_round2(raw)), 35, detail
+    )
     return f, below
 
 
@@ -240,10 +252,12 @@ def _skill_factor(t: TraineeInput, p: ProjectInput, weight: int = 30) -> tuple[F
     return Factor("skill_coverage", "Prerequisite skill coverage", pts, weight, detail), cov
 
 
+@lru_cache(maxsize=8192)  # TraineeInput is frozen and hashable
 def interest_tokens(t: TraineeInput) -> frozenset[str]:
     return tokenize(t.career_interest) | tokenize(t.background)
 
 
+@lru_cache(maxsize=8192)  # ProjectInput is frozen and hashable
 def project_tokens(p: ProjectInput) -> frozenset[str]:
     toks = tokenize(p.title) | tokenize(p.category) | tokenize(p.description)
     for s in p.skills:
@@ -276,7 +290,9 @@ def _theory_safety_factor(theory: float, safety: float, difficulty: str) -> Fact
     req = DIFFICULTY_REQUIREMENT[diff]
     raw = 8 * min(1.0, theory / req) + 7 * min(1.0, safety / req)
     detail = f"Theory {_pct(theory)}%, safety {_pct(safety)}% vs {req}% required for {diff}"
-    return Factor("theory_safety_readiness", "Theory and safety readiness", float(_round2(raw)), 15, detail)
+    return Factor(
+        "theory_safety_readiness", "Theory and safety readiness", float(_round2(raw)), 15, detail
+    )
 
 
 # ---------------------------------------------------------------- public
@@ -355,7 +371,12 @@ def _score_profile(t: TraineeInput, p: ProjectInput) -> PairScore:
 def best_project(t: TraineeInput, projects: list[ProjectInput]) -> PairScore | None:
     """Ordinary allocation: the highest-scoring eligible project for one trainee (no capacity;
     several trainees may independently receive the same project). Ties: project code."""
-    eligible = [ps for ps in (score_pair(t, p) for p in projects) if ps.eligible]
+    return best_of([score_pair(t, p) for p in projects])
+
+
+def best_of(scores: list[PairScore]) -> PairScore | None:
+    """The best_project choice from already computed scores (lets callers score each pair once)."""
+    eligible = [ps for ps in scores if ps.eligible]
     if not eligible:
         return None
     return min(eligible, key=lambda ps: (-ps.score, ps.project_code))

@@ -1,57 +1,107 @@
 @import "tailwindcss";
 
 /*
- * Design tokens (frontend.md §3). Light theme only in the MVP.
- * Style: Minimalism / Swiss for enterprise dashboards. Indigo primary, orange accent used sparingly,
- * slate neutrals. Text pairs meet WCAG AA (4.5:1) on surface and bg.
+ * Design tokens (frontend.md §3, frontend/DESIGN.md). Light theme only in the MVP.
+ * Navy primary + navy chrome sidebar; teal accent means "automation is moving"; clay and violet add warmth.
+ * Surfaces are frosted glass over a soft colour mesh (the page background). Text pairs meet WCAG AA (4.5:1)
+ * on the composed surface colour.
  */
 @theme {
-  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-heading: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 
-  --color-bg: #f6f7fb;
-  --color-surface: #ffffff;
-  --color-surface-2: #f8fafc;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-text: #0f172a;
-  --color-muted: #475569;
-  --color-subtle: #64748b;
+  --color-bg: #f3f4f8;
+  --color-surface: rgb(255 255 255 / 0.72);
+  --color-surface-2: rgb(246 248 251 / 0.72);
+  /* Floating layers (dialogs, toasts) stay nearly opaque for legibility. */
+  --color-surface-strong: rgb(255 255 255 / 0.94);
+  --color-border: rgb(14 31 58 / 0.10);
+  --color-border-strong: rgb(14 31 58 / 0.22);
+  --color-text: #0e1726;
+  --color-muted: #475365;
+  --color-subtle: #5f6b7d;
 
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
+  --color-primary: #1d4f91;
+  --color-primary-light: #2f68b8;
+  --color-primary-hover: #163f75;
   --color-primary-fg: #ffffff;
-  --color-primary-soft: #eef2ff;
-  --color-primary-ink: #3730a3;
+  --color-primary-soft: #e6effa;
+  --color-primary-ink: #133968;
 
-  --color-accent: #ea580c;
-  --color-accent-soft: #fff7ed;
-  --color-accent-ink: #9a3412;
+  --color-accent: #0f766e;
+  --color-accent-light: #14958b;
+  --color-accent-soft: #e2f5f2;
+  --color-accent-ink: #0b544e;
 
-  --color-info: #1d4ed8;
-  --color-info-bg: #eff6ff;
-  --color-success: #15803d;
-  --color-success-bg: #f0fdf4;
-  --color-warning: #a16207;
-  --color-warning-bg: #fefce8;
-  --color-danger: #b91c1c;
-  --color-danger-bg: #fef2f2;
+  /* Warm and cool supporting hues: decoration and data only, never status. */
+  --color-clay: #c4623f;
+  --color-clay-soft: #fbece5;
+  --color-clay-ink: #9a4527;
+  --color-violet: #6247b8;
+  --color-violet-soft: #efeafb;
+  --color-violet-ink: #4b3591;
+
+  /* Sidebar chrome. */
+  --color-chrome: #0e1f3a;
+  --color-chrome-2: rgb(255 255 255 / 0.07);
+  --color-chrome-text: #c9d4e6;
+  --color-chrome-muted: #93a3bd;
+  --color-chrome-accent: #5eead4;
+
+  /* Pipeline canvas. */
+  --color-canvas: rgb(248 250 252 / 0.55);
+  --color-canvas-dot: rgb(14 31 58 / 0.13);
+
+  --color-info: #1d5fb8;
+  --color-info-bg: #eaf2fc;
+  --color-success: #17734a;
+  --color-success-bg: #e6f6ed;
+  --color-warning: #8f5408;
+  --color-warning-bg: #fcf3df;
+  --color-danger: #b42318;
+  --color-danger-bg: #fdecea;
   --color-neutral: #334155;
-  --color-neutral-bg: #f1f5f9;
+  --color-neutral-bg: rgb(14 31 58 / 0.06);
 
   /* Data-viz series (distinct in hue and lightness; always paired with labels). */
-  --color-chart-1: #4f46e5;
-  --color-chart-2: #0d9488;
-  --color-chart-3: #ea580c;
-  --color-chart-4: #ca8a04;
-  --color-chart-5: #64748b;
+  --color-chart-1: #1d4f91;
+  --color-chart-2: #0f766e;
+  --color-chart-3: #c4623f;
+  --color-chart-4: #6247b8;
+  --color-chart-5: #5f6b7d;
 
-  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
-  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --shadow-overlay: 0 20px 40px -12px rgb(15 23 42 / 0.25);
+  /* 3D: a top highlight (inset), a tight contact shadow and a soft tinted ambient shadow. */
+  --shadow-card:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.85), 0 1px 2px 0 rgb(14 31 58 / 0.06), 0 8px 20px -10px rgb(14 31 58 / 0.14),
+    0 20px 40px -24px rgb(29 79 145 / 0.22);
+  --shadow-raised:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.9), 0 2px 4px 0 rgb(14 31 58 / 0.07), 0 16px 32px -12px rgb(14 31 58 / 0.22),
+    0 32px 64px -32px rgb(29 79 145 / 0.35);
+  --shadow-overlay: inset 0 1px 0 0 rgb(255 255 255 / 0.9), 0 32px 64px -16px rgb(14 23 38 / 0.38);
+  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 0 rgb(0 0 0 / 0.12), 0 1px 2px 0 rgb(14 31 58 / 0.18), 0 6px 14px -6px rgb(14 31 58 / 0.35);
+  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.95), 0 1px 2px 0 rgb(14 31 58 / 0.08), 0 4px 10px -6px rgb(14 31 58 / 0.18);
 
   --animate-fade-in: fade-in 160ms ease-out;
   --animate-slide-in: slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-flow: flow 900ms linear infinite;
+  --animate-pulse-ring: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes flow {
+  to {
+    background-position: 12px 12px;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
 }
 
 @keyframes fade-in {
@@ -82,7 +132,7 @@
 
   html,
   body {
-    background: var(--color-bg);
+    background-color: var(--color-bg);
     color: var(--color-text);
     font-family: var(--font-sans);
     font-size: 16px;
@@ -95,7 +145,8 @@
   h3,
   h4 {
     font-family: var(--font-heading);
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    letter-spacing: -0.015em;
     text-wrap: balance;
   }
 
@@ -121,6 +172,12 @@
     border-radius: 4px;
   }
 
+  /* The navy sidebar needs a light focus ring. */
+  .bg-chrome :focus-visible,
+  .bg-primary-ink :focus-visible {
+    outline-color: var(--color-chrome-accent);
+  }
+
   ::selection {
     background: var(--color-primary-soft);
     color: var(--color-primary-ink);
@@ -128,6 +185,12 @@
 
   table {
     font-variant-numeric: tabular-nums;
+  }
+
+  code,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
   }
 
   dialog[open] {
@@ -148,5 +211,273 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Pipeline canvas: n8n-style dot grid. */
+@utility bg-dot-grid {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(var(--color-canvas-dot) 1px, transparent 1px),
+    linear-gradient(120deg, rgb(29 79 145 / 0.07), rgb(15 118 110 / 0.05) 45%, rgb(196 98 63 / 0.06) 75%, rgb(98 71 184 / 0.07));
+  background-size: 16px 16px, 100% 100%;
+}
+
+/* 3D icon tile: glossy top light and a soft coloured drop under the tile (inherits the tile's text colour). */
+@utility tile-3d {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0) 60%);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.9),
+    inset 0 -1px 0 0 color-mix(in oklab, currentColor 18%, transparent),
+    0 4px 10px -4px color-mix(in oklab, currentColor 45%, transparent);
+}
+
+/*
+ * Pipeline layout (components/shared/Pipeline.tsx).
+ * Mobile: one vertical column. md: 2-column serpentine. xl: `--cols`-column serpentine.
+ * Each node sets its grid cell per breakpoint through CSS variables; connectors read the same gaps.
+ */
+@layer components {
+  .pl-grid {
+    --gx: 2.75rem;
+    --gy: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gy);
+  }
+
+  .pl-conn {
+    position: absolute;
+    pointer-events: none;
+    top: 100%;
+    left: calc(50% - 1px);
+    width: 2px;
+    height: var(--gy);
+    --line: var(--color-border-strong);
+    background: repeating-linear-gradient(180deg, var(--line) 0 4px, transparent 4px 8px);
+  }
+
+  .pl-conn[data-state="done"] {
+    --line: color-mix(in oklab, var(--color-primary) 55%, white);
+    background: var(--line);
+  }
+
+  .pl-conn[data-state="active"] {
+    --line: var(--color-accent);
+    background: repeating-linear-gradient(180deg, var(--line) 0 6px, transparent 6px 12px);
+    animation: var(--animate-flow);
+  }
+
+  .pl-conn[data-state="error"] {
+    --line: var(--color-danger);
+  }
+
+  .pl-conn[data-state="waiting"],
+  .pl-conn[data-state="attention"] {
+    --line: color-mix(in oklab, var(--color-warning) 60%, white);
+  }
+
+  /* Output port at the source end, arrowhead at the target end. */
+  .pl-conn::before,
+  .pl-conn::after {
+    content: "";
+    position: absolute;
+  }
+
+  .pl-conn::before {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: var(--color-surface);
+    border: 2px solid var(--line);
+    left: -3px;
+    top: -4px;
+  }
+
+  .pl-conn::after {
+    left: -4px;
+    bottom: -1px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--line);
+  }
+
+  @media (min-width: 48rem) {
+    .pl-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: var(--gx);
+      row-gap: var(--gy);
+    }
+
+    .pl-node {
+      grid-row: var(--r2);
+      grid-column: var(--c2);
+    }
+
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) {
+    .pl-conn[data-md="right"],
+    .pl-conn[data-md="left"] {
+      top: calc(50% - 1px);
+      width: var(--gx);
+      height: 2px;
+    }
+
+    .pl-conn[data-md="right"] {
+      left: 100%;
+    }
+
+    .pl-conn[data-md="left"] {
+      left: auto;
+      right: 100%;
+      transform: scaleX(-1);
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .pl-grid {
+      grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    }
+
+    .pl-node {
+      grid-row: var(--rx);
+      grid-column: var(--cx);
+    }
+
+    .pl-conn[data-xl="right"],
+    .pl-conn[data-xl="left"] {
+      top: calc(50% - 1px);
+      width: var(--gx);
+      height: 2px;
+    }
+
+    .pl-conn[data-xl="right"] {
+      left: 100%;
+    }
+
+    .pl-conn[data-xl="left"] {
+      left: auto;
+      right: 100%;
+      transform: scaleX(-1);
+    }
+  }
+
+  /* Horizontal geometry: rotate the dash pattern, port and arrowhead. */
+  @media (min-width: 48rem) and (max-width: 79.99rem) {
+    .pl-conn:is([data-md="right"], [data-md="left"]) {
+      background: repeating-linear-gradient(90deg, var(--line) 0 4px, transparent 4px 8px);
+    }
+    .pl-conn:is([data-md="right"], [data-md="left"])[data-state="done"] {
+      background: var(--line);
+    }
+    .pl-conn:is([data-md="right"], [data-md="left"])[data-state="active"] {
+      background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px);
+    }
+    .pl-conn:is([data-md="right"], [data-md="left"])::before {
+      left: -4px;
+      top: -3px;
+    }
+    .pl-conn:is([data-md="right"], [data-md="left"])::after {
+      left: auto;
+      right: -1px;
+      top: -4px;
+      bottom: auto;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 6px solid var(--line);
+      border-right: 0;
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .pl-conn:is([data-xl="right"], [data-xl="left"]) {
+      background: repeating-linear-gradient(90deg, var(--line) 0 4px, transparent 4px 8px);
+    }
+    .pl-conn:is([data-xl="right"], [data-xl="left"])[data-state="done"] {
+      background: var(--line);
+    }
+    .pl-conn:is([data-xl="right"], [data-xl="left"])[data-state="active"] {
+      background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px);
+    }
+    .pl-conn:is([data-xl="right"], [data-xl="left"])::before {
+      left: -4px;
+      top: -3px;
+    }
+    .pl-conn:is([data-xl="right"], [data-xl="left"])::after {
+      left: auto;
+      right: -1px;
+      top: -4px;
+      bottom: auto;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 6px solid var(--line);
+      border-right: 0;
+    }
+  }
+}
+
+/*
+ * Glass and depth (unlayered so they sit on top of the utilities).
+ * Page: a soft four-colour mesh. Panels: frosted glass. Sidebar: navy with a coloured glow.
+ */
+body {
+  background-image:
+    radial-gradient(1100px 620px at -5% -10%, rgb(47 104 184 / 0.20), transparent 62%),
+    radial-gradient(900px 560px at 105% -5%, rgb(20 149 139 / 0.16), transparent 60%),
+    radial-gradient(900px 700px at 100% 105%, rgb(196 98 63 / 0.15), transparent 62%),
+    radial-gradient(800px 640px at -5% 100%, rgb(98 71 184 / 0.14), transparent 60%);
+  background-attachment: fixed;
+}
+
+:where(div, section, article, aside, header, ol, ul, li, a, form, details, nav).shadow-card,
+:where(div, section, article, aside, header, ol, ul, li, a, form, details, nav).shadow-raised,
+.pl-node > button,
+header.sticky {
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  backdrop-filter: blur(16px) saturate(170%);
+}
+
+dialog {
+  background-color: var(--color-surface-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+
+/* Lift on hover: cards that are links, and pipeline nodes. */
+a.shadow-card,
+.pl-node > button {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 180ms ease,
+    border-color 150ms ease;
+}
+
+a.shadow-card:hover,
+.pl-node > button:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-raised);
+}
+
+.bg-chrome {
+  background-color: var(--color-chrome);
+  background-image:
+    radial-gradient(520px 340px at 0% 0%, rgb(47 104 184 / 0.45), transparent 70%),
+    radial-gradient(420px 380px at 100% 100%, rgb(20 149 139 / 0.30), transparent 70%),
+    radial-gradient(360px 300px at 0% 100%, rgb(98 71 184 / 0.28), transparent 70%),
+    linear-gradient(180deg, #10264a, #0b1830);
+}
+
+.bg-chrome .bg-chrome-2 {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.shadow-card:hover,
+  .pl-node > button:hover {
+    transform: none;
   }
 }

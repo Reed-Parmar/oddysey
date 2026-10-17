@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import AppError, invalid_state, not_found
+from app.core.errors import AppError, conflict, invalid_state, not_found
 from app.db import models as M
 from app.db.enums import CycleStatus, SubmissionStatus, TraineeProgress
 from spa_ai.scoring import ProjectInput, TraineeInput
@@ -20,13 +20,42 @@ VISIBLE_ALLOC = (CycleStatus.draft, CycleStatus.published, CycleStatus.archived)
 # ---------------------------------------------------------------- cycles
 
 
-def active_cycle(db: Session) -> M.Cycle | None:
-    return db.scalar(select(M.Cycle).where(M.Cycle.status.in_(ACTIVE)))
+def active_cycles(db: Session) -> list[M.Cycle]:
+    """ADR-018: any number of cycles may be active (draft/published), newest first."""
+    return list(
+        db.scalars(select(M.Cycle).where(M.Cycle.status.in_(ACTIVE)).order_by(M.Cycle.created_at.desc(), M.Cycle.id))
+    )
 
 
-def resolve_cycle(db: Session, cycle_id: uuid.UUID | None) -> M.Cycle | None:
-    """List filter semantics: default active cycle; unknown id → None (lists return empty)."""
-    return db.get(M.Cycle, cycle_id) if cycle_id else active_cycle(db)
+def default_cycle(db: Session) -> M.Cycle | None:
+    """Staff UI default only (CYC-01, RPT-01 without cycle_id): the most recently created active cycle."""
+    cycles = active_cycles(db)
+    return cycles[0] if cycles else None
+
+
+def resolve_cycles(db: Session, cycle_id: uuid.UUID | None) -> list[M.Cycle]:
+    """List filter semantics: an explicit id → that cycle (unknown → [] so lists are empty); else all active cycles."""
+    if cycle_id:
+        c = db.get(M.Cycle, cycle_id)
+        return [c] if c else []
+    return active_cycles(db)
+
+
+def student_trainee(db: Session, user_id: uuid.UUID) -> tuple[M.Cycle | None, M.Trainee | None]:
+    """The student's own record in a non-archived cycle (at most one: trigger trainees_one_open_cycle_per_user)."""
+    t = db.scalar(
+        select(M.Trainee)
+        .join(M.Cycle, M.Cycle.id == M.Trainee.cycle_id)
+        .where(M.Trainee.user_id == user_id, M.Cycle.status.in_(ACTIVE))
+    )
+    return (db.get(M.Cycle, t.cycle_id), t) if t else (None, None)
+
+
+def no_student_record(db: Session) -> AppError:
+    """A student write found no own open record: no cycle at all, or the account is not enrolled in one."""
+    if not active_cycles(db):
+        return conflict("NO_ACTIVE_CYCLE", "There is no active programme cycle")
+    return conflict("NO_TRAINEE_RECORD", "No trainee record is linked to your account")
 
 
 def lock_cycle(db: Session, cycle_id: uuid.UUID, update: bool = False) -> M.Cycle:
@@ -242,3 +271,32 @@ def derive_progress(
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+# ---------------------------------------------------------------- bulk reference data (imports)
+
+
+def resolve_skills_bulk(db: Session, names: Iterable[str]) -> tuple[dict[str, M.Skill], list[str]]:
+    """resolve_skill_names for a whole file in two statements: one lookup, one batched insert.
+
+    Returns ({lower(name): Skill}, created names). The first spelling in input order creates a missing
+    skill, exactly as resolving row by row would. Avoids a SELECT per row, whose autoflush also forced
+    every pending row to be inserted one statement at a time."""
+    wanted: dict[str, str] = {}
+    for n in names:
+        wanted.setdefault(n.lower(), n)
+    if not wanted:
+        return {}, []
+    found = {s.name.lower(): s for s in db.scalars(select(M.Skill).where(func.lower(M.Skill.name).in_(list(wanted))))}
+    created = [n for k, n in wanted.items() if k not in found]
+    if created:
+        new = [M.Skill(name=n) for n in created]
+        db.add_all(new)
+        db.flush()
+        found.update({s.name.lower(): s for s in new})
+    return found, created
+
+
+def pick_skills(found: dict[str, M.Skill], names: list[str]) -> list[M.Skill]:
+    """Map one row's (already de-duplicated) names to Skill rows from resolve_skills_bulk."""
+    return [found[n.lower()] for n in names]

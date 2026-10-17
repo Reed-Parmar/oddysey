@@ -30,7 +30,7 @@ cd backend
 | `--trainees / --projects / --scenarios` | 1000 / 100 / 30 | size (limits 30–20000 / 9–2000 / 3–500) |
 | `--seed` | 42 | every random choice derives from it |
 | `--out` | `data/synthetic` | output directory |
-| `--formats` | `csv,jsonl` | add `xlsx` (inspection workbook) and/or `import` (importer-format files) |
+| `--formats` | `csv,jsonl` | add `xlsx` (inspection workbook) and/or `import` (per-scenario ingest files) |
 | `--no-submissions`, `--no-llm`, `--no-validate` | off | skip those parts |
 | `--workbook` | the dataset xlsx | reference workbook (read-only) |
 | `--trainee-csv` | none | extra reference trainee CSV in dataset columns (a title and blank rows before the header are fine) |
@@ -142,7 +142,8 @@ trainee. Re-score allocations with their own `match_mode`.
 | `submissions.csv`, `evaluations.csv` | optional |
 | `llm/<task>/<split>.jsonl` | LLM examples (section 5) |
 | `schema/*.json` | JSON Schemas for the main tables and every LLM input/target |
-| `import/SCN-xxxx_{trainees,projects}.csv` | `--formats import`: dataset-format files for the admin importer |
+| `ingest/supervisors.csv`, `ingest/trainees.csv`, `ingest/projects.csv` | **the files to upload** in the admin import screens (always written) |
+| `ingest/scenarios/SCN-xxxx_{trainees,projects}.csv` | `--formats import`: the same, one cohort per scenario |
 | `inspection.xlsx` | `--formats xlsx`: convenience workbook (not canonical) |
 | `manifest.json` | parameters, seed, versions, reference stats, split manifest, row counts, SHA-256 |
 | `validation_report.json`, `README.md` | data-quality report and dataset card |
@@ -213,19 +214,39 @@ The report also lists:
 
 ## 8. Loading into a local or test environment
 
-There is no automatic database insertion. To try a scenario in a **local/dev** stack:
+**Upload only the files in `ingest/`.** The root CSVs are canonical ML tables with machine column names
+(`project_id`, `title`, …). The importer rejects them with "Header row with 'Project Title' not found".
 
-1. Generate with `--formats csv,jsonl,import`.
-2. As an admin, open the import screen and upload `import/SCN-0001_trainees.csv`, then
-   `SCN-0001_projects.csv`, to a test cycle. Run the **dry run** first.
+| File | Admin screen | Columns (taken from the importer constants) |
+|---|---|---|
+| `ingest/supervisors.csv` | Staff & Invitations > import staff | Email, Full Name, Role, Department |
+| `ingest/projects.csv` | import projects | Project ID, Project Title, Target Trade, Difficulty Level, Required Prerequisite Skills, Min Practical Score Required (%), Max Trainee Capacity, Project Category / Sponsor Goal, Problem Statement Doc, Description |
+| `ingest/trainees.csv` | import trainees | Trainee ID, Full Name, Gender, ITI Trade, ITI Name, the three score columns, Core Skills Demonstrated, Primary Career Interest, Background |
 
-Notes:
+Follow this order:
 
-- The files use the dataset's columns, including the title row the parser skips.
+1. Import the supervisors. They are invited and become active after accepting.
+2. Import the projects into a test cycle and wait until they are ready.
+3. Import the trainees. Allocation is immediate and permanent (ADR-017): trainees imported before projects
+   are ready get the first ready project, not their best one, and the result will not match the labels.
+
+Supervisor emails use the reserved `example.org` domain. Each Department names the trade and its project
+domains, so `pick_supervisor`'s word-overlap rule finds a supervisor for every project. The validator checks
+this coverage (`every_project_has_a_matching_supervisor`).
+
+Other notes:
+
+- Files are split at the importer's 2,000-row limit if needed.
 - `min_match_score` and scenario-specific project statuses are not importer columns.
-- Projects then go through the normal ADR-017 processing; the `synthetic.invalid` brief links are not
-  reachable.
-- Never import into production. `scripts.seed --reset` is unrelated and is never run by the generator.
+- The `synthetic.invalid` brief links are not reachable.
+- Never import into production. The generator never writes to a database.
+
+**Verified against the real app.** `backend/tests/integration/test_synthetic_ingest.py` (needs the test
+Postgres) generates a small dataset and runs the real staff, project and trainee importers (dry run, then
+apply). It drains the worker and asserts:
+
+- every project becomes ready with an auto-assigned supervisor
+- the worker's allocations equal the generator's engine replay for every trainee
 
 ## 9. Limitations and bias risks
 

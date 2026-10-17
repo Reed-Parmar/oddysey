@@ -36,18 +36,11 @@ export function AppRouter() {
         <Route element={<RequireAuth><AppShell /></RequireAuth>}>
           <Route path="/app" element={<RoleRedirect />} />
           <Route path="/account" element={<Account />} />
-          <Route path="/student" element={<RequireRole role="student" />}>
-            <Route path="onboarding" element={load(<StudentOnboarding />)} />
-            <Route element={<StudentGate />}>
-              <Route path="*" element={load(<StudentArea />)} />
-            </Route>
-          </Route>
-          <Route path="/supervisor" element={<RequireRole role="supervisor" />}>
-            <Route path="*" element={load(<SupervisorArea />)} />
-          </Route>
-          <Route path="/admin" element={<RequireRole role="admin" />}>
-            <Route path="*" element={load(<AdminArea />)} />
-          </Route>
+          {/* One splat route per area so the area's own <Routes> (including its index dashboard) resolves the rest. */}
+          <Route path="/student/onboarding" element={<RequireRole role="student">{load(<StudentOnboarding />)}</RequireRole>} />
+          <Route path="/student/*" element={<RequireRole role="student"><StudentGate>{load(<StudentArea />)}</StudentGate></RequireRole>} />
+          <Route path="/supervisor/*" element={<RequireRole role="supervisor">{load(<SupervisorArea />)}</RequireRole>} />
+          <Route path="/admin/*" element={<RequireRole role="admin">{load(<AdminArea />)}</RequireRole>} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -1,0 +1,84 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "enum": [
+        "assigned",
+        "unallocated"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "project_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Project Code"
+    },
+    "assignment_source": {
+      "enum": [
+        "auto_best_eligible",
+        "replacement_ranked",
+        "none"
+      ],
+      "title": "Assignment Source",
+      "type": "string"
+    },
+    "differs_from_best_individual": {
+      "title": "Differs From Best Individual",
+      "type": "boolean"
+    },
+    "why_not_best_individual": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Why Not Best Individual"
+    },
+    "unallocated_reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "no_ready_projects",
+            "all_ready_projects_rejected",
+            "no_project_for_trades",
+            "verified_assessment_required",
+            "below_min_practical",
+            "below_min_match",
+            "no_eligible_project"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unallocated Reason"
+    },
+    "explanation": {
+      "minLength": 20,
+      "title": "Explanation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision",
+    "project_code",
+    "assignment_source",
+    "differs_from_best_individual",
+    "why_not_best_individual",
+    "unallocated_reason",
+    "explanation"
+  ],
+  "title": "AllocationTarget",
+  "type": "object"
+}

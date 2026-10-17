@@ -50,8 +50,9 @@ Non-nav routes (detail pages) are listed in each handbook. A self-registered stu
 ## 3. Design tokens and status labels
 
 - Tailwind v4 `@theme` tokens in `src/index.css`. Light only in the MVP (dark mode in Phase 5). The full design system (palette, type, components, layout rules) is in [`frontend/DESIGN.md`](../frontend/DESIGN.md):
-  - Indigo primary, with orange accent kept for AI moments; slate neutrals.
-  - Lexend headings, Source Sans 3 body text, tabular figures in data.
+  - Navy-blue primary, navy sidebar with a coloured glow, teal accent reserved for "automation is moving", clay and violet for decoration and data; slate neutrals. Frosted-glass panels over a soft colour mesh, with light 3D depth (layered shadows, glossy buttons and icon tiles).
+  - IBM Plex Sans (headings and body), IBM Plex Mono for codes and metrics, tabular figures in data.
+  - `Pipeline` shows the automated lifecycle (Admin overview: whole cycle; Student dashboard: own record; Supervisor dashboard: own trainees). Stage statuses are derived only from existing API responses; no new endpoints.
   - Phosphor icons.
   - Cards `rounded-xl border shadow-card p-5`.
 - **One label map**, `lib/statusLabels.ts`. Every badge shows text, never colour alone:

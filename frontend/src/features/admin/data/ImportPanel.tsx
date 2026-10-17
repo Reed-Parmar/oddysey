@@ -4,11 +4,13 @@ import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { ApiError, errorMessage, type ErrorDetail } from "@/api/errors";
-import type { ImportResult } from "@/api/types";
+import type { Cycle, ImportResult } from "@/api/types";
 import { uploadMultipart } from "@/api/upload";
 import { DataTable, FormField, useToast, type Column } from "@/components/shared";
 import { Alert, Button, Dialog, cx } from "@/components/ui";
 import { formatBytes } from "@/lib/format";
+
+import { TargetCycleField } from "./common";
 
 export type ImportEndpoint = "/admin/imports/trainees" | "/admin/imports/projects";
 export type ImportProblem = { row: number | null; column: string; message: string };
@@ -193,8 +195,10 @@ function ImportSteps({ stage }: { stage: 0 | 1 | 2 }) {
 
 type Envelope = { data: ImportResult };
 
-export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied, notes }: {
+export function ImportDialog({ open, onClose, endpoint, cycleId, cycles, noun, onApplied, notes }: {
   open: boolean; onClose: () => void; endpoint: ImportEndpoint; cycleId: string; noun: string;
+  /** Several active cycles and no cycle filter chosen: let the admin pick the target (defaults to `cycleId`). */
+  cycles?: Cycle[];
   onApplied: (r: ImportResult) => void;
   /** Column notes shown above the file picker (e.g. which legacy columns are ignored). */
   notes?: ReactNode;
@@ -205,11 +209,13 @@ export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [applyProblems, setApplyProblems] = useState<ImportProblem[]>([]);
   const [fileError, setFileError] = useState<string>();
+  const [chosen, setChosen] = useState("");
+  const target = chosen || cycleId;
 
   const send = (dryRun: boolean) => {
     const form = new FormData();
     form.append("file", file as File);
-    form.append("cycle_id", cycleId);
+    form.append("cycle_id", target);
     form.append("dry_run", dryRun ? "true" : "false");
     setProgress(0);
     return uploadMultipart<Envelope>(endpoint, form, { onProgress: setProgress }).finally(() => setProgress(null));
@@ -261,6 +267,8 @@ export function ImportDialog({ open, onClose, endpoint, cycleId, noun, onApplied
       <div className="flex flex-col gap-5">
         <ImportSteps stage={stage} />
         {notes && <Alert variant="info" icon={<Info />}>{notes}</Alert>}
+        {cycles && <TargetCycleField id="import-cycle" value={target} actives={cycles}
+          onChange={(v) => { setChosen(v); setPreview(null); setApplyProblems([]); }} />}
         <FormField label="Spreadsheet (.xlsx or .csv, max 5 MB)" htmlFor="import-file" hint="Row numbers in problems refer to the sheet rows.">
           <DropZone id="import-file" accept=".xlsx,.csv" maxBytes={MAX_BYTES} file={file} error={fileError}
             onChange={(f) => { setFile(f); setPreview(null); setApplyProblems([]); setFileError(undefined); }} />

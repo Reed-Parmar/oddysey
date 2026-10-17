@@ -27,10 +27,11 @@ from app.domain import (
     now_utc,
     person_key,
     project_input,
-    resolve_cycle,
+    resolve_cycles,
     trainee_input,
 )
 from app.schemas import (
+    CycleRef,
     GradeRef,
     LatestSubmission,
     ProgressAllocation,
@@ -114,6 +115,7 @@ def build_rows(db: DB, cycle: M.Cycle, viewer: M.User, include_unallocated: bool
             )
         rows.append(
             ProgressRow(
+                cycle=CycleRef(id=cycle.id, name=cycle.name),
                 trainee=trainee_ref_trade(t),
                 project=project_ref(a.project) if a else None,
                 supervisor=user_ref(a.project.supervisor) if a and a.project.supervisor else None,
@@ -211,12 +213,10 @@ def list_progress(
     empty = TrackingEnvelope(
         data=[], meta=PageMeta(page=params.page, page_size=params.page_size, total=0), summary=summarise([])
     )
-    cycle = resolve_cycle(db, cycle_id)
-    if cycle is None:
+    cycles = [c for c in resolve_cycles(db, cycle_id) if viewer.role == UserRole.admin or c.status in VISIBLE_ALLOC]
+    if not cycles:
         return empty
-    if viewer.role != UserRole.admin and cycle.status not in VISIBLE_ALLOC:
-        return empty
-    rows = build_rows(db, cycle, viewer, include_unallocated)
+    rows = [r for c in cycles for r in build_rows(db, c, viewer, include_unallocated)]
     if project_id:
         rows = [r for r in rows if r.project and r.project.id == project_id]
     if trade_id:

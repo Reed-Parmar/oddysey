@@ -44,15 +44,15 @@ export function TrackingPage() {
   const [selected, setSelected] = useState<ProgressRow | null>(null);
   const dq = useDebounced(q.trim());
 
-  const projectParams = { cycle_id: scope.id, sort: "title", page_size: 100 };
+  const projectParams = { cycle_id: scope.id || undefined, sort: "title", page_size: 100 };
   const projects = useQuery({
     queryKey: qk.projects.list(projectParams),
     queryFn: () => call(api.GET("/api/v1/projects", { params: { query: projectParams } })),
-    enabled: !!scope.id,
+    enabled: scope.ready,
   });
 
   const query = {
-    cycle_id: scope.id, include_unallocated: true, page, page_size: 25, q: dq || undefined,
+    cycle_id: scope.id || undefined, include_unallocated: true, page, page_size: 25, q: dq || undefined,
     progress: (progress || undefined) as ProgressRow["progress"] | undefined,
     analysis_status: (analysis || undefined) as (typeof ANALYSIS)[number] | undefined,
     trade_id: trade || undefined, project_id: project || undefined, late_only: lateOnly || undefined, sort,
@@ -60,7 +60,7 @@ export function TrackingPage() {
   const list = useQuery({
     queryKey: qk.progress.list(query),
     queryFn: () => call(api.GET("/api/v1/progress", { params: { query } })),
-    enabled: !!scope.id,
+    enabled: scope.ready,
     placeholderData: keepPreviousData,
   });
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
@@ -80,6 +80,7 @@ export function TrackingPage() {
         </span>
       </span>
     ) },
+    ...(scope.multi ? [{ key: "cycle", header: "Cycle", cell: (r: ProgressRow) => <span className="whitespace-nowrap">{r.cycle.name}</span> }] : []),
     { key: "trades", header: "Trades", cell: (r) => <span className="block min-w-28">{r.trainee.trades.map((t) => t.name).join(", ") || "—"}</span> },
     { key: "project", header: "Current project", sort: "project_title", cell: (r) => r.project ? (
       <span className="block min-w-44">{r.project.title}<span className="block text-xs text-muted">{r.project.project_code}</span></span>
@@ -125,9 +126,9 @@ export function TrackingPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Allocation & Progress" eyebrow="Programme team"
-        description="Every trainee in the cycle: their automatically allocated project, match details, submissions and evaluation. Select a trainee for full details." />
+        description="Every trainee in the active cycles (or the cycle you pick): their automatically allocated project, match details, submissions and evaluation. Select a trainee for full details." />
       {archived && <ReadOnlyBanner />}
-      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.id ? (
+      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.ready ? (
         <EmptyState icon={<Target />} title="No active cycle" description="Create a cycle on the Overview page first."
           action={<LinkButton variant="primary" to="/admin">Go to Overview</LinkButton>} />
       ) : (
@@ -138,7 +139,7 @@ export function TrackingPage() {
             description="One row per trainee. Each trainee works on their project individually."
             toolbar={<div className="flex flex-col gap-3">
               <FilterBar>
-                <CycleSelect id="trk-cycle" value={scope.id} cycles={scope.cycles} activeId={scope.active?.id}
+                <CycleSelect id="trk-cycle" value={scope.id} cycles={scope.cycles} actives={scope.actives}
                   onChange={(v) => { setParams(v ? { cycle: v } : {}); setProject(""); setPage(1); }} />
                 <SearchInput id="trk-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Trainee, ID, project or code" />
                 <LabeledSelect id="trk-progress" label="Status" value={progress} onChange={reset(setProgress)}>

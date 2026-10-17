@@ -47,6 +47,10 @@ class UserRef(Ref):
     full_name: str
 
 
+class CycleRef(Ref):
+    name: str
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     email: str
@@ -295,6 +299,7 @@ class GradeRef(BaseModel):
 
 
 class ProgressRow(BaseModel):
+    cycle: CycleRef  # ADR-018: lists may span several active cycles
     trainee: TraineeRefTrade
     project: ProjectRef | None
     supervisor: UserRef | None

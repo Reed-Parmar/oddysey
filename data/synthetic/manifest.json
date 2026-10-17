@@ -1,0 +1,538 @@
+{
+  "kind": "spa-synthetic-dataset",
+  "generator_version": "synthetic-1",
+  "scoring_version": "scoring-2",
+  "allocation_policy": "adr017-best-eligible+ranked-replacement",
+  "seed": 42,
+  "parameters": {
+    "trainees": 1000,
+    "projects": 100,
+    "scenarios": 30,
+    "seed": 42,
+    "out": "(output directory)",
+    "formats": [
+      "csv",
+      "jsonl",
+      "xlsx",
+      "import"
+    ],
+    "submissions": true,
+    "llm": true,
+    "workbook": "CSR_Hackathon_ITI_Project_Dataset.xlsx",
+    "trainee_csv": null
+  },
+  "synthetic": true,
+  "sources": [
+    "CSR_Hackathon_ITI_Project_Dataset.xlsx"
+  ],
+  "reference_stats": {
+    "trainee_rows": 12,
+    "project_rows": 8,
+    "submission_rows": 10,
+    "evaluation_rows": 10,
+    "trades": [
+      "COPA",
+      "Electrician",
+      "Fitter",
+      "Mechanic Motor Vehicle",
+      "Solar Technician",
+      "Welder"
+    ],
+    "theory": {
+      "n": 12,
+      "mean": 81.75,
+      "sd": 7.7,
+      "min": 68.0,
+      "max": 95.0
+    },
+    "practical": {
+      "n": 12,
+      "mean": 86.25,
+      "sd": 6.66,
+      "min": 72.0,
+      "max": 96.0
+    },
+    "safety": {
+      "n": 12,
+      "mean": 92.33,
+      "sd": 4.52,
+      "min": 85.0,
+      "max": 99.0
+    },
+    "min_practical": {
+      "n": 8,
+      "mean": 78.12,
+      "sd": 4.96,
+      "min": 70.0,
+      "max": 85.0
+    },
+    "legacy_capacity": {
+      "n": 8,
+      "mean": 4.25,
+      "sd": 0.97,
+      "min": 3.0,
+      "max": 6.0
+    },
+    "logbook_hours": {
+      "n": 10,
+      "mean": 33.1,
+      "sd": 6.14,
+      "min": 24.0,
+      "max": 45.0
+    },
+    "bom_cost_inr": {
+      "n": 10,
+      "mean": 1515.0,
+      "sd": 1059.49,
+      "min": 0.0,
+      "max": 3400.0
+    },
+    "rubric_max": {
+      "workmanship": 25,
+      "functional_demo": 25,
+      "safety_sop": 15,
+      "documentation": 15,
+      "viva": 20
+    }
+  },
+  "scenario_types": [
+    "balanced",
+    "scarce_projects",
+    "advanced_heavy",
+    "rejection_wave",
+    "projects_not_ready",
+    "near_threshold",
+    "pending_assessments",
+    "replacement_competition"
+  ],
+  "splits": {
+    "strategy": "entity-disjoint: trainees and projects are partitioned 70/15/15 by primary trade; each scenario samples only from its split's pools, so no scenario, trainee or project crosses splits",
+    "scenarios": {
+      "SCN-0001": "train",
+      "SCN-0002": "train",
+      "SCN-0003": "train",
+      "SCN-0004": "test",
+      "SCN-0005": "train",
+      "SCN-0006": "train",
+      "SCN-0007": "test",
+      "SCN-0008": "validation",
+      "SCN-0009": "test",
+      "SCN-0010": "train",
+      "SCN-0011": "test",
+      "SCN-0012": "train",
+      "SCN-0013": "train",
+      "SCN-0014": "test",
+      "SCN-0015": "train",
+      "SCN-0016": "validation",
+      "SCN-0017": "train",
+      "SCN-0018": "train",
+      "SCN-0019": "validation",
+      "SCN-0020": "train",
+      "SCN-0021": "train",
+      "SCN-0022": "train",
+      "SCN-0023": "train",
+      "SCN-0024": "validation",
+      "SCN-0025": "validation",
+      "SCN-0026": "train",
+      "SCN-0027": "train",
+      "SCN-0028": "train",
+      "SCN-0029": "train",
+      "SCN-0030": "train"
+    },
+    "trainees": {
+      "train": 700,
+      "validation": 150,
+      "test": 150
+    },
+    "projects": {
+      "train": 70,
+      "validation": 15,
+      "test": 15
+    }
+  },
+  "files": {
+    "trainees.csv": {
+      "rows": 1000,
+      "sha256": "0d361c9204e5c087a7e401859bd6ba547f5a6dd837758d0ee4b63adda786345f"
+    },
+    "projects.csv": {
+      "rows": 100,
+      "sha256": "4c88a389065482ae0a012c4105dcd07b9fa96783d014a340e2dc0c8b1b605053"
+    },
+    "scenarios.csv": {
+      "rows": 30,
+      "sha256": "7a504cc07320d55ad999c0b7bf8960d165631a77a660ec3129287cd2115fca22"
+    },
+    "scenario_projects.csv": {
+      "rows": 633,
+      "sha256": "d82533f59f06e45626cd665f5b86c61e432e965320b6f2c63364e9a923019498"
+    },
+    "candidate_pairs.csv": {
+      "rows": 118325,
+      "sha256": "d22d08e25ced9eba5e4e5e73b01c11e7f42683326b9711477e212c691c1029cc"
+    },
+    "recommendations.csv": {
+      "rows": 25835,
+      "sha256": "532e7f0d360c371f6e42e846de5e2046313d365eccc257da8448dab7d66d11eb"
+    },
+    "allocations.csv": {
+      "rows": 2985,
+      "sha256": "d4922869a4dc5fceed45edd7f4987f7d8a4018a402e9676b1de89804e5ba572b"
+    },
+    "rejections.csv": {
+      "rows": 151,
+      "sha256": "2b4f5452c6756abc24b5213769c244003f77e6cd43c48359b2eac7ba974421c7"
+    },
+    "allocation_results.csv": {
+      "rows": 5167,
+      "sha256": "a32ddf32b3c124020b8a5ee5dcc232d9e26aaffb55ae7ce452f177622cbbb53f"
+    },
+    "submissions.csv": {
+      "rows": 1854,
+      "sha256": "d512c7f597fb3b2a78527c0d3a4bcb804571bb3b184af7099dbd86241b628920"
+    },
+    "evaluations.csv": {
+      "rows": 1607,
+      "sha256": "a2c3f3e74db4e24ddda7a718b28b318ed2e15dbc25082d0f1ce975cdb765deda"
+    },
+    "schema/trainee.schema.json": {
+      "rows": 0,
+      "sha256": "4ac93d1a4c2428d3d3d28a76992e2f98da8e6a01a40343f3dfa00200dd753908"
+    },
+    "schema/project.schema.json": {
+      "rows": 0,
+      "sha256": "883865ac5c230c0e18b60218531357277f0269845faf0f69f70fd6833e515f16"
+    },
+    "schema/candidate_pair.schema.json": {
+      "rows": 0,
+      "sha256": "f44c4366ade04ba59b687a7aa183380e93f19890c1aa688dd9e205cdf394058a"
+    },
+    "schema/allocation.schema.json": {
+      "rows": 0,
+      "sha256": "b8b56e181b5ff27bf0cd9bb150785c6ec6a50a4391e52f42472a96129f634547"
+    },
+    "schema/llm_rank_projects.input.schema.json": {
+      "rows": 0,
+      "sha256": "b94c4a681f57549feecb413670515e04e2b53497da3457fbd5ab6a4b79358448"
+    },
+    "schema/llm_rank_projects.target.schema.json": {
+      "rows": 0,
+      "sha256": "eb2191e74b477328f70c3c183a049a7cd9dbab2c66fa4a6a8be1ca263aac31b1"
+    },
+    "llm/rank_projects/train.jsonl": {
+      "rows": 3989,
+      "sha256": "d433e0645dbff66c188e68c1634d788f3231ebe3c528001cf6b6dfd39f0169e0"
+    },
+    "llm/rank_projects/validation.jsonl": {
+      "rows": 564,
+      "sha256": "2ae8cc91d988201c2742fc8bcf37d79ae073d544f986c73c4199f6ec14a17ba0"
+    },
+    "llm/rank_projects/test.jsonl": {
+      "rows": 614,
+      "sha256": "a245a4e885650ecd66aaf242bdb2c7b38a663d3a836b502fd7179504b8924087"
+    },
+    "schema/llm_explain_allocation.input.schema.json": {
+      "rows": 0,
+      "sha256": "f82f9f3f121befb725c9e4c9056277170f0c45d0cb0eb1eb9c2923d763df7eac"
+    },
+    "schema/llm_explain_allocation.target.schema.json": {
+      "rows": 0,
+      "sha256": "d4790b2e30297289762f8e8519b0558f988699f2a6c2b782dead5c208c925463"
+    },
+    "llm/explain_allocation/train.jsonl": {
+      "rows": 3989,
+      "sha256": "3cb6286cf3b563153dd0fbd00801e64f36d45cb1ff85928507d40ef1bdbbc017"
+    },
+    "llm/explain_allocation/validation.jsonl": {
+      "rows": 564,
+      "sha256": "b9b86cee0613d6ff3d930127951471154f27542c09a72ed3a6f499e7d5a9d76c"
+    },
+    "llm/explain_allocation/test.jsonl": {
+      "rows": 614,
+      "sha256": "d2f0a6ce3bce30be0f06b10bee549d551f4de4282d13a1ebabba06eebca37468"
+    },
+    "schema/llm_decision_output.input.schema.json": {
+      "rows": 0,
+      "sha256": "07336583a86a2da52ca09c0651889ac4db8df7aa2ba3a5d39ecbf1cdb856cfb3"
+    },
+    "schema/llm_decision_output.target.schema.json": {
+      "rows": 0,
+      "sha256": "f2bb7e987036df349c3e8fa6effffacd7a5f5ca476e4f568b3b866e3c3091a07"
+    },
+    "llm/decision_output/train.jsonl": {
+      "rows": 3989,
+      "sha256": "46d1e425fdc53841f542f6f1e41223228bf69e6d020a1003fcddec6f7eb2aeae"
+    },
+    "llm/decision_output/validation.jsonl": {
+      "rows": 564,
+      "sha256": "a7e9ba38948fbe3379a3bcd6f57a720cf3bda81acdcc77672045b1978f3e7956"
+    },
+    "llm/decision_output/test.jsonl": {
+      "rows": 614,
+      "sha256": "fb749b22dd24fcc9ba68642a2bbde1d10234a07ea53c4c44f50e00726618e2cf"
+    },
+    "ingest/supervisors.csv": {
+      "rows": 13,
+      "sha256": "a8cac8291de605459e45e3636bbebbf754a9ede0a2779b326b3f7b3935b83a6f"
+    },
+    "ingest/admins.csv": {
+      "rows": 2,
+      "sha256": "bb9bfec780395b82269f1afade65db488bc273c8a9fecea90580100918525673"
+    },
+    "ingest/trainees.csv": {
+      "rows": 1000,
+      "sha256": "46b031484463c2d868b66c3860dccc54409249999c851ee84b9ded0b4296c921"
+    },
+    "ingest/projects.csv": {
+      "rows": 100,
+      "sha256": "70f1240af75540f80e896e9da6332648815082ed8fab9b9fdc5dc1e33db79c08"
+    },
+    "ingest/scenarios/SCN-0001_trainees.csv": {
+      "rows": 252,
+      "sha256": "121f341fee344f9470db9e2290fed94096475908b7cd3aae4092fe54b2ea973a"
+    },
+    "ingest/scenarios/SCN-0001_projects.csv": {
+      "rows": 32,
+      "sha256": "d49cfa9ac1b6f5a652d0e37808a8bca3f135a3b5ee30db91758a117af2e6c1fe"
+    },
+    "ingest/scenarios/SCN-0002_trainees.csv": {
+      "rows": 154,
+      "sha256": "26844ea67b5aa0dc9d751915eaa2b2f872be6ca5c24ebd0ea4e8fc4e4ec022a7"
+    },
+    "ingest/scenarios/SCN-0002_projects.csv": {
+      "rows": 14,
+      "sha256": "91cb37123d1386547419345a155f83d7de1f0eeb71355528dd5f5bd88607e88e"
+    },
+    "ingest/scenarios/SCN-0003_trainees.csv": {
+      "rows": 241,
+      "sha256": "a6100557e6b2b28fb508c19704a3ad4f8c7aaaf3bc48792fb10bacd473c6f2f1"
+    },
+    "ingest/scenarios/SCN-0003_projects.csv": {
+      "rows": 28,
+      "sha256": "bbf15e0547980e04ac1fe27662328490c006b46ddb5d5fd763512489b0f2f24e"
+    },
+    "ingest/scenarios/SCN-0004_trainees.csv": {
+      "rows": 109,
+      "sha256": "0b7a1e8710c07192c57d501f8b60a474ab0d52c05e094eb56eb5ff7bcbf44754"
+    },
+    "ingest/scenarios/SCN-0004_projects.csv": {
+      "rows": 14,
+      "sha256": "2bc3d4aa06b5778072220e3d6ebe9e5312b0e4cf128b7314f47380e6479639d8"
+    },
+    "ingest/scenarios/SCN-0005_trainees.csv": {
+      "rows": 201,
+      "sha256": "22fcf0db87050a819e96b0901100cf0e4529017332cf0b057712fe8a9a3a2fde"
+    },
+    "ingest/scenarios/SCN-0005_projects.csv": {
+      "rows": 22,
+      "sha256": "b05b69efb6673d21c94da4e129eaba1977858e3d0ff0545c50755426b4771cb7"
+    },
+    "ingest/scenarios/SCN-0006_trainees.csv": {
+      "rows": 149,
+      "sha256": "403e18e03a8ed17a4409498274b317d27ee188e37d9d0861d0af4ab80509e57a"
+    },
+    "ingest/scenarios/SCN-0006_projects.csv": {
+      "rows": 23,
+      "sha256": "d2661370e917dcb4b983c545db2473a607d3c3468e768aef62216ff1977f4748"
+    },
+    "ingest/scenarios/SCN-0007_trainees.csv": {
+      "rows": 121,
+      "sha256": "844b83b282a847c5bb81ad48a1b7e1e1ce10ac6a3d8839d608d3a61a76f33bb2"
+    },
+    "ingest/scenarios/SCN-0007_projects.csv": {
+      "rows": 12,
+      "sha256": "0ac1d437687edf77a763788ff0eff4761cea584f39f03aaca07ddd5519e3df48"
+    },
+    "ingest/scenarios/SCN-0008_trainees.csv": {
+      "rows": 137,
+      "sha256": "5b7707fbe0841d0b646767b24cbbc9aa6351b3064bafa1fae15a58decaa0493c"
+    },
+    "ingest/scenarios/SCN-0008_projects.csv": {
+      "rows": 15,
+      "sha256": "7b2c3e4eccf77e74c1256b4a4bc89a07bc5631eaa5503ff5ab3a8d8738340c18"
+    },
+    "ingest/scenarios/SCN-0009_trainees.csv": {
+      "rows": 134,
+      "sha256": "ca8ea229e6b82d813809b47b640a7629635b71f5ab19bbe20a86d634148c80bc"
+    },
+    "ingest/scenarios/SCN-0009_projects.csv": {
+      "rows": 14,
+      "sha256": "0eb15699ffa8727c04cbd5db1605f77b1a2050612ff16b1a1034c33558989ad1"
+    },
+    "ingest/scenarios/SCN-0010_trainees.csv": {
+      "rows": 221,
+      "sha256": "2051a1c276111628f09beed1d1a8f72549d7c991d8ccbb499bcfc9bfa96ee580"
+    },
+    "ingest/scenarios/SCN-0010_projects.csv": {
+      "rows": 13,
+      "sha256": "63886573073aa5b3b29be66b1bbda5281719e8bdbfa7a51e692185f94391c8d2"
+    },
+    "ingest/scenarios/SCN-0011_trainees.csv": {
+      "rows": 117,
+      "sha256": "23a9405b7a14a9a32426734155d8e75abbeccaa99f7d394da30d2acae3f97a61"
+    },
+    "ingest/scenarios/SCN-0011_projects.csv": {
+      "rows": 14,
+      "sha256": "62138b447c95a9e9444ca6dcb4eca01043f71dd865a4e79aecb060d0e2633d56"
+    },
+    "ingest/scenarios/SCN-0012_trainees.csv": {
+      "rows": 216,
+      "sha256": "cddd292ad23a0734af02b06b5ab92e4ebb126f4476d14008d4e65d1984171785"
+    },
+    "ingest/scenarios/SCN-0012_projects.csv": {
+      "rows": 32,
+      "sha256": "8d54a8bb95f38bf49ce7caaa4ab3c19299eb06d9cabbb91202330de546c68368"
+    },
+    "ingest/scenarios/SCN-0013_trainees.csv": {
+      "rows": 226,
+      "sha256": "87d703334f4f69635349513a5d350869528ad5875910b539f4a4147c529c83e7"
+    },
+    "ingest/scenarios/SCN-0013_projects.csv": {
+      "rows": 29,
+      "sha256": "293368fd71a3979f13454fe24c4933914e37476f245c827b8600a712c11e7966"
+    },
+    "ingest/scenarios/SCN-0014_trainees.csv": {
+      "rows": 133,
+      "sha256": "60727a9688408e04ce3e1776e0767250183baccc79e15c0ad3d514ba7b631cd3"
+    },
+    "ingest/scenarios/SCN-0014_projects.csv": {
+      "rows": 11,
+      "sha256": "e33c633ed15cbcc6c15f461acc2c07928d06afea75c46a4a0338064e77b05f54"
+    },
+    "ingest/scenarios/SCN-0015_trainees.csv": {
+      "rows": 208,
+      "sha256": "64b8b72143816ba1e59cb69f2c63114c145885afb6949262df800a78357b275a"
+    },
+    "ingest/scenarios/SCN-0015_projects.csv": {
+      "rows": 35,
+      "sha256": "0fa7f63f6decb61e5a3218f1bac765ffd93bd67243c8313875a7c84cb9eb1202"
+    },
+    "ingest/scenarios/SCN-0016_trainees.csv": {
+      "rows": 100,
+      "sha256": "2dfae8c583e1019986ea835536da1a8a474d63535b4c8b5a83bcc15f2592bc22"
+    },
+    "ingest/scenarios/SCN-0016_projects.csv": {
+      "rows": 10,
+      "sha256": "5ceb2d279d0e357f02819e32dd91c3ff056e490c34b0eae161313ec94546b36c"
+    },
+    "ingest/scenarios/SCN-0017_trainees.csv": {
+      "rows": 151,
+      "sha256": "9d7032dea03432edabc6063700a72bb7257516a125ea179f376071f1d34aeef1"
+    },
+    "ingest/scenarios/SCN-0017_projects.csv": {
+      "rows": 26,
+      "sha256": "973531c267e53781033e3207f3564bdaa1099ae525575834864bf1f8d93a14c3"
+    },
+    "ingest/scenarios/SCN-0018_trainees.csv": {
+      "rows": 134,
+      "sha256": "9572288acc68a62d1e91ee8b54f57a01cb96927718859069491ad8e6bee847c6"
+    },
+    "ingest/scenarios/SCN-0018_projects.csv": {
+      "rows": 12,
+      "sha256": "cfe5cc0bf4874536f9c33a1f0c3f5b5b4722db4d9834896bd02b705155227a51"
+    },
+    "ingest/scenarios/SCN-0019_trainees.csv": {
+      "rows": 113,
+      "sha256": "3e0c417906d011af8dd3b80c72b52b775e5015073f954d2905e2eafe9dc07b1c"
+    },
+    "ingest/scenarios/SCN-0019_projects.csv": {
+      "rows": 13,
+      "sha256": "1298e415a6256df9c4c346377e6c6a7f4abf4521d662f02cdb56593e93e634c2"
+    },
+    "ingest/scenarios/SCN-0020_trainees.csv": {
+      "rows": 226,
+      "sha256": "4d829706d8484f2157f21560a6207940b173b09b8020ee52c06dd0fd145c09d7"
+    },
+    "ingest/scenarios/SCN-0020_projects.csv": {
+      "rows": 22,
+      "sha256": "194a16382cc5d6fb4c555ccc083c93ac865a62e699498f42e337a0bd1d918dd7"
+    },
+    "ingest/scenarios/SCN-0021_trainees.csv": {
+      "rows": 146,
+      "sha256": "2127dad807e4d97a8108a4cf9fa5fbe52eef90b232b5caa2e1dc1f4fd197a5d2"
+    },
+    "ingest/scenarios/SCN-0021_projects.csv": {
+      "rows": 26,
+      "sha256": "f615b2ba70702555d86ad24c430e70b76bbf76a667c61346f5f6658b5b23b952"
+    },
+    "ingest/scenarios/SCN-0022_trainees.csv": {
+      "rows": 183,
+      "sha256": "9acfb297d64b4ababc7b2fd2c8e043708f59aa793f1a9d650b5ff486ae294318"
+    },
+    "ingest/scenarios/SCN-0022_projects.csv": {
+      "rows": 24,
+      "sha256": "64367885ce38f0a5663670397c92d3836d7b00c899dccf4144d00778cdf39503"
+    },
+    "ingest/scenarios/SCN-0023_trainees.csv": {
+      "rows": 190,
+      "sha256": "a8554a6b944a5c3ca1b91bdee12364d663e7ab87e9edb67d5c577f9530c5c646"
+    },
+    "ingest/scenarios/SCN-0023_projects.csv": {
+      "rows": 32,
+      "sha256": "42e64a8c634f22bdcea7a63f3de82ec8a5925560ece6446e57c74918ba9d0770"
+    },
+    "ingest/scenarios/SCN-0024_trainees.csv": {
+      "rows": 108,
+      "sha256": "669d48dc4029f776eac5d59b41b41bd46f10bdf37e96b7c59ca4e0ed2a985430"
+    },
+    "ingest/scenarios/SCN-0024_projects.csv": {
+      "rows": 11,
+      "sha256": "fdc283c7fe127fca1e9e4813e69cc16bf271306c33b39eacd554ac3fbf87e19f"
+    },
+    "ingest/scenarios/SCN-0025_trainees.csv": {
+      "rows": 106,
+      "sha256": "e845b01a8adfbf27c7c4a61d9727c427dec29e45198a753b7844843fc11d7432"
+    },
+    "ingest/scenarios/SCN-0025_projects.csv": {
+      "rows": 15,
+      "sha256": "7b2c3e4eccf77e74c1256b4a4bc89a07bc5631eaa5503ff5ab3a8d8738340c18"
+    },
+    "ingest/scenarios/SCN-0026_trainees.csv": {
+      "rows": 197,
+      "sha256": "8eded9db3ae3c42e7f5beff26f8df1a1170e521184b8e7cbf744973cc5fb54d0"
+    },
+    "ingest/scenarios/SCN-0026_projects.csv": {
+      "rows": 9,
+      "sha256": "335d87f3f30da75e8625c952cfc7e2966b6af8fa9b2607f1b9aafe2153d6c801"
+    },
+    "ingest/scenarios/SCN-0027_trainees.csv": {
+      "rows": 239,
+      "sha256": "747899df1f24e17053bb587fe0ca075d0d02ee87f9c6debf9f1cbe5f36d9065d"
+    },
+    "ingest/scenarios/SCN-0027_projects.csv": {
+      "rows": 34,
+      "sha256": "e11f86372ebd940c9f72b3a4a39e2f46665aace29ed20c3ba2ee354d44c7412d"
+    },
+    "ingest/scenarios/SCN-0028_trainees.csv": {
+      "rows": 211,
+      "sha256": "8a33ad761696ea3bcbece9b8282e982398745ce2cbe16bdb71a429268026b324"
+    },
+    "ingest/scenarios/SCN-0028_projects.csv": {
+      "rows": 25,
+      "sha256": "ee8949f979be4888036810fd0808655ce5116a5878ab35b743f1efa308331091"
+    },
+    "ingest/scenarios/SCN-0029_trainees.csv": {
+      "rows": 238,
+      "sha256": "6a25b93355e636c28f4de6b625f67c99932b460ab8d79dfec969b506b5a6d373"
+    },
+    "ingest/scenarios/SCN-0029_projects.csv": {
+      "rows": 34,
+      "sha256": "86823415476efd2d9a1a7b20e55d3100160f5193bcf79ba19adc3c9f14f5ce41"
+    },
+    "ingest/scenarios/SCN-0030_trainees.csv": {
+      "rows": 206,
+      "sha256": "46861bda927ed3d2bb7b9389f607e27d8e1c4cc532b3164ef6b9392e80be87d9"
+    },
+    "ingest/scenarios/SCN-0030_projects.csv": {
+      "rows": 32,
+      "sha256": "0198533cdb822137fecf79116b3d56c775262c19d3255ea6f06935cb606bb174"
+    },
+    "ingest/README.md": {
+      "rows": 0,
+      "sha256": "a69bb5713ecc5205f332b17467c13fb55cd750beb1c385e93799d4dcbb740c5c"
+    },
+    "inspection.xlsx": {
+      "rows": 0
+    }
+  }
+}

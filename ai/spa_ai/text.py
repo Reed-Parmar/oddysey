@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 _SPLIT = re.compile(r"[^a-z0-9]+")
 
 STOP_WORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-        "in", "into", "is", "it", "of", "on", "or", "the", "to", "with",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
     }
 )
 
@@ -20,6 +39,9 @@ def _depluralize(token: str) -> str:
     return token
 
 
+@lru_cache(
+    maxsize=65536
+)  # pure and immutable result: the scorer tokenizes the same strings for every pair
 def tokenize(text: str | None) -> frozenset[str]:
     """Lower-case, split on non-[a-z0-9] runs, drop stop-words, strip one plural 's'."""
     if not text:

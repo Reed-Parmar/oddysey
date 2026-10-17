@@ -22,18 +22,20 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: ReactNode;
 };
 
+/* Solid variants: base colour + a top-light gradient + a bevelled shadow (3D); pressing nudges them down. */
+const GLOSS = "bg-linear-to-b from-white/20 to-transparent shadow-btn";
 const BUTTON_VARIANTS = {
-  primary: "bg-primary text-primary-fg shadow-card hover:bg-primary-hover",
-  accent: "bg-accent text-white shadow-card hover:bg-accent-ink",
-  secondary: "border border-border-strong bg-surface text-text shadow-card hover:border-subtle hover:bg-surface-2",
-  danger: "bg-danger text-white shadow-card hover:bg-danger/90",
+  primary: `bg-primary ${GLOSS} text-primary-fg hover:bg-primary-hover`,
+  accent: `bg-accent ${GLOSS} text-white hover:bg-accent-ink`,
+  secondary: "border border-border-strong bg-surface-strong text-text shadow-btn-soft hover:border-subtle hover:bg-white",
+  danger: `bg-danger ${GLOSS} text-white hover:bg-danger/90`,
   ghost: "text-neutral hover:bg-neutral-bg hover:text-text",
 };
 
 const BUTTON_SIZES = { sm: "min-h-9 px-3 text-sm", md: "min-h-10 px-4 text-sm", lg: "min-h-12 px-5 text-base" };
 
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors duration-150 select-none";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-150 select-none active:translate-y-px";
 
 /** Button look for links (`<Link className={buttonStyles("secondary")}>`): never nest a <button> in an <a>. */
 export function buttonStyles(variant: NonNullable<ButtonProps["variant"]> = "primary", size: NonNullable<ButtonProps["size"]> = "md") {
@@ -110,6 +112,21 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   );
 });
 
+/** Decorative icon-tile colours; a card keeps the same colour because it is picked from its title. */
+const TILE_TONES = [
+  "bg-primary-soft text-primary",
+  "bg-accent-soft text-accent-ink",
+  "bg-violet-soft text-violet-ink",
+  "bg-clay-soft text-clay-ink",
+];
+
+function tileTone(title: ReactNode) {
+  if (typeof title !== "string") return TILE_TONES[0];
+  let h = 0;
+  for (const ch of title) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TILE_TONES[h % TILE_TONES.length];
+}
+
 export function Card({
   className,
   children,
@@ -136,7 +153,7 @@ export function Card({
         <div className={cx("flex flex-wrap items-start justify-between gap-3", flush ? "px-5 pt-5 pb-4" : "mb-4")}>
           <div className="flex min-w-0 items-start gap-3">
             {icon && (
-              <span aria-hidden className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary [&>svg]:size-[18px]">
+              <span aria-hidden className={cx("tile-3d mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg [&>svg]:size-[18px]", tileTone(title))}>
                 {icon}
               </span>
             )}

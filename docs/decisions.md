@@ -170,3 +170,20 @@ Status values: **Approved** (source of truth), **Proposed** (awaiting owner appr
 - Public sign-up creates a Student. `PUT /onboarding` saves a draft; `POST /onboarding/complete` validates it and enrols the trainee in the active cycle, or keeps the profile waiting until a cycle exists (`enrol_waiting` job on cycle creation). A typed trainee ID that already exists in the cycle is never linked (`IDENTITY_CONFLICT`, nothing revealed). Trainee-bound invitations keep working.
 
 **Consequences**: migration `0003_automation`. Removed endpoints: REC-01..03 and the admin auto-allocate/publish flow. New endpoints are listed in api.md "ADR-017 endpoints". Notifications go to an outbox (`EMAIL_BACKEND=disabled|console|smtp`); nothing is emailed unless SMTP is configured.
+
+## ADR-018: Several cycles can be active at the same time
+**Status:** Approved (owner instruction, 2026-10-18: "more than one cycle can be active at a time"; enrolment = "a hybrid of student picks and matched by trade, admin does very minimal work"; one cycle per student at a time). It **supersedes** the single-active-cycle rule (ADR-011 note, `cycles_single_active`, `409 ACTIVE_CYCLE_EXISTS`).
+
+**Problem.** Cohorts overlap: a programme team runs several batches with different deadlines and trades at once. One active cycle forced them to archive a running cohort before starting the next.
+
+**Options.** (a) Admin picks one "intake" cycle for self-registration. (b) Students pick a cycle. (c) Placement by trade. **Chosen: (b)+(c) hybrid with zero admin setup.** A cycle's trades are derived from its own projects (never configured). Onboarding ranks open cycles for the student and preselects the best one; the student may choose another. Anything not chosen is decided automatically.
+
+**Rules**
+- **Active cycle** = status `draft` or `published` (not archived); any number may exist. **Open for enrolment** = active and `submission_deadline` in the future. Cycle names stay unique.
+- **One open cycle per student account.** A user can be linked to at most one trainee whose cycle is not archived (DB trigger `trainees_one_open_cycle_per_user`, `409 ACCOUNT_IN_OTHER_CYCLE`). Past (archived) records stay viewable. Imported trainee records without accounts are unrestricted.
+- **Cycle ranking for a student** (`cycle_options`): over open cycles, `matching_projects` = projects (not failed/archived) whose trades overlap the student's trades. Order: matching_projects desc → total projects desc → later deadline (more time) → created_at → id. The first is `recommended`. With no trades chosen yet, the order starts at total projects.
+- **Enrolment:** `onboarding.data.cycle_id` is optional. On completion the chosen cycle is used if it is still open, else the recommended one. With no open cycle the profile waits (`waiting_for_cycle`); `enrol_waiting` (on cycle creation) places each waiting student in their recommended cycle. One option only → chosen silently.
+- **Scoping.** Lists that take `cycle_id` (projects, trainees, allocations, progress, submissions) default to **all active cycles** when it is omitted, and every row carries its cycle. `GET /cycles/current` = the caller's default cycle: a student's own open cycle; for staff the most recently created active cycle (used only as a UI default). `GET /cycles/active` (staff) lists all active cycles. The admin Overview switches between active cycles.
+- **Automation** is unchanged and per cycle: each active cycle gets its own `allocate_cycle` schedule, rejections/replacements stay inside their cycle, and the rejection exclusion (person + canonical project) still spans cycles.
+
+**Consequences:** migration `0004_multi_cycle` (drops `cycles_single_active`; adds the trigger). API: CYC-01 semantics change, `GET /cycles/active`, `cycle_options` and `data.cycle_id` on ONB, `cycle` on progress rows; `ACTIVE_CYCLE_EXISTS` is retired. Frontend: "All active cycles" filter default, Overview cycle switcher, onboarding cycle card, sidebar lists active cycles. Handbooks carry an ADR-018 note.

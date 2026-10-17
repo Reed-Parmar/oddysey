@@ -191,15 +191,30 @@ def test_recommendation_is_not_the_allocation_label(dataset: Path):
             assert r["assignment_matches_best_individual"] == "true"
 
 
-def test_import_files_use_the_dataset_format(dataset: Path):
-    from app.modules.imports import PROJECT_REQUIRED, TRAINEE_REQUIRED, parse_upload
+def test_ingest_files_are_accepted_by_the_importer_parsers(dataset: Path):
+    from scripts.synthetic.ingest import PARSE_ARGS
 
-    f = next((dataset / "import").glob("*_trainees.csv"))
-    sheet = parse_upload(f.name, f.read_bytes(), "", "Trainee ID", TRAINEE_REQUIRED)
-    assert not sheet.errors and sheet.rows
-    f = next((dataset / "import").glob("*_projects.csv"))
-    sheet = parse_upload(f.name, f.read_bytes(), "", "Project Title", PROJECT_REQUIRED)
-    assert not sheet.errors and sheet.rows
+    for kind, (sheet_name, marker, required) in PARSE_ARGS.items():
+        f = dataset / "ingest" / f"{kind}.csv"
+        sheet = parse_upload_(f, sheet_name, marker, required)
+        assert not sheet.errors and sheet.rows, kind
+    for f in (dataset / "ingest" / "scenarios").glob("*.csv"):
+        kind = "trainees" if f.stem.endswith("_trainees") else "projects"
+        assert not parse_upload_(f, *PARSE_ARGS[kind]).errors, f.name
+
+
+def test_canonical_tables_are_not_importer_input(dataset: Path):
+    """The root CSVs use machine column names; uploading one fails with the error users reported."""
+    from scripts.synthetic.ingest import PARSE_ARGS
+
+    sheet = parse_upload_(dataset / "projects.csv", *PARSE_ARGS["projects"])
+    assert [e.message for e in sheet.errors] == ["Header row with 'Project Title' not found"]
+
+
+def parse_upload_(path: Path, sheet_name: str, marker: str, required: list[str]):
+    from app.modules.imports import parse_upload
+
+    return parse_upload(path.name, path.read_bytes(), sheet_name, marker, required)
 
 
 # ---------------------------------------------------------------- the validator catches corruption

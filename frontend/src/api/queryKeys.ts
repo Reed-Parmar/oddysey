@@ -7,6 +7,7 @@ export const qk = {
   cycles: {
     all: () => ["cycles"],
     current: () => ["cycles", "current"],
+    active: () => ["cycles", "active"],
     list: (p?: P) => k("cycles", "list", p),
     detail: (id: string) => ["cycles", "detail", id],
     archivePreview: (id: string) => ["cycles", "detail", id, "archive-preview"],
@@ -35,7 +36,7 @@ export const qk = {
     detail: (id: string) => ["submissions", "detail", id],
     analysis: (id: string) => ["submissions", "analysis", id],
   },
-  onboarding: { me: () => ["onboarding", "me"] },
+  onboarding: { me: () => ["onboarding", "me"], cycleOptions: (tradeIds: string[]) => ["onboarding", "cycle-options", ...tradeIds] },
   notifications: { me: () => ["notifications", "me"] },
   allocationHistory: {
     all: () => ["allocationHistory"],

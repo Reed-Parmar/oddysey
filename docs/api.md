@@ -59,6 +59,21 @@ is no longer accepted or returned), manual `project_code` input.
 | INV-02 | POST | `/admin/invitations` | admin | adds full_name, department, send_email; list rows add email_delivery |
 | IMP-01/02 | POST | `/admin/imports/trainees|projects` | admin | Trades may be comma-separated; project codes optional (generated); "Max Trainee Capacity" ignored |
 
+## 0b. ADR-018 changes (rev 4, binding: several active cycles)
+
+| ID | Change |
+|---|---|
+| CYC-01 `GET /cycles/current` | The caller's **default** cycle: a student's own open (non-archived) cycle, else `null`; staff get the most recently created active cycle (a UI default only) |
+| CYC-07 `GET /cycles/active` | **New**, admin/supervisor: every active (`draft`/`published`) cycle, newest first, unpaginated |
+| CYC-04 `POST /cycles` | No longer refused when another cycle is active (`ACTIVE_CYCLE_EXISTS` is retired). New cycles are open for enrolment at once; waiting students are placed (`enrol_waiting`) |
+| List filters (PRJ-01, TRN-03, ALLOC-01, PROG-01, SUB-02, RPT-01 aside) | `cycle_id` omitted → **all active cycles** (before: the one active cycle). Rows carry `cycle_id`; PROG-01 rows add `cycle: {id, name}` |
+| RPT-01 `GET /admin/reports/overview` | `cycle_id` omitted → the most recently created active cycle |
+| ONB-01/02 | `data.cycle_id` (optional, the student's choice). Response adds `cycle_options[]`: `{id, name, submission_deadline, matching_projects, total_projects, recommended}` for every cycle open for enrolment, ranked (ADR-018), and `cycle` (`{id, name}` once enrolled) |
+| ONB-03 | Enrols in the chosen cycle if still open, else the recommended one; waits when none is open |
+| Student writes (TRN-02, RES-01, SUB-01, ALLOC-07) | Use the student's own open cycle (`409 NO_ACTIVE_CYCLE` when they have none) |
+| INV-02 student invitation | `trainee_id` must belong to an active cycle |
+| Errors | `409 ACCOUNT_IN_OTHER_CYCLE`: linking an account to a trainee while it is linked to a trainee in another non-archived cycle (DB trigger) |
+
 ## 1. Conventions
 
 | Topic | Rule |
@@ -465,9 +480,9 @@ Scope: student → own row, only when allocated and the cycle is `published|arch
 
 ### USR / INV / RPT — admin (C)
 
-**USR-01 `GET /admin/users`** · paginated · `role`, `status`, `q`, sort `full_name` (default), `email`, `-created_at`. Items are `User` plus `"trainee": TraineeRef | null` (students linked in the active cycle).
+**USR-01 `GET /admin/users`** · paginated · `role`, `status`, `q`, `staff` (bool; `true` = admins and supervisors only, admins listed first, then the chosen sort; used by Staff & Invitations), sort `full_name` (default), `email`, `-created_at`. Items are `User` plus `"trainee": TraineeRef | null` (students linked in the active cycle).
 **USR-02 `PATCH /admin/users/{user_id}`** · `{"role"?, "status"?}`. Guards per [auth.md](auth.md) §5: self → 403; last admin → 409; supervisor of active projects → `409 ROLE_CHANGE_BLOCKED`; student linked to a trainee with an allocation → `409 ROLE_CHANGE_BLOCKED`. A no-op is 200 with no audit. Disabling a supervisor is allowed (the UI warns).
-**INV-01 `GET /admin/invitations`** · paginated · `status`, `role` · sort `-created_at`.
+**INV-01 `GET /admin/invitations`** · paginated · `status`, `role`, `staff` (bool; as USR-01: staff roles only, admin invitations first) · sort `-created_at`.
 **INV-02 `POST /admin/invitations`** · `{"email", "role": "student|supervisor|admin", "trainee_id"?}`. `trainee_id` is **required iff** `role = student` (422 otherwise); the trainee must be in the active cycle and unlinked (`409 ACCOUNT_ALREADY_LINKED`). Expired open invites for the email/trainee are auto-revoked (audit `invitation.revoked {reason: "superseded_expired"}`). Expires in 7 days.
 `201 {"data": {"invitation": <Invitation>, "invite_url": "https://…/register?invite=…"}}`. `invite_url` is returned **only here**. Errors: `409 EMAIL_IN_USE` · `409 INVITATION_EXISTS` · 422.
 **INV-03 `POST /admin/invitations/{invitation_id}/revoke`** · pending only (`409 INVALID_STATE`) → `200 <Invitation>`.

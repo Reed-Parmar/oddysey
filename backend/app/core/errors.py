@@ -50,7 +50,11 @@ CONSTRAINT_CODES: dict[str, tuple[int, str, str]] = {
     "submissions_one_pending": (409, "SUBMISSION_PENDING", "A version already awaits evaluation"),
     "submissions_one_evaluated": (409, "SUBMISSION_ALREADY_EVALUATED", "Submission already evaluated"),
     "evaluations_one_per_submission": (409, "SUBMISSION_ALREADY_EVALUATED", "Submission already evaluated"),
-    "cycles_single_active": (409, "ACTIVE_CYCLE_EXISTS", "Archive the current cycle first"),
+    "trainees_one_open_cycle_per_user": (
+        409,
+        "ACCOUNT_IN_OTHER_CYCLE",
+        "This account already belongs to another active cycle",
+    ),
     "recommendation_runs_one_active": (409, "RUN_IN_PROGRESS", "A recommendation run is already in progress"),
     "trainees_cycle_user_key": (409, "ACCOUNT_ALREADY_LINKED", "Account already linked"),
     "invitations_one_open_per_email": (409, "INVITATION_EXISTS", "An open invitation already exists"),

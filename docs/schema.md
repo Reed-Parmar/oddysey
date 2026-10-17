@@ -460,6 +460,16 @@ would lose history such as rejected allocations). Summary:
 | `report_analyses` | Per version and revision: text snapshot + hash, page offsets, corpus snapshot, originality, evaluation, semantic, ai_writing, review_state |
 | `analysis_reviews` | Supervisor/admin review history (confirm/annotate/amend/request_explanation/request_rework) |
 
+### 4.3 Migration 0004 (ADR-018: several active cycles)
+
+Implemented in `backend/migrations/versions/0004_multi_cycle.py` (reversible; the downgrade refuses while more than one cycle is active).
+
+| Object | Change |
+|---|---|
+| `cycles_single_active` | Dropped: any number of `draft`/`published` cycles |
+| `trainees` | Trigger `trainees_one_open_cycle_per_user` (BEFORE INSERT / UPDATE OF user_id, cycle_id): a user may be linked to at most one trainee whose cycle is not archived → constraint name `trainees_one_open_cycle_per_user` → `409 ACCOUNT_IN_OTHER_CYCLE`. `trainees_cycle_user_key` stays |
+| `onboarding_profiles.data` | May hold `cycle_id` (the student's choice); JSON, no column |
+
 ## 5. Ownership and access
 
 | Table | Written by | Read scope |

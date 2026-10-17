@@ -111,6 +111,8 @@ export const onboardingSchema = z.object({
   skills: skillsField,
   career_interest: z.string().max(CAREER_MAX, `At most ${CAREER_MAX} characters`),
   background: z.string().max(BACKGROUND_MAX, `At most ${BACKGROUND_MAX} characters`),
+  /** ADR-018: "" = automatic (the cycle that best matches the student's trades). */
+  cycle_id: z.string(),
 });
 export type OnboardingValues = z.infer<typeof onboardingSchema>;
 export type OnboardingField = keyof OnboardingValues;
@@ -131,6 +133,7 @@ export function onboardingValues(data: Record<string, unknown> | null | undefine
     skills: strList(d.skills),
     career_interest: str(d.career_interest),
     background: str(d.background),
+    cycle_id: str(d.cycle_id),
   };
 }
 
@@ -146,6 +149,7 @@ export function onboardingBody(v: OnboardingValues): OnboardingData {
     skills: normaliseSkills(v.skills),
     career_interest: t(v.career_interest),
     background: t(v.background),
+    cycle_id: v.cycle_id || null,
   };
 }
 

@@ -30,11 +30,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export function RequireRole({ role }: { role: UserRole }) {
+export function RequireRole({ role, children }: { role: UserRole; children?: ReactNode }) {
   const { user } = useAuth();
   if (!user) return null;
   if (user.role !== role) return <Forbidden />;
-  return <Outlet />;
+  return children ?? <Outlet />;
 }
 
 export function RoleRedirect() {
@@ -48,12 +48,12 @@ export function useMyTrainee() {
 
 /** Students without an enrolled trainee record (or without an open cycle) finish onboarding first (ADR-017).
  * UX only: every student endpoint re-checks enrolment on the server. */
-export function StudentGate() {
+export function StudentGate({ children }: { children?: ReactNode }) {
   const cycle = useCurrentCycle();
   const me = useMyTrainee();
   if (cycle.isLoading || me.isLoading) return <LoadingState />;
   if (cycle.error) return <ErrorState error={cycle.error} onRetry={() => cycle.refetch()} />;
   if (me.error) return <ErrorState error={me.error} onRetry={() => me.refetch()} />;
   if (!cycle.data?.data || !me.data?.data) return <Navigate to="/student/onboarding" replace />;
-  return <Outlet />;
+  return children ?? <Outlet />;
 }

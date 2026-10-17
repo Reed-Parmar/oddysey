@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "EligibilityRow": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "enum": [
+              "trade_mismatch",
+              "below_min_practical",
+              "verified_assessment_required",
+              "below_min_match"
+            ],
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_code",
+        "eligible",
+        "reasons"
+      ],
+      "title": "EligibilityRow",
+      "type": "object"
+    },
+    "FinalAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Project Code"
+        },
+        "source": {
+          "enum": [
+            "auto_best_eligible",
+            "replacement_ranked",
+            "none"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "allocation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Allocation Ref"
+        },
+        "unallocated_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "no_ready_projects",
+                "all_ready_projects_rejected",
+                "no_project_for_trades",
+                "verified_assessment_required",
+                "below_min_practical",
+                "below_min_match",
+                "no_eligible_project"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unallocated Reason"
+        }
+      },
+      "required": [
+        "project_code",
+        "source",
+        "allocation_ref",
+        "unallocated_reason"
+      ],
+      "title": "FinalAssignment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "recommended_project_codes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Recommended Project Codes",
+      "type": "array"
+    },
+    "final_assignment": {
+      "$ref": "#/$defs/FinalAssignment"
+    },
+    "eligibility": {
+      "items": {
+        "$ref": "#/$defs/EligibilityRow"
+      },
+      "title": "Eligibility",
+      "type": "array"
+    }
+  },
+  "required": [
+    "recommended_project_codes",
+    "final_assignment",
+    "eligibility"
+  ],
+  "title": "DecisionTarget",
+  "type": "object"
+}

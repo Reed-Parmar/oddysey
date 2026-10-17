@@ -30,7 +30,7 @@ from app.db.enums import (
     SubmissionStatus,
     UserRole,
 )
-from app.domain import VISIBLE_ALLOC, active_cycle, effective_deadline, lock_cycle, resolve_cycle
+from app.domain import VISIBLE_ALLOC, effective_deadline, lock_cycle, no_student_record, resolve_cycles, student_trainee
 from app.modules.report_export import render_report_html
 from app.schemas import ReportEvaluationSummary, SubmissionOut, submission_out
 from app.storage import get_storage
@@ -197,9 +197,9 @@ async def create_submission(
             422, "REPORT_REQUIRED", REPORT_REQUIRED, [{"field": "body.report_url", "message": REPORT_REQUIRED}]
         )
 
-    cycle = active_cycle(db)
+    cycle = student_trainee(db, user.id)[0]
     if cycle is None:
-        raise conflict("NO_ACTIVE_CYCLE", "There is no active programme cycle")
+        raise no_student_record(db)
     cycle = lock_cycle(db, cycle.id)  # same lock order as rejection: cycle → trainee → allocation
     if cycle.status == CycleStatus.archived:
         raise invalid_state("The cycle is archived")
@@ -293,10 +293,10 @@ def list_submissions(
     check_sort(sort, set(SORTS))
     stmt = scope_submissions(select(M.Submission), viewer)
     if viewer.role != UserRole.student or cycle_id:
-        cycle = resolve_cycle(db, cycle_id)
-        if cycle is None:
+        cycles = resolve_cycles(db, cycle_id)
+        if not cycles:
             return empty_page(params)
-        stmt = stmt.where(M.Submission.cycle_id == cycle.id)
+        stmt = stmt.where(M.Submission.cycle_id.in_([c.id for c in cycles]))
     if trainee_id:
         stmt = stmt.where(M.Allocation.trainee_id == trainee_id)
     if project_id:

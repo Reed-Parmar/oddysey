@@ -1,0 +1,297 @@
+{
+  "$defs": {
+    "Assessment": {
+      "additionalProperties": false,
+      "properties": {
+        "theory": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Theory"
+        },
+        "practical": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Practical"
+        },
+        "safety": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Safety"
+        }
+      },
+      "required": [
+        "theory",
+        "practical",
+        "safety"
+      ],
+      "title": "Assessment",
+      "type": "object"
+    },
+    "EngineFacts": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "ineligible_reasons": {
+          "items": {
+            "enum": [
+              "trade_mismatch",
+              "below_min_practical",
+              "verified_assessment_required",
+              "below_min_match"
+            ],
+            "type": "string"
+          },
+          "title": "Ineligible Reasons",
+          "type": "array"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "full",
+            "profile"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "factors": {
+          "items": {
+            "$ref": "#/$defs/FactorFact"
+          },
+          "title": "Factors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_code",
+        "eligible",
+        "ineligible_reasons",
+        "score",
+        "mode",
+        "factors"
+      ],
+      "title": "EngineFacts",
+      "type": "object"
+    },
+    "FactorFact": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "max_points": {
+          "title": "Max Points",
+          "type": "integer"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "points",
+        "max_points",
+        "detail"
+      ],
+      "title": "FactorFact",
+      "type": "object"
+    },
+    "Profile": {
+      "additionalProperties": false,
+      "properties": {
+        "trades": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Trades",
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "career_interest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Career Interest"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Background"
+        },
+        "assessment": {
+          "$ref": "#/$defs/Assessment"
+        },
+        "score_mode": {
+          "enum": [
+            "full",
+            "profile"
+          ],
+          "title": "Score Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trades",
+        "skills",
+        "career_interest",
+        "background",
+        "assessment",
+        "score_mode"
+      ],
+      "title": "Profile",
+      "type": "object"
+    },
+    "ProjectBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category"
+        },
+        "trades": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Trades",
+          "type": "array"
+        },
+        "difficulty": {
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "min_practical_score": {
+          "title": "Min Practical Score",
+          "type": "number"
+        },
+        "min_match_score": {
+          "title": "Min Match Score",
+          "type": "number"
+        },
+        "required_skills": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Skills",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_code",
+        "title",
+        "category",
+        "trades",
+        "difficulty",
+        "min_practical_score",
+        "min_match_score",
+        "required_skills"
+      ],
+      "title": "ProjectBrief",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "$ref": "#/$defs/Profile"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/ProjectBrief"
+      },
+      "minItems": 1,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "engine_facts": {
+      "items": {
+        "$ref": "#/$defs/EngineFacts"
+      },
+      "title": "Engine Facts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "profile",
+    "candidates",
+    "engine_facts"
+  ],
+  "title": "RankInput",
+  "type": "object"
+}

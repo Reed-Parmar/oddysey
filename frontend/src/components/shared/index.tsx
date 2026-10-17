@@ -35,7 +35,7 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        {eyebrow && <div className="mb-1.5 text-sm font-medium text-muted">{eyebrow}</div>}
+        {eyebrow && <div className="mb-1.5 text-sm font-semibold text-clay-ink">{eyebrow}</div>}
         <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-[1.75rem]">{title}</h1>
         {description && <p className="mt-1.5 max-w-3xl text-[0.95rem] text-muted">{description}</p>}
       </div>
@@ -365,7 +365,7 @@ export function StatCard({ label, value, hint, icon, tone = "primary", to }: {
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted">{label}</p>
         {icon && (
-          <span aria-hidden className={cx("inline-flex size-9 shrink-0 items-center justify-center rounded-lg [&>svg]:size-5", TONE_ICON[tone])}>
+          <span aria-hidden className={cx("tile-3d inline-flex size-9 shrink-0 items-center justify-center rounded-lg [&>svg]:size-5", TONE_ICON[tone])}>
             {icon}
           </span>
         )}

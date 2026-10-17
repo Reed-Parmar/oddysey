@@ -25,7 +25,7 @@ from spa_ai.scoring import (
     SCORING_VERSION,
     PairScore,
     ProjectInput,
-    best_project,
+    best_of,
     rank_candidates,
     score_pair,
 )
@@ -103,7 +103,20 @@ def _insert_allocation(
 ) -> M.Allocation | None:
     """Insert inside a savepoint; None when a concurrent worker already assigned the trainee or the
     pair is excluded (the DB constraints are the final word)."""
-    a = M.Allocation(
+    a = _new_allocation(cycle, trainee, project, ps, trigger, explanation)
+    try:
+        with db.begin_nested():
+            db.add(a)
+            db.flush()
+    except IntegrityError:
+        return None
+    return a
+
+
+def _new_allocation(
+    cycle: M.Cycle, trainee: M.Trainee, project: M.Project, ps: PairScore, trigger: str, explanation: str
+) -> M.Allocation:
+    return M.Allocation(
         id=uuid.uuid4(),
         cycle_id=cycle.id,
         trainee_id=trainee.id,
@@ -118,13 +131,6 @@ def _insert_allocation(
         created_by=None,
         status=AllocationStatus.active,
     )
-    try:
-        with db.begin_nested():
-            db.add(a)
-            db.flush()
-    except IntegrityError:
-        return None
-    return a
 
 
 def _notify_allocated(db: Session, a: M.Allocation, trainee: M.Trainee, project: M.Project) -> None:
@@ -160,6 +166,9 @@ def _has_active(db: Session, trainee_id: uuid.UUID) -> bool:
 # ---------------------------------------------------------------- ordinary allocation
 
 
+ALLOCATE_CHUNK = 500  # trainees locked and inserted per batch
+
+
 @jobs.handler("allocate_cycle")
 def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     cycle = lock_cycle(db, uuid.UUID(payload["cycle_id"]))  # FOR SHARE: blocks a concurrent archive
@@ -168,48 +177,101 @@ def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     # Promised replacements first, so ordinary allocation cannot consume their candidates.
     replaced = process_pending_replacements(db, cycle)
     projects = ready_projects(db, cycle.id)
+    by_id = {str(p.id): p for p in projects}
     pinputs = {p.id: project_input(p) for p in projects}
     trainees = unassigned_trainees(db, cycle.id)
     excluded = exclusions(db, {person_key(t) for t in trainees})
-    allocated = 0
+    trigger = payload.get("trigger", "schedule")
     waiting: dict[str, int] = {}
-    for t in trainees:
+    plan: list[tuple[M.Trainee, PairScore, int]] = []
+    for t in trainees:  # pure scoring: every pair is scored once
         ex = excluded.get(person_key(t), set())
         allowed = [pinputs[p.id] for p in projects if p.canonical_id not in ex]
         ti = trainee_input(t)
-        best = best_project(ti, allowed) if allowed else None
+        scores = [score_pair(ti, p) for p in allowed]
+        best = best_of(scores)
         if best is None:
-            waiting[waiting_reason(ti, allowed, bool(ex))] = waiting.get(waiting_reason(ti, allowed, bool(ex)), 0) + 1
+            key = waiting_reason(ti, allowed, bool(ex), scores)
+            waiting[key] = waiting.get(key, 0) + 1
             continue
-        locked = _lock_trainee(db, t.id)
-        if locked is None or _has_active(db, t.id):
-            continue
-        project = next(p for p in projects if str(p.id) == best.project_id)
-        n_eligible = sum(1 for p in allowed if score_pair(ti, p).eligible)
-        a = _insert_allocation(
-            db, cycle, locked, project, best, payload.get("trigger", "schedule"), explain(best, n_eligible, "Allocated")
-        )
-        if a is None:
-            continue
-        allocated += 1
-        audit.record(
-            db,
-            None,
-            "allocation.auto_created",
-            "allocation",
-            a.id,
-            {"actor": "system", "project_id": str(project.id), "trainee_id": str(t.id), "score": float(best.score)},
-        )
-        _notify_allocated(db, a, locked, project)
+        plan.append((t, best, sum(1 for ps in scores if ps.eligible)))
+    allocated = 0
+    for i in range(0, len(plan), ALLOCATE_CHUNK):
+        allocated += _allocate_batch(db, cycle, plan[i : i + ALLOCATE_CHUNK], by_id, trigger)
     db.commit()
     return {"allocated": allocated, "replacements": replaced, "waiting": waiting, "ready_projects": len(projects)}
 
 
-def waiting_reason(ti: Any, allowed: list[ProjectInput], has_exclusions: bool) -> str:
+def _allocate_batch(
+    db: Session,
+    cycle: M.Cycle,
+    plan: list[tuple[M.Trainee, PairScore, int]],
+    projects: dict[str, M.Project],
+    trigger: str,
+) -> int:
+    """Lock the planned trainees in one statement (skipping rows another worker holds), drop anyone who got
+    an active allocation meanwhile, insert all allocations in one savepoint. If the database refuses any row
+    (concurrent assignment or a rejection exclusion), fall back to the row-by-row path for this batch."""
+    ids = [t.id for t, _, _ in plan]
+    locked = set(
+        db.scalars(
+            select(M.Trainee.id)
+            .where(M.Trainee.id.in_(ids))
+            .order_by(M.Trainee.id)
+            .with_for_update(of=M.Trainee, skip_locked=True)
+        )
+    )
+    busy = set(
+        db.scalars(
+            select(M.Allocation.trainee_id).where(
+                M.Allocation.trainee_id.in_(ids), M.Allocation.status == AllocationStatus.active
+            )
+        )
+    )
+    todo = [(t, ps, n) for t, ps, n in plan if t.id in locked and t.id not in busy]
+    rows = [
+        (
+            t,
+            projects[ps.project_id],
+            ps,
+            _new_allocation(cycle, t, projects[ps.project_id], ps, trigger, explain(ps, n, "Allocated")),
+        )
+        for t, ps, n in todo
+    ]
+    try:
+        with db.begin_nested():
+            db.add_all([a for *_, a in rows])
+            db.flush()
+        done = rows
+    except IntegrityError:
+        done = []
+        for t, project, ps, _ in rows:
+            n = next(n for tt, _, n in todo if tt.id == t.id)
+            a = _insert_allocation(db, cycle, t, project, ps, trigger, explain(ps, n, "Allocated"))
+            if a is not None:
+                done.append((t, project, ps, a))
+    with db.no_autoflush:  # audit rows go out batched at commit
+        for t, project, ps, a in done:
+            audit.record(
+                db,
+                None,
+                "allocation.auto_created",
+                "allocation",
+                a.id,
+                {"actor": "system", "project_id": str(project.id), "trainee_id": str(t.id), "score": float(ps.score)},
+            )
+            _notify_allocated(db, a, t, project)
+    return len(done)
+
+
+def waiting_reason(
+    ti: Any, allowed: list[ProjectInput], has_exclusions: bool, scores: list[PairScore] | None = None
+) -> str:
     """Why an unassigned trainee is waiting (shown in tracking rows)."""
     if not allowed:
         return "all_ready_projects_rejected" if has_exclusions else "no_ready_projects"
-    reasons = [set(score_pair(ti, p).ineligible_reasons) for p in allowed]
+    scored = scores if scores is not None else [score_pair(ti, p) for p in allowed]
+    reasons = [set(ps.ineligible_reasons) for ps in scored]
     if all("trade_mismatch" in r for r in reasons):
         return "no_project_for_trades"
     if any(r == {"verified_assessment_required"} for r in reasons):

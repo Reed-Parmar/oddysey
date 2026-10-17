@@ -1,0 +1,139 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project_id": {
+      "pattern": "^SYN-PRJ-\\d{4}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_code": {
+      "pattern": "^SYN-[A-Z]{2}-\\d{4}$",
+      "title": "Project Code",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 5,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 5000,
+      "title": "Description",
+      "type": "string"
+    },
+    "category": {
+      "maxLength": 120,
+      "title": "Category",
+      "type": "string"
+    },
+    "domain": {
+      "title": "Domain",
+      "type": "string"
+    },
+    "target_trade_id": {
+      "title": "Target Trade Id",
+      "type": "string"
+    },
+    "target_trade_name": {
+      "title": "Target Trade Name",
+      "type": "string"
+    },
+    "target_trade_ids": {
+      "title": "Target Trade Ids",
+      "type": "string"
+    },
+    "target_trade_names": {
+      "title": "Target Trade Names",
+      "type": "string"
+    },
+    "difficulty": {
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "title": "Difficulty",
+      "type": "string"
+    },
+    "required_skills": {
+      "title": "Required Skills",
+      "type": "string"
+    },
+    "min_practical_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Min Practical Score",
+      "type": "number"
+    },
+    "min_match_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Min Match Score",
+      "type": "number"
+    },
+    "legacy_max_trainees": {
+      "description": "History only; capacity is not enforced (ADR-017)",
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Legacy Max Trainees",
+      "type": "integer"
+    },
+    "catalog_status": {
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ],
+      "title": "Catalog Status",
+      "type": "string"
+    },
+    "problem_doc_url": {
+      "pattern": "^https://synthetic\\.invalid/",
+      "title": "Problem Doc Url",
+      "type": "string"
+    },
+    "requirements_version": {
+      "title": "Requirements Version",
+      "type": "integer"
+    },
+    "home_split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Home Split",
+      "type": "string"
+    },
+    "synthetic_record": {
+      "const": true,
+      "title": "Synthetic Record",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "project_id",
+    "project_code",
+    "title",
+    "description",
+    "category",
+    "domain",
+    "target_trade_id",
+    "target_trade_name",
+    "target_trade_ids",
+    "target_trade_names",
+    "difficulty",
+    "required_skills",
+    "min_practical_score",
+    "min_match_score",
+    "legacy_max_trainees",
+    "catalog_status",
+    "problem_doc_url",
+    "requirements_version",
+    "home_split",
+    "synthetic_record"
+  ],
+  "title": "ProjectRow",
+  "type": "object"
+}

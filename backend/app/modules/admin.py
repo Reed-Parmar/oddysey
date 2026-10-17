@@ -8,7 +8,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
+from sqlalchemy.orm import lazyload
 
 from app import audit, jobs
 from app.automation.notify import notify
@@ -29,7 +30,7 @@ from app.db.enums import (
     UserRole,
     UserStatus,
 )
-from app.domain import active_cycle, now_utc
+from app.domain import ACTIVE, active_cycles, default_cycle, now_utc
 from app.modules.core_routes import hash_invite_token
 from app.modules.progress import build_rows
 from app.schemas import InvitationOut, TraineeRef, UserOut, invitation_out, trainee_ref, user_out
@@ -42,10 +43,20 @@ class AdminUser(UserOut):
 
 
 USER_SORTS = {"full_name": M.User.full_name, "email": M.User.email, "-created_at": M.User.created_at.desc()}
+STAFF_ROLES = (UserRole.admin, UserRole.supervisor)
 
 
-def _admin_user(db: DB, u: M.User, cycle: M.Cycle | None) -> AdminUser:
-    t = db.scalar(select(M.Trainee).where(M.Trainee.user_id == u.id, M.Trainee.cycle_id == cycle.id)) if cycle else None
+def _admins_first(col: Any) -> Any:
+    return case((col == UserRole.admin, 0), else_=1)
+
+
+def _admin_user(db: DB, u: M.User) -> AdminUser:
+    """`trainee` = the account's record in its open cycle (ADR-018: at most one)."""
+    t = db.scalar(
+        select(M.Trainee)
+        .join(M.Cycle, M.Cycle.id == M.Trainee.cycle_id)
+        .where(M.Trainee.user_id == u.id, M.Cycle.status.in_(ACTIVE))
+    )
     return AdminUser(**user_out(u).model_dump(), trainee=trainee_ref(t) if t else None)
 
 
@@ -58,18 +69,22 @@ def list_users(
     status: UserStatus | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
     sort: str = "full_name",
+    staff: bool = False,
 ) -> PageEnvelope[AdminUser]:
     check_sort(sort, set(USER_SORTS))
     stmt = select(M.User)
+    order: list[Any] = [USER_SORTS[sort], M.User.id]
+    if staff:  # Staff & Invitations: admins first, then supervisors; students are managed with their trainee
+        stmt = stmt.where(M.User.role.in_(STAFF_ROLES))
+        order.insert(0, _admins_first(M.User.role))
     if role:
         stmt = stmt.where(M.User.role == role)
     if status:
         stmt = stmt.where(M.User.status == status)
     if (pattern := clean_q(q)) is not None:
         stmt = stmt.where(or_(M.User.full_name.ilike(pattern, escape="\\"), M.User.email.ilike(pattern, escape="\\")))
-    rows, meta = paginate(db, stmt.order_by(USER_SORTS[sort], M.User.id), params)
-    cycle = active_cycle(db)
-    return PageEnvelope(data=[_admin_user(db, u, cycle) for u in rows], meta=meta)
+    rows, meta = paginate(db, stmt.order_by(*order), params)
+    return PageEnvelope(data=[_admin_user(db, u) for u in rows], meta=meta)
 
 
 class UserPatch(In):
@@ -145,7 +160,7 @@ def patch_user(user_id: uuid.UUID, body: UserPatch, admin: Admin, db: DB) -> Env
         requeue_for_staff_change(db)  # projects waiting for a supervisor get another chance
     db.commit()
     db.refresh(target)
-    return Envelope(data=_admin_user(db, target, active_cycle(db)))
+    return Envelope(data=_admin_user(db, target))
 
 
 # ---------------------------------------------------------------- invitations + staff onboarding
@@ -188,13 +203,18 @@ def list_invitations(
     status: InvitationStatus | None = None,
     role: UserRole | None = None,
     sort: Literal["-created_at"] = "-created_at",
+    staff: bool = False,
 ) -> PageEnvelope[InvitationRow]:
     stmt = select(M.Invitation)
+    order: list[Any] = [M.Invitation.created_at.desc(), M.Invitation.id]
+    if staff:
+        stmt = stmt.where(M.Invitation.role.in_(STAFF_ROLES))
+        order.insert(0, _admins_first(M.Invitation.role))
     if status:
         stmt = _status_filter(stmt, status)
     if role:
         stmt = stmt.where(M.Invitation.role == role)
-    rows, meta = paginate(db, stmt.order_by(M.Invitation.created_at.desc()), params)
+    rows, meta = paginate(db, stmt.order_by(*order), params)
     return PageEnvelope(data=[_invitation_row(db, i) for i in rows], meta=meta)
 
 
@@ -217,10 +237,10 @@ def _create_invitation(db: DB, admin: M.User, body: InvitationIn) -> tuple[M.Inv
     if (body.role == UserRole.student) != (body.trainee_id is not None):
         raise field_error("body.trainee_id", "required for student invitations and only for them")
     if body.trainee_id is not None:
-        cycle = active_cycle(db)
         t = db.scalar(select(M.Trainee).where(M.Trainee.id == body.trainee_id).with_for_update(of=M.Trainee))
-        if t is None or cycle is None or t.cycle_id != cycle.id:
-            raise field_error("body.trainee_id", "must be a trainee in the active cycle")
+        cycle = db.get(M.Cycle, t.cycle_id) if t else None
+        if t is None or cycle is None or cycle.status not in ACTIVE:
+            raise field_error("body.trainee_id", "must be a trainee in an active cycle")
         if t.user_id is not None:
             raise conflict("ACCOUNT_ALREADY_LINKED", "This trainee already has an account")
     if db.scalar(select(M.User.id).where(M.User.email == email)):
@@ -333,6 +353,16 @@ async def import_staff(
     ]
     seen: set[str] = set()
     invited = 0
+    # Two lookups for the whole sheet instead of two per row.
+    sheet_emails = list({(_text(r.get("email")) or "").lower() for _, r in sheet.rows} - {""})
+    existing_users = set(db.scalars(select(M.User.email).where(M.User.email.in_(sheet_emails))))
+    pending_invites = set(
+        db.scalars(
+            _status_filter(
+                select(M.Invitation.email).where(M.Invitation.email.in_(sheet_emails)), InvitationStatus.pending
+            )
+        )
+    )
     if not sheet.errors:
         for number, r in sheet.rows:
             email = (_text(r.get("email")) or "").lower()
@@ -372,16 +402,14 @@ async def import_staff(
                 )
                 continue
             seen.add(email)
-            if db.scalar(select(M.User.id).where(M.User.email == email)):
+            if email in existing_users:
                 results.append(
                     StaffRowResult(
                         row=number, email=email, role=role, status="skipped", message="already has an account"
                     )
                 )
                 continue
-            if db.scalar(
-                _status_filter(select(M.Invitation.id).where(M.Invitation.email == email), InvitationStatus.pending)
-            ):
+            if email in pending_invites:
                 results.append(
                     StaffRowResult(
                         row=number, email=email, role=role, status="skipped", message="an invitation is already pending"
@@ -559,19 +587,21 @@ def automation(_: Admin, db: DB) -> Envelope[AutomationStats]:
 
 
 @router.post("/admin/automation/run-now", status_code=202)
-def run_now(admin: Admin, db: DB) -> Envelope[AutomationStats]:
-    """Optional nudge: queue an allocation run now (the schedule runs it anyway)."""
-    cycle = active_cycle(db)
-    if cycle is None:
+def run_now(admin: Admin, db: DB, cycle_id: uuid.UUID | None = None) -> Envelope[AutomationStats]:
+    """Optional nudge: queue an allocation run now (the schedule runs it anyway). Without `cycle_id`: every
+    active cycle (ADR-018)."""
+    cycles = [c for c in active_cycles(db) if cycle_id is None or c.id == cycle_id]
+    if not cycles:
         raise invalid_state("There is no active cycle")
-    jobs.enqueue(
-        db,
-        "allocate_cycle",
-        {"cycle_id": str(cycle.id), "trigger": "manual"},
-        dedupe_key=f"allocate:{cycle.id}",
-        trigger="manual",
-    )
-    audit.record(db, admin.id, "automation.run_requested", "cycle", cycle.id, {})
+    for cycle in cycles:
+        jobs.enqueue(
+            db,
+            "allocate_cycle",
+            {"cycle_id": str(cycle.id), "trigger": "manual"},
+            dedupe_key=f"allocate:{cycle.id}",
+            trigger="manual",
+        )
+        audit.record(db, admin.id, "automation.run_requested", "cycle", cycle.id, {})
     db.commit()
     return Envelope(data=automation_stats(db))
 
@@ -581,13 +611,22 @@ def overview(admin: Admin, db: DB, cycle_id: uuid.UUID | None = None) -> Envelop
     def count(stmt) -> int:  # type: ignore[no-untyped-def]
         return db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
 
+    def active_role(role: UserRole) -> Any:
+        return func.count().filter(M.User.role == role, M.User.status == UserStatus.active)
+
+    students, supervisors, admins, disabled = db.execute(  # one round-trip instead of four
+        select(
+            active_role(UserRole.student),
+            active_role(UserRole.supervisor),
+            active_role(UserRole.admin),
+            func.count().filter(M.User.status == UserStatus.disabled),
+        )
+    ).one()
     users = UserStats(
-        students=count(select(M.User.id).where(M.User.role == UserRole.student, M.User.status == UserStatus.active)),
-        supervisors=count(
-            select(M.User.id).where(M.User.role == UserRole.supervisor, M.User.status == UserStatus.active)
-        ),
-        admins=count(select(M.User.id).where(M.User.role == UserRole.admin, M.User.status == UserStatus.active)),
-        disabled=count(select(M.User.id).where(M.User.status == UserStatus.disabled)),
+        students=students,
+        supervisors=supervisors,
+        admins=admins,
+        disabled=disabled,
         pending_invitations=count(_status_filter(select(M.Invitation.id), InvitationStatus.pending)),
     )
     auto = automation_stats(db)
@@ -596,7 +635,7 @@ def overview(admin: Admin, db: DB, cycle_id: uuid.UUID | None = None) -> Envelop
         if cycle is None:
             raise not_found("Cycle")
     else:
-        cycle = active_cycle(db)
+        cycle = default_cycle(db)
     if cycle is None:
         return Envelope(
             data=Overview(
@@ -624,8 +663,11 @@ def overview(admin: Admin, db: DB, cycle_id: uuid.UUID | None = None) -> Envelop
         self_registered=sum(1 for t in trainees if t.onboarded_via == "self"),
         by_trade=sorted(by_trade.values(), key=lambda x: x.name),
     )
-    projects = list(db.scalars(select(M.Project).where(M.Project.cycle_id == cycle.id)).unique())
-    allocs = list(db.scalars(select(M.Allocation).where(M.Allocation.cycle_id == cycle.id)).unique())
+    # Counts only: skip the eager-loaded relations (each costs a round-trip to the pooler).
+    projects = list(db.scalars(select(M.Project).where(M.Project.cycle_id == cycle.id).options(lazyload("*"))).unique())
+    allocs = list(
+        db.scalars(select(M.Allocation).where(M.Allocation.cycle_id == cycle.id).options(lazyload("*"))).unique()
+    )
     active = [a for a in allocs if a.status == AllocationStatus.active]
     pstats = ProjectBrief(
         total=len(projects),

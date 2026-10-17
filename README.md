@@ -50,7 +50,7 @@ Real first admin instead: `uv run python -m scripts.create_admin --email you@org
 ## Run locally
 
 ```bash
-cd backend && uv run uvicorn app.main:app --reload --port 8000    # API docs: http://localhost:8000/api/v1/docs
+cd backend && uv run uvicorn app.main:app --reload --timeout-graceful-shutdown 5 --port 8000    # API docs: http://localhost:8000/api/v1/docs
 cd backend && uv run python -m app.worker                         # background automation (or RUN_WORKER_IN_API=true)
 cd frontend && pnpm install && pnpm dev                           # http://localhost:5173
 ```

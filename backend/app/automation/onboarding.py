@@ -4,9 +4,13 @@ A typed trainee ID never links someone to an existing record: if the code alread
 record in the cycle, or to another account in any cycle, the profile stops at `identity_conflict`
 and nothing about the other record is revealed. Trainee-bound invitations remain the way to claim
 an imported record.
+
+ADR-018: several cycles may be open. `cycle_options` ranks them by how many of their projects match the
+student's trades; enrolment uses the student's choice while it is still open, else the top-ranked cycle.
 """
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -15,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from app import audit, jobs
 from app.db import models as M
-from app.domain import active_cycle, clean_names, resolve_skill_names, set_trainee_trades
+from app.db.enums import ProjectProcessing, ProjectStatus
+from app.domain import active_cycles, clean_names, now_utc, resolve_skill_names, set_trainee_trades, student_trainee
 
 
 class OnboardingData(BaseModel):
@@ -30,6 +35,7 @@ class OnboardingData(BaseModel):
     skills: list[str] = Field(default_factory=list, max_length=20)
     career_interest: str | None = Field(default=None, max_length=300)
     background: str | None = Field(default=None, max_length=2000)
+    cycle_id: uuid.UUID | None = None  # the student's choice (ADR-018); optional: the best match is used otherwise
 
     @field_validator("trade_ids")
     @classmethod
@@ -70,17 +76,78 @@ def code_conflict(db: Session, code: str, user_id: uuid.UUID, cycle_id: uuid.UUI
     return other_owner is not None
 
 
+class CycleOption(BaseModel):
+    id: uuid.UUID
+    name: str
+    submission_deadline: datetime
+    matching_projects: int
+    total_projects: int
+    recommended: bool
+
+
+def cycle_options(db: Session, trade_ids: list[uuid.UUID]) -> list[CycleOption]:
+    """Cycles open for enrolment (active, deadline ahead), best match first. Trades come from each cycle's own
+    projects, so admins configure nothing. Order: matching projects, total projects, later deadline, oldest cycle."""
+    now = now_utc()
+    cycles = [c for c in active_cycles(db) if c.submission_deadline > now]
+    if not cycles:
+        return []
+    usable = (
+        select(M.Project.id, M.Project.cycle_id)
+        .where(
+            M.Project.cycle_id.in_([c.id for c in cycles]),
+            M.Project.status != ProjectStatus.archived,
+            M.Project.processing_status != ProjectProcessing.failed,
+        )
+        .subquery()
+    )
+    totals = dict(db.execute(select(usable.c.cycle_id, func.count()).group_by(usable.c.cycle_id)).all())
+    matching: dict[uuid.UUID, int] = {}
+    if trade_ids:
+        matching = dict(
+            db.execute(
+                select(usable.c.cycle_id, func.count(func.distinct(usable.c.id)))
+                .join(M.ProjectTrade, M.ProjectTrade.project_id == usable.c.id)
+                .where(M.ProjectTrade.trade_id.in_(trade_ids))
+                .group_by(usable.c.cycle_id)
+            ).all()
+        )
+    ranked = sorted(
+        cycles,
+        key=lambda c: (
+            -matching.get(c.id, 0),
+            -totals.get(c.id, 0),
+            -c.submission_deadline.timestamp(),
+            c.created_at,
+            str(c.id),
+        ),
+    )
+    return [
+        CycleOption(
+            id=c.id,
+            name=c.name,
+            submission_deadline=c.submission_deadline,
+            matching_projects=matching.get(c.id, 0),
+            total_projects=totals.get(c.id, 0),
+            recommended=i == 0,
+        )
+        for i, c in enumerate(ranked)
+    ]
+
+
 def enrol(db: Session, user: M.User, profile: M.OnboardingProfile) -> str:
-    """Creates the trainee record in the active cycle. Returns the new profile status."""
+    """Creates the trainee record in the chosen (still open) or best-matching cycle. Returns the new profile status."""
     data = OnboardingData.model_validate(profile.data)
-    cycle = active_cycle(db)
-    if cycle is None:
-        profile.status = "waiting_for_cycle"
-        return profile.status
-    existing = db.scalar(select(M.Trainee).where(M.Trainee.cycle_id == cycle.id, M.Trainee.user_id == user.id))
-    if existing is not None:
+    if student_trainee(db, user.id)[1] is not None:  # already in an open cycle (one at a time, ADR-018)
         profile.status = "enrolled"
         return profile.status
+    options = cycle_options(db, data.trade_ids)
+    if not options:
+        profile.status = "waiting_for_cycle"
+        return profile.status
+    chosen = next((o for o in options if o.id == data.cycle_id), options[0])
+    cycle = db.get(M.Cycle, chosen.id)
+    assert cycle is not None
     assert data.trainee_code is not None
     if code_conflict(db, data.trainee_code, user.id, cycle.id):
         profile.status = "identity_conflict"

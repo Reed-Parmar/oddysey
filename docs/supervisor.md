@@ -1,5 +1,8 @@
 # Supervisor Module Handbook (Teammate B)
 
+> **ADR-018 (rev 4, binding).** Several cycles can be active. A supervisor's lists cover their projects in **all active
+> cycles** by default (each row shows its cycle); the cycle filter narrows it.
+
 > **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Supervisors are selected automatically by expertise
 > overlap and current load. They see only projects they supervise (PRJ-01) and trainees allocated to them, as soon as
 > allocations are made (no publish step). There are no recommendation runs or capacity: a project shows the

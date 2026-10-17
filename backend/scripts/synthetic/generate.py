@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from scripts.synthetic import GENERATOR_VERSION, llm
+from scripts.synthetic import GENERATOR_VERSION, ingest, llm
 from scripts.synthetic import submissions as subs_mod
 from scripts.synthetic.allocation import ALLOCATION_POLICY
 from scripts.synthetic.entities import SynthProject, SynthTrainee, make_projects, make_trainees
@@ -93,7 +93,7 @@ def prepare_out(cfg: Config) -> Path:
             target = (out / rel).resolve()
             if out in target.parents and target.is_file():
                 target.unlink()
-        for sub in ("llm", "import", "schema"):
+        for sub in ("llm", "import", "ingest/scenarios", "ingest", "schema"):
             d = out / sub
             if d.is_dir() and not any(p.is_file() for p in d.rglob("*")):
                 shutil.rmtree(d)
@@ -301,73 +301,6 @@ def project_row(p: SynthProject) -> dict[str, Any]:
     }
 
 
-def import_rows(
-    sc_cohort: list[str], sc_projects: list[str], trainees: dict[str, SynthTrainee], projects: dict[str, SynthProject]
-) -> tuple[list[list[Any]], list[list[Any]]]:
-    """Dataset-format sheets (IMP-01 / IMP-02 columns) with a title row and a blank row like the workbook."""
-    t_head = [
-        "Trainee ID",
-        "Full Name",
-        "Gender",
-        "ITI Trade",
-        "ITI Name",
-        "Trade Theory Score (%)",
-        "Workshop Practical Score (%)",
-        "Safety Compliance Score (%)",
-        "Core Skills Demonstrated",
-        "Primary Career Interest",
-        "Background",
-    ]
-    p_head = [
-        "Project ID",
-        "Project Title",
-        "Target Trade",
-        "Difficulty Level",
-        "Required Prerequisite Skills",
-        "Min Practical Score Required (%)",
-        "Max Trainee Capacity",
-        "Project Category / Sponsor Goal",
-        "Problem Statement Doc",
-        "Description",
-    ]
-    t_rows: list[list[Any]] = [["SYNTHETIC ITI trainee data - fictional records, not real trainees"], [], t_head]
-    for tid in sc_cohort:
-        t = trainees[tid]
-        t_rows.append(
-            [
-                t.trainee_id,
-                t.full_name,
-                (t.gender or "").title(),
-                ", ".join(x.name for x in t.trades),
-                t.centre_name,
-                t.theory,
-                t.practical,
-                t.safety,
-                ", ".join(t.skills),
-                t.career_interest,
-                t.background,
-            ]
-        )
-    p_rows: list[list[Any]] = [["SYNTHETIC project catalogue - fictional projects"], [], p_head]
-    for pid in sc_projects:
-        p = projects[pid]
-        p_rows.append(
-            [
-                p.project_code,
-                p.title,
-                ", ".join(x.name for x in p.trades),
-                p.difficulty.title(),
-                ", ".join(p.required_skills),
-                p.min_practical_score,
-                p.legacy_max_trainees,
-                p.category,
-                p.problem_doc_url,
-                p.description,
-            ]
-        )
-    return t_rows, p_rows
-
-
 def write_raw_csv(path: Path, rows: list[list[Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as f:
@@ -515,15 +448,32 @@ def generate(cfg: Config) -> dict[str, Any]:
                 record(f"schema/llm_{task}.{kind}.schema.json", 0)
             for split, split_rows in by_split.items():
                 record(f"llm/{task}/{split}.jsonl", write_jsonl(out / "llm" / task / f"{split}.jsonl", split_rows))
+    # Importer-ready files (always written): what an admin uploads. See ingest/README.md.
+    ingest_files: dict[str, list[list[Any]]] = {}
+    sups = ingest.supervisors(cfg.seed)
+    ingest_files.update(ingest.chunks("ingest/supervisors", ingest.STAFF_HEADER, ingest.staff_rows(sups)))
+    ingest_files.update(ingest.chunks("ingest/admins", ingest.STAFF_HEADER, ingest.staff_rows(ingest.admins(cfg.seed))))
+    ingest_files.update(ingest.chunks("ingest/trainees", ingest.TRAINEE_HEADER, ingest.trainee_rows(trainees)))
+    ingest_files.update(ingest.chunks("ingest/projects", ingest.PROJECT_HEADER, ingest.project_rows(projects)))
     if "import" in cfg.formats:
         for sc in scenarios:
-            t_rows, p_rows = import_rows(
-                [tid for tid, _ in sc.cohort], [p.project_id for p in sc.projects], t_by_id, p_by_id
+            cohort = [t_by_id[tid] for tid, _ in sc.cohort]
+            sproj = [p_by_id[p.project_id] for p in sc.projects]
+            ingest_files.update(
+                ingest.chunks(
+                    f"ingest/scenarios/{sc.scenario_id}_trainees", ingest.TRAINEE_HEADER, ingest.trainee_rows(cohort)
+                )
             )
-            for kind, sheet in (("trainees", t_rows), ("projects", p_rows)):
-                rel = f"import/{sc.scenario_id}_{kind}.csv"
-                write_raw_csv(out / rel, sheet)
-                record(rel, len(sheet) - 3)
+            ingest_files.update(
+                ingest.chunks(
+                    f"ingest/scenarios/{sc.scenario_id}_projects", ingest.PROJECT_HEADER, ingest.project_rows(sproj)
+                )
+            )
+    for rel, sheet in ingest_files.items():
+        write_raw_csv(out / rel, sheet)
+        record(rel, len(sheet) - 1)
+    (out / "ingest" / "README.md").write_text(ingest.README, encoding="utf-8", newline="\n")
+    record("ingest/README.md", 0)
     if "xlsx" in cfg.formats:
         write_xlsx(out / "inspection.xlsx", tables)
         record("inspection.xlsx", 0)  # zip timestamps make the bytes vary; excluded from reproducibility hashes

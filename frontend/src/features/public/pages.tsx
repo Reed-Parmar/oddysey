@@ -6,12 +6,17 @@ import {
   ClipboardText,
   Eye,
   EyeSlash,
+  FileMagnifyingGlass,
+  FlagCheckered,
   GraduationCap,
+  IdentificationCard,
   type Icon,
-  Scales,
+  Robot,
   ShieldCheck,
   Sparkle,
+  Target,
   UserGear,
+  UserPlus,
   UploadSimple,
 } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -55,44 +60,46 @@ function PublicFrame({ children }: { children: ReactNode }) {
   );
 }
 
-const HIGHLIGHTS: [Icon, string, string][] = [
-  [Sparkle, "Explainable matching", "Every score is the sum of itemised factors (trade, practical readiness, skill coverage, interests). Gender is never used."],
-  [Scales, "Humans decide", "Auto-allocation drafts the best fit within capacity. The programme team reviews, overrides with a reason and publishes."],
-  [ClipboardText, "Rubric evaluation", "Supervisors score workmanship, demo, safety, documentation and viva. The total and grade are computed on the server."],
+/** The automated lifecycle, as labels only (the live version is on each role's dashboard). */
+const STAGES: [Icon, string, string][] = [
+  [UserPlus, "Trainee Onboarding", "Imported by the programme team or self-registered"],
+  [IdentificationCard, "Profile Verification", "Skills, interests and verified practical marks"],
+  [FileMagnifyingGlass, "Project Analysis", "Project documents processed in the background"],
+  [Sparkle, "AI-Assisted Matching", "Itemised rule scores; gender is never used"],
+  [Target, "Automated Allocation", "Every 15 minutes, one project per trainee"],
+  [UploadSimple, "Student Submission", "A written report, with a rework loop"],
+  [ClipboardText, "Evaluation", "Automated rubric and originality analysis, reviewed by supervisors"],
+  [FlagCheckered, "Completion", "Outcomes frozen when the cycle is archived"],
 ];
 
 /** Split layout for log-in and registration: brand panel on large screens, form always first on mobile. */
 function AuthLayout({ title, description, children, footer }: { title: string; description?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden overflow-hidden bg-primary-ink text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div aria-hidden className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-primary/40 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-accent/25 blur-3xl" />
+      <aside className="relative hidden overflow-hidden bg-chrome text-white lg:flex lg:flex-col lg:justify-between lg:gap-10 lg:p-12">
         <Link to="/" className="relative flex items-center gap-3 rounded-lg">
-          <svg viewBox="0 0 32 32" aria-hidden className="size-9">
-            <rect width="32" height="32" rx="8" fill="white" />
-            <path d="M9 20l5-5 4 4 6-8" stroke="var(--color-primary)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <BrandMark className="size-9" />
           <span className="font-heading text-lg font-semibold">Smart Project Allocation</span>
         </Link>
         <div className="relative max-w-md">
-          <p className="text-sm font-semibold tracking-wide text-white/70 uppercase">Tata STRIVE · ITI trainee projects</p>
+          <p className="text-sm font-semibold tracking-wide text-chrome-muted uppercase">Tata STRIVE · ITI trainee projects</p>
           <p className="mt-3 font-heading text-3xl leading-tight font-semibold">The right project for every trainee, tracked to a graded outcome.</p>
-          <ul className="mt-8 space-y-5">
-            {HIGHLIGHTS.map(([I, t, d]) => (
-              <li key={t} className="flex gap-3">
-                <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          <ol aria-label="How it works" className="mt-8">
+            {STAGES.map(([I, t, d], i) => (
+              <li key={t} className="relative flex gap-3 pb-4 last:pb-0">
+                {i < STAGES.length - 1 && <span aria-hidden className="absolute top-9 bottom-0 left-[17px] w-0.5 bg-white/15" />}
+                <span aria-hidden className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-chrome-2 text-chrome-accent">
                   <I size={18} />
                 </span>
-                <div>
-                  <p className="font-semibold">{t}</p>
-                  <p className="mt-0.5 text-sm text-white/75">{d}</p>
+                <div className="min-w-0 pt-0.5">
+                  <p className="text-sm font-semibold">{t}</p>
+                  <p className="text-xs text-chrome-text">{d}</p>
                 </div>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
-        <p className="relative text-xs text-white/60">Security is enforced on the server. Your data is only visible to your programme team.</p>
+        <p className="relative text-xs text-chrome-muted">Security is enforced on the server. Your data is only visible to your programme team.</p>
       </aside>
 
       <div className="flex min-h-dvh flex-col">
@@ -134,16 +141,15 @@ const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInput
 });
 
 const ROLES: [Icon, string, string][] = [
-  [GraduationCap, "Trainees", "See suggested projects with the reasons behind them, then submit your work in versions."],
-  [ChalkboardTeacher, "Supervisors", "Review submissions, request rework, and grade against the official 5-criterion rubric."],
-  [UserGear, "Programme team", "Import data, run recommendations, allocate within capacity, publish, and track progress."],
+  [GraduationCap, "Trainees", "Receive a project with the reasons it was chosen, reject it once if it does not fit, and submit your report in versions."],
+  [ChalkboardTeacher, "Supervisors", "Review the automated evaluation and originality analysis, then finalise or request rework."],
+  [UserGear, "Programme team", "Import trainees and projects, watch the automated lifecycle, and step in only where a stage needs attention."],
 ];
 
-const FLOW: [Icon, string][] = [
-  [UploadSimple, "Import trainees & projects"],
-  [Sparkle, "Explainable recommendations"],
-  [Scales, "Allocate & publish"],
-  [ClipboardText, "Submit & evaluate"],
+const HIGHLIGHTS: [Icon, string, string][] = [
+  [Sparkle, "Explainable matching", "Every score is the sum of itemised factors (trade, practical readiness, skill coverage, interests). Gender is never used."],
+  [Robot, "Automated, not opaque", "A background worker processes projects, allocates every 15 minutes and analyses reports. Each stage shows its status and errors."],
+  [ClipboardText, "Evaluation with evidence", "Each report gets an automated rubric evaluation and a Plagiarism & Originality Analysis that supervisors review."],
 ];
 
 export function Landing() {
@@ -160,7 +166,7 @@ export function Landing() {
             Match every trainee to the right project, and track it to a graded outcome.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            Explainable recommendations, a human-reviewed allocation, versioned submissions and rubric evaluation, in one place for trainees, supervisors and the programme team.
+            Automated, explainable allocation, versioned report submissions and evidence-based evaluation, in one place for trainees, supervisors and the programme team.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/login" className={buttonStyles("primary", "lg")}>
@@ -169,19 +175,19 @@ export function Landing() {
             <Link to="/register" className={buttonStyles("secondary", "lg")}>Register as a trainee</Link>
           </div>
         </div>
-        <ol aria-label="How it works" className="grid gap-3 sm:grid-cols-2">
-          {FLOW.map(([I, t], i) => (
-            <li key={t} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 shadow-card">
-              <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <I size={20} />
-              </span>
-              <span>
-                <span className="block text-xs font-semibold text-subtle">Step {i + 1}</span>
-                <span className="block text-sm font-semibold">{t}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
+        <div className="rounded-2xl border border-border bg-dot-grid p-4 shadow-card sm:p-6">
+          <ol aria-label="How it works" className="grid gap-2.5 sm:grid-cols-2">
+            {STAGES.map(([I, t], i) => (
+              <li key={t} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-3 shadow-card">
+                <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  <I size={18} />
+                </span>
+                <span className="min-w-0 flex-1 text-sm font-semibold">{t}</span>
+                <span aria-hidden className="font-mono text-[0.68rem] text-subtle">{String(i + 1).padStart(2, "0")}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
       <section aria-labelledby="features" className="pb-12">

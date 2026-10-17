@@ -11,15 +11,25 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 
 import { HOME, NAV, ROLE_LABEL } from "./nav";
 
+/** The caller's default cycle (CYC-01): a student's own cycle; for staff the newest active one (a UI default). */
 export function useCurrentCycle() {
   return useQuery({ queryKey: qk.cycles.current(), queryFn: () => call(api.GET("/api/v1/cycles/current")) });
 }
 
+/** Every active cycle, newest first (CYC-07, staff only; ADR-018: several may be active). */
+export function useActiveCycles(enabled = true) {
+  return useQuery({ queryKey: qk.cycles.active(), queryFn: () => call(api.GET("/api/v1/cycles/active")), enabled });
+}
+
+/** Three connected nodes: the automated pipeline as the brand. */
 export function BrandMark({ className = "size-8" }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden className={className}>
       <rect width="32" height="32" rx="8" fill="var(--color-primary)" />
-      <path d="M9 20l5-5 4 4 6-8" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 22 16 10l6 12" stroke="white" strokeOpacity="0.55" strokeWidth="2" fill="none" strokeLinejoin="round" />
+      <circle cx="10" cy="22" r="3" fill="white" />
+      <circle cx="16" cy="10" r="3" fill="white" />
+      <circle cx="22" cy="22" r="3" fill="var(--color-accent-soft)" stroke="var(--color-accent)" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -27,6 +37,7 @@ export function BrandMark({ className = "size-8" }: { className?: string }) {
 export function AppShell() {
   const { user, signOut } = useAuth();
   const cycle = useCurrentCycle();
+  const actives = useActiveCycles(!!user && user.role !== "student");
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
@@ -53,27 +64,29 @@ export function AppShell() {
   if (!user) return null;
   const items = NAV[user.role];
   const c = cycle.data?.data;
+  // Staff: every active cycle (ADR-018). Students: their own cycle.
+  const shown = user.role === "student" ? (c ? [c] : []) : (actives.data?.data ?? []);
 
   const nav = (
     <nav aria-label="Main" className="flex flex-col gap-0.5 px-3 py-4">
       {items.map((i) => (
         <Fragment key={i.to}>
           {i.section && (
-            <p className="mt-5 mb-1.5 px-3 text-[0.7rem] font-semibold tracking-wider text-subtle uppercase first:mt-0">{i.section}</p>
+            <p className="mt-5 mb-1.5 px-3 text-[0.7rem] font-semibold tracking-wider text-chrome-muted uppercase first:mt-0">{i.section}</p>
           )}
           <NavLink
             to={i.to}
             end={i.end}
             className={({ isActive }) =>
               `group relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors duration-150 ${
-                isActive ? "bg-primary-soft font-semibold text-primary-ink" : "font-medium text-neutral hover:bg-neutral-bg hover:text-text"
+                isActive ? "bg-white/10 font-semibold text-white" : "font-medium text-chrome-text hover:bg-white/5 hover:text-white"
               }`
             }
           >
             {({ isActive }) => (
               <>
-                {isActive && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />}
-                <i.icon aria-hidden size={20} weight={isActive ? "fill" : "regular"} className={isActive ? "text-primary" : "text-subtle group-hover:text-neutral"} />
+                {isActive && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-chrome-accent" />}
+                <i.icon aria-hidden size={20} weight={isActive ? "fill" : "regular"} className={isActive ? "text-white" : "text-chrome-muted group-hover:text-white"} />
                 {i.label}
               </>
             )}
@@ -87,19 +100,28 @@ export function AppShell() {
     <Link to={HOME[user.role]} className="flex items-center gap-2.5 rounded-lg">
       <BrandMark />
       <span className="leading-tight">
-        <span className="block font-heading text-[0.95rem] font-semibold text-text">Smart Allocation</span>
-        <span className="block text-xs text-muted">Tata STRIVE · ITI projects</span>
+        <span className="block font-heading text-[0.95rem] font-semibold text-white">Smart Allocation</span>
+        <span className="block text-xs text-chrome-muted">Tata STRIVE · ITI projects</span>
       </span>
     </Link>
   );
 
-  const cyclePill = c && (
-    <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
-      <p className="text-[0.7rem] font-semibold tracking-wider text-subtle uppercase">Current cycle</p>
-      <p className="mt-0.5 truncate text-sm font-semibold text-text" title={c.name}>{c.name}</p>
-      <div className="mt-1.5">
-        <StatusBadge kind="cycle" value={c.status} />
-      </div>
+  const cyclePill = shown.length > 0 && (
+    <div className="rounded-lg border border-white/10 bg-chrome-2 px-3 py-2.5">
+      <p className="text-[0.7rem] font-semibold tracking-wider text-chrome-muted uppercase">
+        {user.role === "student" ? "Your cycle" : shown.length > 1 ? `Active cycles (${shown.length})` : "Active cycle"}
+      </p>
+      <ul className="mt-0.5 flex flex-col gap-0.5">
+        {shown.slice(0, 4).map((x) => (
+          <li key={x.id} className="truncate text-sm font-semibold text-white" title={x.name}>{x.name}</li>
+        ))}
+        {shown.length > 4 && <li className="text-xs text-chrome-muted">+{shown.length - 4} more</li>}
+      </ul>
+      {shown.length === 1 && (
+        <div className="mt-1.5">
+          <StatusBadge kind="cycle" value={shown[0].status} />
+        </div>
+      )}
     </div>
   );
 
@@ -113,10 +135,10 @@ export function AppShell() {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface lg:flex">
-        <div className="flex h-16 items-center border-b border-border px-5">{brand}</div>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-chrome lg:flex">
+        <div className="flex h-16 items-center border-b border-white/10 px-5">{brand}</div>
         <div className="flex-1 overflow-y-auto">{nav}</div>
-        {cyclePill && <div className="border-t border-border p-3">{cyclePill}</div>}
+        {cyclePill && <div className="border-t border-white/10 p-3">{cyclePill}</div>}
       </aside>
 
       {/* Mobile drawer */}
@@ -125,22 +147,22 @@ export function AppShell() {
           <div className="absolute inset-0 animate-fade-in bg-text/40" onClick={() => setOpen(false)} aria-hidden />
           <aside
             id="mobile-nav"
-            className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] animate-slide-in flex-col bg-surface shadow-overlay"
+            className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] animate-slide-in flex-col bg-chrome shadow-overlay"
             aria-label="Navigation"
           >
-            <div className="flex h-16 items-center justify-between border-b border-border px-4">
+            <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
               {brand}
               <button
                 type="button"
                 aria-label="Close navigation"
-                className="inline-flex size-10 items-center justify-center rounded-lg text-muted hover:bg-neutral-bg"
+                className="inline-flex size-10 items-center justify-center rounded-lg text-chrome-text hover:bg-white/10 hover:text-white"
                 onClick={() => setOpen(false)}
               >
                 <X aria-hidden size={20} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">{nav}</div>
-            {cyclePill && <div className="border-t border-border p-3">{cyclePill}</div>}
+            {cyclePill && <div className="border-t border-white/10 p-3">{cyclePill}</div>}
           </aside>
         </div>
       )}
@@ -162,9 +184,11 @@ export function AppShell() {
               <BrandMark className="size-7" />
             </Link>
           </div>
-          {c && (
+          {shown.length > 0 && (
             <span className="hidden min-w-0 items-center gap-2 text-sm text-muted md:flex lg:hidden">
-              <span className="truncate">{c.name}</span> <StatusBadge kind="cycle" value={c.status} />
+              {shown.length > 1 ? <span className="truncate">{shown.length} active cycles</span> : <>
+                <span className="truncate">{shown[0].name}</span> <StatusBadge kind="cycle" value={shown[0].status} />
+              </>}
             </span>
           )}
           <div className="ml-auto flex items-center gap-2 sm:gap-3">

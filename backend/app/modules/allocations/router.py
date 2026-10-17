@@ -19,7 +19,7 @@ from app.core.errors import not_found
 from app.core.responses import Envelope, In, ListEnvelope, Page, PageEnvelope, check_sort, clean_q, empty_page, paginate
 from app.db import models as M
 from app.db.enums import AllocationSource, AllocationStatus, UserRole
-from app.domain import resolve_cycle
+from app.domain import resolve_cycles
 from app.schemas import AllocationOut, ProjectRef, allocation_out, project_ref
 
 router = APIRouter(tags=["allocations"])
@@ -45,14 +45,14 @@ def list_allocations(
     sort: str = "project_title",
 ) -> PageEnvelope[AllocationOut]:
     check_sort(sort, set(SORTS))
-    cycle = resolve_cycle(db, cycle_id)
-    if cycle is None:
+    cycles = resolve_cycles(db, cycle_id)
+    if not cycles:
         return empty_page(params)
     stmt = (
         select(M.Allocation)
         .join(M.Trainee, M.Trainee.id == M.Allocation.trainee_id)
         .join(M.Project, M.Project.id == M.Allocation.project_id)
-        .where(M.Allocation.cycle_id == cycle.id)
+        .where(M.Allocation.cycle_id.in_([c.id for c in cycles]))
     )
     if viewer.role == UserRole.supervisor:
         stmt = stmt.where(M.Project.supervisor_id == viewer.id)

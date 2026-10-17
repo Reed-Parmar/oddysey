@@ -1086,6 +1086,46 @@
         "title": "CycleIn",
         "type": "object"
       },
+      "CycleOption": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "matching_projects": {
+            "title": "Matching Projects",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "submission_deadline": {
+            "format": "date-time",
+            "title": "Submission Deadline",
+            "type": "string"
+          },
+          "total_projects": {
+            "title": "Total Projects",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "submission_deadline",
+          "matching_projects",
+          "total_projects",
+          "recommended"
+        ],
+        "title": "CycleOption",
+        "type": "object"
+      },
       "CycleOut": {
         "properties": {
           "archive_at": {
@@ -1240,6 +1280,25 @@
           }
         },
         "title": "CyclePatch",
+        "type": "object"
+      },
+      "CycleRef": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CycleRef",
         "type": "object"
       },
       "CycleStatus": {
@@ -1786,6 +1845,32 @@
           "data"
         ],
         "title": "Envelope[UserOut]",
+        "type": "object"
+      },
+      "Envelope_list_CycleOut__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CycleOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[CycleOut]]",
         "type": "object"
       },
       "EvaluationIn": {
@@ -2445,6 +2530,22 @@
         "title": "LatestSubmission",
         "type": "object"
       },
+      "ListEnvelope_CycleOption_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CycleOption"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ListEnvelope[CycleOption]",
+        "type": "object"
+      },
       "ListEnvelope_HistoryEntry_": {
         "properties": {
           "data": {
@@ -2663,6 +2764,18 @@
             ],
             "title": "Centre Name"
           },
+          "cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Id"
+          },
           "full_name": {
             "anyOf": [
               {
@@ -2734,9 +2847,26 @@
             ],
             "title": "Completed At"
           },
+          "cycle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CycleRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cycle_open": {
             "title": "Cycle Open",
             "type": "boolean"
+          },
+          "cycle_options": {
+            "items": {
+              "$ref": "#/components/schemas/CycleOption"
+            },
+            "title": "Cycle Options",
+            "type": "array"
           },
           "data": {
             "additionalProperties": true,
@@ -2774,6 +2904,8 @@
           "missing",
           "enrolled",
           "cycle_open",
+          "cycle",
+          "cycle_options",
           "completed_at",
           "has_history"
         ],
@@ -3119,6 +3251,9 @@
             "title": "Archived",
             "type": "boolean"
           },
+          "cycle": {
+            "$ref": "#/components/schemas/CycleRef"
+          },
           "deadline": {
             "anyOf": [
               {
@@ -3194,6 +3329,7 @@
           }
         },
         "required": [
+          "cycle",
           "trainee",
           "project",
           "supervisor",
@@ -5880,8 +6016,27 @@
     },
     "/api/v1/admin/automation/run-now": {
       "post": {
-        "description": "Optional nudge: queue an allocation run now (the schedule runs it anyway).",
+        "description": "Optional nudge: queue an allocation run now (the schedule runs it anyway). Without `cycle_id`: every\nactive cycle (ADR-018).",
         "operationId": "run_now_api_v1_admin_automation_run_now_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
+            }
+          }
+        ],
         "responses": {
           "202": {
             "content": {
@@ -5892,6 +6047,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Run Now",
@@ -6069,6 +6234,16 @@
               "default": "-created_at",
               "title": "Sort",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "staff",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Staff",
+              "type": "boolean"
             }
           },
           {
@@ -6359,6 +6534,16 @@
               "default": "full_name",
               "title": "Sort",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "staff",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Staff",
+              "type": "boolean"
             }
           },
           {
@@ -6859,8 +7044,30 @@
         ]
       }
     },
+    "/api/v1/cycles/active": {
+      "get": {
+        "operationId": "list_active_cycles_api_v1_cycles_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_CycleOut__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Active Cycles",
+        "tags": [
+          "cycles"
+        ]
+      }
+    },
     "/api/v1/cycles/current": {
       "get": {
+        "description": "The caller's default cycle: a student's own open cycle; for staff the newest active one (a UI default).",
         "operationId": "current_cycle_api_v1_cycles_current_get",
         "responses": {
           "200": {
@@ -7287,6 +7494,55 @@
           }
         },
         "summary": "Complete Onboarding",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/cycle-options": {
+      "get": {
+        "description": "Live ranking while the student edits trades (ADR-018). Read-only; reveals only cycle names and counts.",
+        "operationId": "get_cycle_options_api_v1_onboarding_cycle_options_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trade_ids",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "maxItems": 5,
+              "title": "Trade Ids",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEnvelope_CycleOption_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cycle Options",
         "tags": [
           "onboarding"
         ]

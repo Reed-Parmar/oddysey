@@ -42,12 +42,20 @@ def schedule_tick(db: Session, now: datetime | None = None) -> None:
                 db, "archive_due", {"cycle_id": str(cycle.id)}, dedupe_key=f"archive:{cycle.id}", trigger="schedule"
             )
     # Sweep: work that should have a job but does not (e.g. created before the worker existed).
-    for pid in db.scalars(select(M.Project.id).where(M.Project.processing_status == ProjectProcessing.queued)):
-        jobs.enqueue(db, "process_project", {"project_id": str(pid)}, dedupe_key=f"project:{pid}", trigger="sweep")
-    for pid in db.scalars(
-        select(M.Project.id).where(M.Project.processing_status == ProjectProcessing.awaiting_supervisor)
-    ):
-        jobs.enqueue(db, "process_project", {"project_id": str(pid)}, dedupe_key=f"project:{pid}", trigger="sweep")
+    # One deduplicated batch job (not one job per project): process_projects hands any project that still
+    # needs AI generation to its own process_project job.
+    pending = [
+        str(pid)
+        for pid in db.scalars(
+            select(M.Project.id).where(
+                M.Project.processing_status.in_((ProjectProcessing.queued, ProjectProcessing.awaiting_supervisor))
+            )
+        )
+    ]
+    if pending:
+        jobs.enqueue(
+            db, "process_projects", {"project_ids": pending}, dedupe_key="process_projects:sweep", trigger="sweep"
+        )
     for sid in db.scalars(
         select(M.Submission.id).where(
             M.Submission.analysis_status.in_((AnalysisStatus.queued, AnalysisStatus.retrying))

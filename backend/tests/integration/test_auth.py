@@ -150,3 +150,20 @@ def test_object_level_visibility(client, users):
     # no catalogue: a student sees only their own allocated project, without stats
     projects = ok(client.get("/api/v1/projects", params={"page_size": 100}, headers=student))["data"]
     assert len(projects) == 1 and all(p["stats"] is None for p in projects)
+
+
+def test_staff_listing_excludes_students_and_puts_admins_first(client, users):
+    admin = users.make("admin", name="Zara Admin")
+    users.make("supervisor", name="Anil Supervisor")
+    users.make("student", name="Bina Student")
+    users.make("admin", name="Yusuf Admin")
+    rows = client.get("/api/v1/admin/users", params={"staff": True}, headers=admin).json()["data"]
+    assert [u["role"] for u in rows] == ["admin", "admin", "supervisor"]
+    assert [u["full_name"] for u in rows[:2]] == ["Yusuf Admin", "Zara Admin"]
+    everyone = client.get("/api/v1/admin/users", headers=admin).json()["data"]
+    assert "student" in {u["role"] for u in everyone}
+    for role, email in (("admin", "a@example.org"), ("supervisor", "v@example.org")):
+        body = {"email": email, "role": role, "send_email": False}
+        assert client.post("/api/v1/admin/invitations", json=body, headers=admin).status_code == 201
+    invs = client.get("/api/v1/admin/invitations", params={"staff": True}, headers=admin).json()["data"]
+    assert [i["role"] for i in invs] == ["admin", "supervisor"]

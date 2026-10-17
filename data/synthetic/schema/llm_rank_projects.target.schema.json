@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "EligibilityReason": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "enum": [
+              "trade_mismatch",
+              "below_min_practical",
+              "verified_assessment_required",
+              "below_min_match"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_code",
+        "reasons"
+      ],
+      "title": "EligibilityReason",
+      "type": "object"
+    },
+    "Explanation": {
+      "additionalProperties": false,
+      "properties": {
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 10,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_code",
+        "text"
+      ],
+      "title": "Explanation",
+      "type": "object"
+    },
+    "RankedProject": {
+      "additionalProperties": false,
+      "properties": {
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "project_code": {
+          "title": "Project Code",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rank",
+        "project_code",
+        "score"
+      ],
+      "title": "RankedProject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ranked_projects": {
+      "items": {
+        "$ref": "#/$defs/RankedProject"
+      },
+      "title": "Ranked Projects",
+      "type": "array"
+    },
+    "explanations": {
+      "items": {
+        "$ref": "#/$defs/Explanation"
+      },
+      "title": "Explanations",
+      "type": "array"
+    },
+    "eligibility_reasons": {
+      "items": {
+        "$ref": "#/$defs/EligibilityReason"
+      },
+      "title": "Eligibility Reasons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ranked_projects",
+    "explanations",
+    "eligibility_reasons"
+  ],
+  "title": "RankTarget",
+  "type": "object"
+}

@@ -84,7 +84,7 @@ function UsersTab() {
   const dq = useDebounced(q.trim());
   const query = {
     q: dq || undefined, role: (role || undefined) as UserRole | undefined,
-    status: (status || undefined) as AdminUser["status"] | undefined, sort, page, page_size: 20,
+    status: (status || undefined) as AdminUser["status"] | undefined, sort, page, page_size: 20, staff: true,
   };
   const list = useQuery({
     queryKey: qk.users.list(query),
@@ -104,7 +104,6 @@ function UsersTab() {
     { key: "role", header: "Role", cell: (u) => <StatusBadge kind="role" value={u.role} /> },
     { key: "status", header: "Status", cell: (u) => <StatusBadge kind="user" value={u.status} /> },
     { key: "dept", header: "Department", cell: (u) => u.department ?? <span className="text-muted">—</span> },
-    { key: "trainee", header: "Linked trainee", cell: (u) => u.trainee ? <span className="tabular-nums">{u.trainee.trainee_code}</span> : <span className="text-muted">—</span> },
     { key: "created", header: "Joined", sort: "-created_at", cell: (u) => <span className="whitespace-nowrap text-muted"><DateTime value={u.created_at} dateOnly /></span> },
     { key: "actions", header: <span className="sr-only">Actions</span>, cell: (u) => {
       const self = u.id === me?.id;
@@ -127,8 +126,7 @@ function UsersTab() {
         toolbar={<FilterBar>
           <SearchInput id="user-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Name or email" />
           <LabeledSelect id="user-role" label="Role" value={role} onChange={reset(setRole)}>
-            <option value="">All roles</option><option value="student">Student</option>
-            <option value="supervisor">Supervisor</option><option value="admin">Admin</option>
+            <option value="">All staff</option><option value="admin">Admin</option><option value="supervisor">Supervisor</option>
           </LabeledSelect>
           <LabeledSelect id="user-status" label="Status" value={status} onChange={reset(setStatus)}>
             <option value="">Any</option><option value="active">Active</option><option value="disabled">Disabled</option>
@@ -224,7 +222,7 @@ function InvitationsTab() {
   const [revoking, setRevoking] = useState<Invitation | null>(null);
   const query = {
     status: (status || undefined) as Invitation["status"] | undefined, role: (role || undefined) as UserRole | undefined,
-    sort: "-created_at" as const, page, page_size: 20,
+    sort: "-created_at" as const, page, page_size: 20, staff: true,
   };
   const list = useQuery({
     queryKey: qk.invitations.list(query),
@@ -273,8 +271,7 @@ function InvitationsTab() {
             <option value="revoked">Revoked</option><option value="expired">Expired</option>
           </LabeledSelect>
           <LabeledSelect id="inv-role" label="Role" value={role} onChange={reset(setRole)}>
-            <option value="">All roles</option><option value="student">Student</option>
-            <option value="supervisor">Supervisor</option><option value="admin">Admin</option>
+            <option value="">All staff</option><option value="admin">Admin</option><option value="supervisor">Supervisor</option>
           </LabeledSelect>
         </FilterBar>}
         footer={list.data?.data.length ? <Pagination meta={list.data.meta} onPageChange={setPage} /> : undefined}>

@@ -6,6 +6,7 @@ type S = components["schemas"];
 export type User = S["UserOut"];
 export type AdminUser = S["AdminUser"];
 export type Cycle = S["CycleOut"];
+export type CycleOption = S["CycleOption"];
 export type Trainee = S["TraineeOut"];
 export type TraineeMe = S["TraineeMe"];
 export type Project = S["ProjectOut"];

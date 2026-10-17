@@ -1,12 +1,16 @@
 # Admin Module Handbook (Teammate C)
 
+> **ADR-018 (rev 4, binding).** Several cycles can be active at once. Overview has a switcher between active cycles and
+> "New cycle" is always available. List filters default to **All active cycles** (rows show their cycle). Admins never
+> configure cycle trades or intake: students are placed by trade match and their own choice.
+
 > **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Admin navigation is **Overview** (cycle creation,
 > settings, history, manual and scheduled archive with preview, automation status), **Projects** (create with title,
 > description and document only; import; generated code, metadata, guide and supervisor; corrections for trades, deadline,
 > minimum match and verified practical requirement), **Allocation & Progress** (one row per trainee incl. unassigned with a
 > waiting reason; minimum vs trainee match; source; status; latest version and analysis; evaluation score + score type;
 > deadline; archive state; summary over the whole filtered set; details drawer with rejection/replacement history) and
-> **Staff & Invitations** (users, invitations with email delivery status, staff spreadsheet import). The Recommendations,
+> **Staff & Invitations** (staff only: admins listed above supervisors; students are managed through their trainee record; users, invitations with email delivery status, staff spreadsheet import). The Recommendations,
 > Allocations, Progress, Cycles and Trainees pages are removed (old URLs redirect). There is no capacity field and no
 > manual allocation; allocation and replacement are automatic.
 

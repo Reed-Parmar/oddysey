@@ -24,7 +24,7 @@ import { label } from "@/lib/statusLabels";
 import {
   ApiErrorAlert, CardState, CycleSelect, FilterBar, IstDateTime, LabeledSelect, LinkButton, MetaLine, ReadOnlyBanner,
   SearchInput, SkillsInput, TableCard, WarningsAlert, formatIst, fromLocalInput, toLocalInput, useActiveSupervisors,
-  useDebounced, useInvalidate, useScopedCycle, useTrades,
+  TargetCycleField, useDebounced, useInvalidate, useScopedCycle, useTrades,
 } from "./common";
 import { ImportDialog } from "./ImportPanel";
 import { sendMultipart } from "./sendMultipart";
@@ -65,19 +65,19 @@ export function ProjectsPage() {
   const scope = useScopedCycle(params.get("cycle") ?? "");
 
   const query = {
-    cycle_id: scope.id, q: dq || undefined,
+    cycle_id: scope.id || undefined, q: dq || undefined,
     processing_status: (processing || undefined) as Project["processing_status"] | undefined,
     sort: "title", page, page_size: 20,
   };
   const list = useQuery({
     queryKey: qk.projects.list(query),
     queryFn: () => call(api.GET("/api/v1/projects", { params: { query } })),
-    enabled: !!scope.id,
+    enabled: scope.ready,
     refetchInterval: (qr) => (qr.state.data?.data.some((p) => isBusy(p.processing_status)) ? 5000 : false),
   });
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
   const archived = scope.cycle?.status === "archived";
-  const writeReason = !scope.id ? "Create a cycle first (Overview)" : archived ? "This cycle is archived (read-only)" : undefined;
+  const writeReason = !scope.target ? "Create a cycle first (Overview)" : archived ? "This cycle is archived (read-only)" : undefined;
   const filtered = !!(dq || processing);
 
   const cols: Column<Project>[] = [
@@ -88,6 +88,7 @@ export function ProjectsPage() {
         {p.category && <span className="mt-0.5 block text-xs text-muted">{p.category}</span>}
       </span>
     ) },
+    ...(scope.multi ? [{ key: "cycle", header: "Cycle", cell: (p: Project) => <span className="whitespace-nowrap">{scope.nameOf(p.cycle_id)}</span> }] : []),
     { key: "trades", header: "Trades", cell: (p) => <span className="block min-w-32">{tradeNames(p)}</span> },
     { key: "status", header: "Processing", cell: (p) => (
       <span className="flex flex-col items-start gap-1">
@@ -98,7 +99,7 @@ export function ProjectsPage() {
     { key: "sup", header: "Supervisor", cell: (p) => p.supervisor ? (
       <span className="flex items-center gap-2 whitespace-nowrap"><Avatar name={p.supervisor.full_name} size="sm" />{p.supervisor.full_name}</span>
     ) : <span className="text-muted">Not assigned</span> },
-    { key: "count", header: "Number of trainees working individually", className: "text-right tabular-nums", cell: (p) => p.stats?.working_individually ?? 0 },
+    { key: "count", header: "Number of trainees", className: "text-right tabular-nums", cell: (p) => p.stats?.working_individually ?? 0 },
     { key: "deadline", header: "Deadline", cell: (p) => (
       <span className="whitespace-nowrap">
         <IstDateTime value={p.effective_deadline} />
@@ -107,7 +108,7 @@ export function ProjectsPage() {
     ) },
   ];
 
-  const createTo = `/admin/projects/new?cycle=${scope.id}`;
+  const createTo = `/admin/projects/new${scope.id ? `?cycle=${scope.id}` : ""}`;
   return (
     <div className="space-y-6">
       <PageHeader title="Projects" eyebrow="Programme team"
@@ -117,13 +118,13 @@ export function ProjectsPage() {
           <LinkButton variant="primary" icon={<Plus />} to={createTo}>Create project</LinkButton>
         </>} />
       {archived && <ReadOnlyBanner />}
-      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.id ? (
+      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.ready ? (
         <EmptyState icon={<FolderSimple />} title="No active cycle" description="Create a cycle on the Overview page first; projects belong to a cycle."
           action={<LinkButton variant="primary" to="/admin">Go to Overview</LinkButton>} />
       ) : (
         <TableCard
           toolbar={<FilterBar>
-            <CycleSelect id="proj-cycle" value={scope.id} cycles={scope.cycles} activeId={scope.active?.id}
+            <CycleSelect id="proj-cycle" value={scope.id} cycles={scope.cycles} actives={scope.actives}
               onChange={(v) => { setParams(v ? { cycle: v } : {}); setPage(1); }} />
             <SearchInput id="proj-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Title or code" />
             <LabeledSelect id="proj-processing" label="Processing status" value={processing} onChange={reset(setProcessing)}>
@@ -149,8 +150,9 @@ export function ProjectsPage() {
             )}
         </TableCard>
       )}
-      {scope.id && !archived && (
-        <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} endpoint="/admin/imports/projects" cycleId={scope.id}
+      {scope.target && !archived && (
+        <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} endpoint="/admin/imports/projects" cycleId={scope.target}
+          cycles={scope.allActive ? scope.actives : undefined}
           noun="projects" notes={PROJECT_IMPORT_NOTES}
           onApplied={() => invalidate(qk.projects.all(), qk.reports.all(), qk.progress.all(), qk.automation.status())} />
       )}
@@ -166,6 +168,9 @@ export function ProjectNewPage() {
   const toast = useToast();
   const invalidate = useInvalidate();
   const scope = useScopedCycle(params.get("cycle") ?? "");
+  const [chosen, setChosen] = useState("");
+  const targetId = chosen || scope.target;
+  const target = scope.actives.find((c) => c.id === targetId) ?? scope.cycle;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -176,7 +181,7 @@ export function ProjectNewPage() {
   const m = useMutation({
     mutationFn: () => {
       const form = new FormData();
-      form.append("cycle_id", scope.id);
+      form.append("cycle_id", targetId);
       form.append("title", title.trim());
       form.append("description", description.trim());
       form.append("file", file as File);
@@ -213,13 +218,13 @@ export function ProjectNewPage() {
     if (!Object.keys(next).length) m.mutate();
   };
 
-  const archived = scope.cycle?.status === "archived";
+  const archived = target?.status === "archived";
   const back = `/admin/projects${scope.id ? `?cycle=${scope.id}` : ""}`;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title="Create project" eyebrow={<BackLink to={back}>Back to projects</BackLink>}
-        description={scope.cycle ? <>Cycle <span className="font-medium text-text">{scope.cycle.name}</span></> : undefined} />
-      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.id ? (
+        description={target ? <>Cycle <span className="font-medium text-text">{target.name}</span></> : undefined} />
+      {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !targetId ? (
         <EmptyState icon={<FolderSimple />} title="No active cycle" description="Create a cycle on the Overview page first."
           action={<LinkButton variant="primary" to="/admin">Go to Overview</LinkButton>} />
       ) : archived ? <ReadOnlyBanner /> : (
@@ -230,6 +235,7 @@ export function ProjectNewPage() {
           </Alert>
           <form noValidate className="mt-5 flex flex-col gap-4" onSubmit={submit}>
             <FormError error={formError} />
+            {!scope.id && <TargetCycleField id="np-cycle" value={targetId} onChange={setChosen} actives={scope.actives} />}
             <FormField label="Title" htmlFor="np-title" required error={errors.title} hint="5 to 200 characters.">
               <Input id="np-title" value={title} maxLength={200} aria-invalid={!!errors.title} onChange={(e) => setTitle(e.target.value)} />
             </FormField>

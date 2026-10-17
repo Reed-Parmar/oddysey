@@ -1,5 +1,6 @@
-"""CYC (ADR-017): cycles are created active (no publish gate), carry deadline and archive settings, and are
-archived manually (with an impact preview) or on schedule. Archiving retains every record."""
+"""CYC (ADR-017, ADR-018): cycles are created active (no publish gate), carry deadline and archive settings, and are
+archived manually (with an impact preview) or on schedule. Archiving retains every record. Several cycles may be
+active at once."""
 
 import uuid
 from datetime import datetime, timedelta
@@ -11,21 +12,27 @@ from sqlalchemy import func, select
 from app import audit, jobs
 from app.automation.archive import ArchivePreview, archive_cycle, preview
 from app.core.config import get_settings
-from app.core.deps import DB, Admin, AnyRole
+from app.core.deps import DB, Admin, AdminOrSupervisor, AnyRole
 from app.core.errors import conflict, invalid_state, not_found
 from app.core.responses import Envelope, In, Page, PageEnvelope, check_sort, paginate
 from app.db import models as M
-from app.db.enums import CycleStatus
-from app.domain import active_cycle, lock_cycle, now_utc
+from app.db.enums import CycleStatus, UserRole
+from app.domain import active_cycles, default_cycle, lock_cycle, now_utc, student_trainee
 from app.schemas import CycleOut, cycle_out, utc
 
 router = APIRouter(tags=["cycles"])
 
 
 @router.get("/cycles/current")
-def current_cycle(_: AnyRole, db: DB) -> Envelope[CycleOut | None]:
-    c = active_cycle(db)
+def current_cycle(user: AnyRole, db: DB) -> Envelope[CycleOut | None]:
+    """The caller's default cycle: a student's own open cycle; for staff the newest active one (a UI default)."""
+    c = student_trainee(db, user.id)[0] if user.role == UserRole.student else default_cycle(db)
     return Envelope(data=cycle_out(c) if c else None)
+
+
+@router.get("/cycles/active")
+def list_active_cycles(_: AdminOrSupervisor, db: DB) -> Envelope[list[CycleOut]]:
+    return Envelope(data=[cycle_out(c) for c in active_cycles(db)])
 
 
 @router.get("/cycles")
@@ -96,8 +103,6 @@ def _name_taken(db: DB, name: str, exclude: uuid.UUID | None = None) -> bool:
 
 @router.post("/cycles", status_code=201)
 def create_cycle(body: CycleIn, admin: Admin, db: DB) -> Envelope[CycleOut]:
-    if active_cycle(db) is not None:
-        raise conflict("ACTIVE_CYCLE_EXISTS", "Archive the current cycle before creating a new one")
     if _name_taken(db, body.name):
         raise conflict("DUPLICATE_NAME", "A cycle with this name already exists")
     c = M.Cycle(

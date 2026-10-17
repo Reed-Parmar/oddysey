@@ -32,11 +32,11 @@ from app.db.enums import (
     UserStatus,
 )
 from app.domain import (
-    active_allocation,
     clean_names,
     lock_cycle,
+    pick_skills,
     project_input,
-    resolve_skill_names,
+    resolve_skills_bulk,
     resolve_trade_names,
     set_project_trades,
     set_trainee_trades,
@@ -146,6 +146,12 @@ def _decimal(v: Any) -> Decimal | None:
 def _split(v: Any) -> list[str]:
     s = _text(v)
     return [p.strip() for p in s.split(",") if p.strip()] if s else []
+
+
+def same_trades(primary_id: Any, current: list[M.Trade], row: list[M.Trade]) -> bool:
+    """Trades are a set plus a primary (first) trade. The loaded relationship is ordered by name, so
+    comparing ordered lists flagged every multi-trade row as changed on each re-import."""
+    return bool(row) and primary_id == row[0].id and {t.id for t in current} == {t.id for t in row}
 
 
 CODE_RE = re.compile(r"^[A-Za-z0-9-]{1,40}$")
@@ -336,10 +342,19 @@ async def import_trainees(
         t.trainee_code.upper(): t
         for t in db.scalars(select(M.Trainee).where(M.Trainee.cycle_id == cycle.id).with_for_update(of=M.Trainee))
     }
-    created_skills: list[str] = []
-    for _, p in parsed:
-        skills, new = resolve_skill_names(db, clean_names(p["skills"], 20, "skills"))
-        created_skills += new
+    # One lookup + one batched insert for every skill in the file (no per-row SELECT/autoflush).
+    row_skills = [clean_names(p["skills"], 20, "skills") for _, p in parsed]
+    found, created_skills = resolve_skills_bulk(db, [n for names in row_skills for n in names])
+    actives = {
+        a.trainee_id: a
+        for a in db.scalars(
+            select(M.Allocation).where(
+                M.Allocation.cycle_id == cycle.id, M.Allocation.status == AllocationStatus.active
+            )
+        ).unique()
+    }
+    for (_, p), names in zip(parsed, row_skills, strict=True):
+        skill_rows = pick_skills(found, names)
         row_trades = [trades[n.lower()] for n in p["trades"]]
         values = {
             "full_name": p["full_name"],
@@ -356,14 +371,14 @@ async def import_trainees(
         if t is None:
             t = M.Trainee(cycle_id=cycle.id, trainee_code=p["code"], **values)
             set_trainee_trades(t, row_trades)
-            t.skills = skills
+            t.skills = skill_rows
             db.add(t)
             result.created += 1
             continue
         dirty = (
             any(getattr(t, k) != v for k, v in values.items())
-            or sorted(s.id for s in t.skills) != sorted(s.id for s in skills)
-            or [x.id for x in t.all_trades] != [x.id for x in row_trades]
+            or sorted(s.id for s in t.skills) != sorted(s.id for s in skill_rows)
+            or not same_trades(t.trade_id, t.all_trades, row_trades)
         )
         if not dirty:
             result.unchanged += 1
@@ -371,11 +386,9 @@ async def import_trainees(
         for k, v in values.items():
             setattr(t, k, v)
         set_trainee_trades(t, row_trades)
-        t.skills = skills
+        t.skills = skill_rows
         result.updated += 1
-        db.flush()
-        db.refresh(t)
-        a = active_allocation(db, t.id)
+        a = actives.get(t.id)  # in-memory state already holds the new trades/skills/scores
         if a is not None:
             reasons = eligibility(trainee_input(t), project_input(a.project))
             if reasons:
@@ -540,9 +553,10 @@ async def import_projects(
     from app.modules.projects import next_project_code
 
     touched: list[M.Project] = []
-    for p in parsed:
-        skills, new = resolve_skill_names(db, clean_names(p["skills"], 15, "skills"))
-        result.created_skills += new
+    row_skills = [clean_names(p["skills"], 15, "skills") for p in parsed]
+    found, result.created_skills = resolve_skills_bulk(db, [n for names in row_skills for n in names])
+    for p, names in zip(parsed, row_skills, strict=True):
+        skill_rows = pick_skills(found, names)
         row_trades = [trades[n.lower()] for n in p["trades"]]
         values: dict[str, Any] = {
             "title": p["title"],
@@ -570,26 +584,27 @@ async def import_projects(
                 **values,
             )
             set_project_trades(proj, row_trades)
-            proj.skills = skills
+            proj.skills = skill_rows
             db.add(proj)
             touched.append(proj)
             result.created += 1
             continue
         dirty = (
             any(getattr(proj, k) != v for k, v in values.items() if k != "max_trainees")
-            or sorted(s.id for s in proj.skills) != sorted(s.id for s in skills)
-            or [x.id for x in proj.all_trades] != [x.id for x in row_trades]
+            or sorted(s.id for s in proj.skills) != sorted(s.id for s in skill_rows)
+            or not same_trades(proj.target_trade_id, proj.all_trades, row_trades)
         )
         if not dirty:
             result.unchanged += 1
             continue
-        trade_or_min = [x.id for x in proj.all_trades] != [
-            x.id for x in row_trades
-        ] or proj.min_practical_score != values["min_practical_score"]
+        trade_or_min = (
+            not same_trades(proj.target_trade_id, proj.all_trades, row_trades)
+            or proj.min_practical_score != values["min_practical_score"]
+        )
         for k, v in values.items():
             setattr(proj, k, v)
         set_project_trades(proj, row_trades)
-        proj.skills = skills
+        proj.skills = skill_rows
         if proj.processing_status == ProjectProcessing.awaiting_document and p["problem_doc_url"]:
             proj.processing_status = ProjectProcessing.queued
         touched.append(proj)
@@ -608,8 +623,7 @@ async def import_projects(
                         f"{a.trainee.trainee_code} is now ineligible for {proj.project_code} ({', '.join(reasons)})"
                     )
     db.flush()
-    for proj in touched:
-        jobs.enqueue(
-            db, "process_project", {"project_id": str(proj.id)}, dedupe_key=f"project:{proj.id}", trigger="import"
-        )
+    for i in range(0, len(touched), 200):  # one batch job per 200 projects instead of one job each
+        ids = [str(proj.id) for proj in touched[i : i + 200]]
+        jobs.enqueue(db, "process_projects", {"project_ids": ids}, trigger="import")
     return Envelope(data=_finish(db, result, dry_run, admin, "import.projects", cycle))

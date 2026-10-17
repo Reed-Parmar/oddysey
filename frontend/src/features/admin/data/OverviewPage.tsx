@@ -1,7 +1,7 @@
 /** /admin overview: cycle management (create, settings, archive, history) + programme stats + automation (ADR-017). */
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Archive, ArrowClockwise, CalendarPlus, ChartBar, CheckCircle, ClockCounterClockwise, FolderSimple, GearSix, GraduationCap,
+  Archive, ArrowClockwise, CalendarPlus, ChartBar, CheckCircle, ClockCounterClockwise, GearSix, GraduationCap,
   Info, Lightning, Robot, Target, Users, Warning,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -13,12 +13,13 @@ import { z } from "zod";
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
 import type { Automation, Cycle, Overview } from "@/api/types";
-import { useCurrentCycle } from "@/app/AppShell";
+import { useActiveCycles } from "@/app/AppShell";
 import {
-  DataTable, EmptyState, ErrorState, FormField, LoadingState, Meter, PageHeader, StackedBar, StatCard, StatusBadge,
+  DataTable, EmptyState, ErrorState, FormField, LoadingState, Meter, PageHeader, StackedBar, StatusBadge,
   useToast, type Column,
 } from "@/components/shared";
-import { Alert, Button, Card, Dialog, Input, Textarea } from "@/components/ui";
+import { Pipeline, PipelineLegend, PipelineStatusChip } from "@/components/shared/Pipeline";
+import { Alert, Button, Card, Dialog, Input, Textarea, cx } from "@/components/ui";
 import { formatScore } from "@/lib/format";
 import { label } from "@/lib/statusLabels";
 
@@ -26,36 +27,64 @@ import {
   ApiErrorAlert, IstDateTime, MetaLine, StatTile, applyFieldErrors, formatIst, fromLocalInput, humanize, toLocalInput,
   triggerLabel, useAllCycles, useInvalidate,
 } from "./common";
+import { buildLifecycle, workerHealth } from "./lifecycle";
 
 const GRADE_ORDER = ["A1", "A", "B+", "B", "C", "D"] as const;
 const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : "—");
 
 const ARCHIVE_EXPLANATION =
-  "Archiving closes a completed cohort while keeping every assignment, document, submission, score, originality report and audit record. It freezes outcomes and keeps completed work out of new allocation runs. It is not deletion or a backup. Only one cycle can be active, so archiving also makes room for the next cohort. Scheduled archiving runs automatically at the archive date when enabled.";
+  "Archiving closes a completed cohort while keeping every assignment, document, submission, score, originality report and audit record. It freezes outcomes and keeps completed work out of new allocation runs. It is not deletion or a backup. Other active cycles are not affected: several cohorts can run at the same time. Scheduled archiving runs automatically at the archive date when enabled.";
 
 export function AdminOverview() {
-  const current = useCurrentCycle();
+  const activeQ = useActiveCycles();
   const [viewId, setViewId] = useState<string | null>(null);
-  const active = current.data?.data ?? null;
+  const [creating, setCreating] = useState(false);
+  const actives = activeQ.data?.data ?? [];
 
-  if (current.isLoading) return <><PageHeader title="Overview" eyebrow="Programme team" /><LoadingState /></>;
-  if (current.error) return <><PageHeader title="Overview" eyebrow="Programme team" /><ErrorState error={current.error} onRetry={() => void current.refetch()} /></>;
+  if (activeQ.isLoading) return <><PageHeader title="Overview" eyebrow="Programme team" /><LoadingState /></>;
+  if (activeQ.error) return <><PageHeader title="Overview" eyebrow="Programme team" /><ErrorState error={activeQ.error} onRetry={() => void activeQ.refetch()} /></>;
 
-  const viewingPast = viewId != null && viewId !== active?.id;
+  // ADR-018: several cycles can be active. Default to the newest; the switcher and history pick another.
+  const active = actives.find((c) => c.id === viewId) ?? (viewId ? null : actives[0] ?? null);
+  const viewingPast = viewId != null && !active;
   return (
     <div className="space-y-6">
-      {viewingPast ? (
-        <PastCycleView cycleId={viewId} onBack={() => setViewId(null)} />
-      ) : active ? (
-        <ActiveCycleView cycle={active} />
-      ) : (
+      {actives.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {actives.length > 1 ? (
+            <div role="tablist" aria-label="Active cycles" className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
+              {actives.map((c) => {
+                const on = !viewingPast && active?.id === c.id;
+                return (
+                  <button key={c.id} role="tab" type="button" aria-selected={on} onClick={() => setViewId(c.id)}
+                    className={cx("inline-flex min-h-9 items-center rounded-md px-4 text-sm font-semibold transition-colors duration-150",
+                      on ? "bg-surface text-primary shadow-card" : "text-muted hover:text-text")}>
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : <span className="text-sm text-muted">1 active cycle</span>}
+          <Button variant={creating ? "secondary" : "primary"} icon={<CalendarPlus />} onClick={() => setCreating((v) => !v)}>
+            {creating ? "Cancel new cycle" : "New cycle"}
+          </Button>
+        </div>
+      )}
+      {(creating || actives.length === 0) && (
         <>
-          <PageHeader title="Overview" eyebrow="Programme team"
-            description="There is no active cycle. Create one to start the next cohort; projects, trainee enrolment and automatic allocation all happen inside it." />
+          {actives.length === 0 && !viewingPast && (
+            <PageHeader title="Overview" eyebrow="Programme team"
+              description="There is no active cycle. Create one to start the next cohort; projects, trainee enrolment and automatic allocation all happen inside it." />
+          )}
           <CreateCycleCard />
         </>
       )}
-      <CycleHistory activeId={active?.id} viewingId={viewingPast ? viewId : active?.id ?? null} onView={(id) => setViewId(id)} />
+      {viewingPast ? (
+        <PastCycleView cycleId={viewId} onBack={() => setViewId(null)} />
+      ) : active ? (
+        <ActiveCycleView key={active.id} cycle={active} />
+      ) : null}
+      <CycleHistory activeIds={actives.map((c) => c.id)} viewingId={viewingPast ? viewId : active?.id ?? null} onView={(id) => setViewId(id)} />
     </div>
   );
 }
@@ -64,7 +93,7 @@ export function AdminOverview() {
 
 function ActiveCycleView({ cycle }: { cycle: Cycle }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const report = useOverview(cycle.id);
+  const report = useOverview(cycle.id, true);
   return (
     <>
       <PageHeader title={cycle.name} eyebrow="Overview · active cycle"
@@ -75,7 +104,10 @@ function ActiveCycleView({ cycle }: { cycle: Cycle }) {
         ]} />}
         actions={<Button variant="secondary" icon={<Archive />} onClick={() => setArchiveOpen(true)}>Archive cycle</Button>} />
       {report.isLoading ? <LoadingState /> : report.error ? <ErrorState error={report.error} onRetry={() => void report.refetch()} /> : report.data ? (
-        <OverviewStats o={report.data.data} />
+        <>
+          <LifecycleSection o={report.data.data} live updatedAt={report.dataUpdatedAt} />
+          <OverviewStats o={report.data.data} />
+        </>
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">
         <AutomationCard />
@@ -86,11 +118,78 @@ function ActiveCycleView({ cycle }: { cycle: Cycle }) {
   );
 }
 
-function useOverview(cycleId: string) {
+function useOverview(cycleId: string, live = false) {
   return useQuery({
     queryKey: qk.reports.overview(cycleId),
     queryFn: () => call(api.GET("/api/v1/admin/reports/overview", { params: { query: { cycle_id: cycleId } } })),
+    refetchInterval: live ? 30_000 : false,
   });
+}
+
+function useAutomation() {
+  return useQuery({
+    queryKey: qk.automation.status(),
+    queryFn: () => call(api.GET("/api/v1/admin/automation")),
+    refetchInterval: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------- lifecycle pipeline
+
+function LifecycleSection({ o, live, updatedAt }: { o: Overview; live?: boolean; updatedAt?: number }) {
+  const toast = useToast();
+  const invalidate = useInvalidate();
+  const automation = useAutomation();
+  const a = live ? automation.data?.data : undefined;
+  const run = useMutation({
+    mutationFn: () => call(api.POST("/api/v1/admin/automation/run-now")),
+    onSuccess: () => {
+      toast.success("Allocation run queued");
+      invalidate(qk.automation.status(), qk.reports.all(), qk.progress.all(), qk.allocations.all(), qk.projects.all());
+    },
+  });
+  const stages = buildLifecycle(o, a, { archived: !live });
+  const health = a ? workerHealth(a) : null;
+  const toolbar = (
+    <>
+      <div className="mr-auto min-w-0">
+        <h2 className="text-base font-semibold text-text">Automated lifecycle</h2>
+        <p className="text-xs text-muted">
+          {live ? "Live from the background worker, refreshed every 30 seconds. Select a stage for details." : "Frozen at archive time. Select a stage for details."}
+        </p>
+      </div>
+      {live && (
+        <>
+          {health && (
+            <span className="inline-flex items-center rounded-full border border-border bg-surface-2 px-3 py-1">
+              <PipelineStatusChip status={health.status} label={health.label} />
+            </span>
+          )}
+          {a && (
+            <span className="font-mono text-xs text-muted">
+              every {a.interval_minutes} min · next {a.next_allocation_estimate ? formatIst(a.next_allocation_estimate) : "—"}
+            </span>
+          )}
+          <Button size="sm" variant="secondary" icon={<Lightning />} loading={run.isPending} disabled={!a}
+            aria-describedby="run-now-hint" onClick={() => run.mutate()}>Run allocation now</Button>
+          <span id="run-now-hint" className="sr-only">Optional. Queues the allocation job early for every active cycle; the schedule keeps running automatically.</span>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section aria-label="Automated lifecycle" className="space-y-3">
+      <ApiErrorAlert error={run.error} />
+      {live && automation.error && <ErrorState error={automation.error} onRetry={() => void automation.refetch()} />}
+      <Pipeline label="Programme lifecycle stages" stages={stages} columns={4} toolbar={toolbar}
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <PipelineLegend />
+            {updatedAt ? <span className="font-mono text-xs text-subtle">Updated {new Date(updatedAt).toLocaleTimeString("en-IN", { hour12: false })}</span> : null}
+          </div>
+        } />
+    </section>
+  );
 }
 
 // ---------------------------------------------------------------- past cycle (read-only)
@@ -113,7 +212,10 @@ function PastCycleView({ cycleId, onBack }: { cycleId: string; onBack: () => voi
         {cycle?.archive_reason && <span className="mt-1 block">Archive reason: {cycle.archive_reason}</span>}
       </Alert>
       {report.isLoading ? <LoadingState /> : report.error ? <ErrorState error={report.error} onRetry={() => void report.refetch()} /> : report.data ? (
-        <OverviewStats o={report.data.data} />
+        <>
+          <LifecycleSection o={report.data.data} />
+          <OverviewStats o={report.data.data} />
+        </>
       ) : null}
     </>
   );
@@ -129,17 +231,7 @@ function OverviewStats({ o }: { o: Overview }) {
   const total = a ? a.assigned + a.unassigned : 0;
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Trainees" value={t?.total ?? 0} icon={<GraduationCap />} to="/admin/tracking"
-          hint={t ? `${t.assessment_complete} assessed · ${t.profile_only} profile only` : undefined} />
-        <StatCard label="Projects ready" value={p?.ready ?? 0} icon={<FolderSimple />} tone="accent" to="/admin/projects"
-          hint={p ? `${p.total} in total · ${p.working_individually} trainees working individually` : undefined} />
-        <StatCard label="Assigned" value={a?.assigned ?? 0} icon={<Target />} tone="success" to="/admin/tracking"
-          hint={a ? `Coverage ${pct(a.assigned, total)} · ${a.unassigned} waiting` : undefined} />
-        <StatCard label="Evaluated" value={s?.evaluated ?? 0} icon={<CheckCircle />} to="/admin/tracking"
-          hint={s ? `${s.submitted} awaiting evaluation · ${s.not_submitted} not submitted` : undefined} />
-      </div>
-
+      <h2 className="sr-only">Stage details</h2>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Matching status" icon={<Target />} description="Automatic allocation: each trainee works individually on one project.">
           {a ? (
@@ -251,35 +343,27 @@ function CountList({ title, entries, format }: { title: string; entries: Record<
 
 // ---------------------------------------------------------------- automation
 
-function lastResult(a: Automation) {
-  const r = (a.last_allocation_result ?? {}) as { allocated?: number; waiting?: number; replacements?: number; ready_projects?: number };
-  return r;
+/** The worker stores `waiting` as counts per reason ({below_min_practical: 1, …}); show totals only. */
+function lastResult(a: Automation): { allocated?: number; waiting?: number; replacements?: number; ready_projects?: number } {
+  const raw = (a.last_allocation_result ?? {}) as Record<string, unknown>;
+  const count = (v: unknown): number | undefined => {
+    if (typeof v === "number") return v;
+    if (Array.isArray(v)) return v.length;
+    if (v && typeof v === "object") return Object.values(v).reduce<number>((n, x) => n + (typeof x === "number" ? x : 0), 0);
+    return undefined;
+  };
+  return { allocated: count(raw.allocated), waiting: count(raw.waiting), replacements: count(raw.replacements), ready_projects: count(raw.ready_projects) };
 }
 
 function AutomationCard() {
-  const toast = useToast();
-  const invalidate = useInvalidate();
-  const q = useQuery({
-    queryKey: qk.automation.status(),
-    queryFn: () => call(api.GET("/api/v1/admin/automation")),
-    refetchInterval: 30_000,
-  });
-  const run = useMutation({
-    mutationFn: () => call(api.POST("/api/v1/admin/automation/run-now")),
-    onSuccess: () => {
-      toast.success("Allocation run queued");
-      invalidate(qk.automation.status(), qk.reports.all(), qk.progress.all(), qk.allocations.all(), qk.projects.all());
-    },
-  });
+  const q = useAutomation();
   const a = q.data?.data;
   const r = a ? lastResult(a) : {};
   return (
     <Card title="Automation" icon={<Robot />}
-      description="Allocation runs on a schedule in the background; no approval step is needed."
-      actions={<Button size="sm" variant="secondary" icon={<Lightning />} loading={run.isPending} disabled={!a} onClick={() => run.mutate()}>Run allocation now</Button>}>
+      description="Allocation runs on a schedule in the background; no approval step is needed.">
       {q.isLoading ? <LoadingState /> : q.error ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : a ? (
         <div className="flex flex-col gap-4 text-sm">
-          <ApiErrorAlert error={run.error} />
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatTileDl label="Runs every" value={`${a.interval_minutes} min`} />
             <StatTileDl label="Queued jobs" value={a.queued_jobs} />
@@ -304,7 +388,7 @@ function AutomationCard() {
             <dd className="font-medium">{a.ai_configured ? "Configured" : "Not configured (rule-based fallbacks are used)"}</dd>
           </dl>
           <p className="text-xs text-muted">
-            "Run allocation now" is optional: it only queues the same job early. The schedule keeps running automatically.
+            The manual run in the lifecycle header is optional: it only queues the same job early. The schedule keeps running automatically.
           </p>
         </div>
       ) : null}
@@ -353,7 +437,7 @@ function CreateCycleCard() {
   });
   const err = form.formState.errors;
   return (
-    <Card title="Create cycle" icon={<CalendarPlus />} description="A cycle is one cohort round. Times are in India Standard Time (Asia/Kolkata).">
+    <Card title="Create cycle" icon={<CalendarPlus />} description="A cycle is one cohort round; several can run at once and students are placed by trade automatically. Times are in India Standard Time (Asia/Kolkata).">
       <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => m.mutate(v))}>
         <ApiErrorAlert error={alertError} />
         <div className="grid gap-4 md:grid-cols-2">
@@ -511,11 +595,11 @@ function ArchiveDialog({ cycle, open, onClose }: { cycle: Cycle; open: boolean; 
 
 // ---------------------------------------------------------------- history
 
-function CycleHistory({ activeId, viewingId, onView }: { activeId?: string; viewingId: string | null; onView: (id: string) => void }) {
+function CycleHistory({ activeIds, viewingId, onView }: { activeIds: string[]; viewingId: string | null; onView: (id: string) => void }) {
   const cycles = useAllCycles();
   const rows = cycles.data?.data ?? [];
   const cols: Column<Cycle>[] = [
-    { key: "name", header: "Cycle", cell: (c) => <span className="font-semibold">{c.name}{c.id === activeId && <span className="ml-1.5 text-xs font-normal text-muted">(active)</span>}</span> },
+    { key: "name", header: "Cycle", cell: (c) => <span className="font-semibold">{c.name}{activeIds.includes(c.id) && <span className="ml-1.5 text-xs font-normal text-muted">(active)</span>}</span> },
     { key: "status", header: "Status", cell: (c) => <StatusBadge kind="cycle" value={c.status} /> },
     { key: "deadline", header: "Submission deadline", cell: (c) => <span className="whitespace-nowrap"><IstDateTime value={c.submission_deadline} /></span> },
     { key: "archived", header: "Archived", cell: (c) => <span className="whitespace-nowrap text-muted">{c.archived_at ? formatIst(c.archived_at) : "—"}</span> },
@@ -530,7 +614,7 @@ function CycleHistory({ activeId, viewingId, onView }: { activeId?: string; view
       actions={<Button size="sm" variant="ghost" icon={<ArrowClockwise />} onClick={() => void cycles.refetch()}>Refresh</Button>}>
       <div className="px-5 pb-5">
         {cycles.isLoading ? <LoadingState /> : cycles.error ? <ErrorState error={cycles.error} onRetry={() => void cycles.refetch()} /> : !rows.length ? (
-          <EmptyState icon={<CalendarPlus />} title="No cycles yet" description="Create the first cycle above." />
+          <EmptyState icon={<CalendarPlus />} title="No cycles yet" description="Create the first cycle above. Several cycles can run at the same time." />
         ) : (
           <DataTable rows={rows} columns={cols} rowKey={(c) => c.id} caption="Cycle history" />
         )}

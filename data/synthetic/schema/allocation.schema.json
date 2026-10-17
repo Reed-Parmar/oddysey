@@ -1,0 +1,231 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "trainee_id": {
+      "title": "Trainee Id",
+      "type": "string"
+    },
+    "enrolment_wave": {
+      "title": "Enrolment Wave",
+      "type": "integer"
+    },
+    "assessment_mode": {
+      "enum": [
+        "full",
+        "profile"
+      ],
+      "title": "Assessment Mode",
+      "type": "string"
+    },
+    "assigned": {
+      "title": "Assigned",
+      "type": "boolean"
+    },
+    "assigned_project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Assigned Project Id"
+    },
+    "assigned_project_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Assigned Project Code"
+    },
+    "assignment_source": {
+      "enum": [
+        "auto_best_eligible",
+        "replacement_ranked",
+        "none"
+      ],
+      "title": "Assignment Source",
+      "type": "string"
+    },
+    "allocation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Allocation Id"
+    },
+    "assignment_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Assignment Score"
+    },
+    "assignment_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Assignment Reason"
+    },
+    "unallocated_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unallocated Reason"
+    },
+    "unallocated_reason_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unallocated Reason Text"
+    },
+    "best_individual_project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Best Individual Project Id"
+    },
+    "best_individual_project_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Best Individual Project Code"
+    },
+    "best_individual_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Best Individual Score"
+    },
+    "assignment_matches_best_individual": {
+      "title": "Assignment Matches Best Individual",
+      "type": "boolean"
+    },
+    "why_not_best_individual": {
+      "anyOf": [
+        {
+          "enum": [
+            "rejected_own_best_project",
+            "offered_rejected_project_as_replacement",
+            "other"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Why Not Best Individual"
+    },
+    "eligible_ready_projects": {
+      "title": "Eligible Ready Projects",
+      "type": "integer"
+    },
+    "alternative_projects": {
+      "title": "Alternative Projects",
+      "type": "string"
+    },
+    "rejected_project_ids": {
+      "title": "Rejected Project Ids",
+      "type": "string"
+    },
+    "allocation_policy": {
+      "title": "Allocation Policy",
+      "type": "string"
+    },
+    "scoring_version": {
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "synthetic_record": {
+      "const": true,
+      "title": "Synthetic Record",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "split",
+    "trainee_id",
+    "enrolment_wave",
+    "assessment_mode",
+    "assigned",
+    "assigned_project_id",
+    "assigned_project_code",
+    "assignment_source",
+    "allocation_id",
+    "assignment_score",
+    "assignment_reason",
+    "unallocated_reason",
+    "unallocated_reason_text",
+    "best_individual_project_id",
+    "best_individual_project_code",
+    "best_individual_score",
+    "assignment_matches_best_individual",
+    "why_not_best_individual",
+    "eligible_ready_projects",
+    "alternative_projects",
+    "rejected_project_ids",
+    "allocation_policy",
+    "scoring_version",
+    "synthetic_record"
+  ],
+  "title": "AllocationResultRow",
+  "type": "object"
+}

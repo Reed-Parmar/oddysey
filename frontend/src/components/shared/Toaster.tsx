@@ -27,7 +27,7 @@ export function Toaster({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className="flex animate-slide-in items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text shadow-raised"
+              className="flex animate-slide-in items-start gap-3 rounded-xl border border-border bg-surface-strong px-4 py-3 text-sm text-text shadow-raised"
             >
               <Icon aria-hidden size={20} weight="fill" className={`mt-px shrink-0 ${tone}`} />
               <p className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]">{t.text}</p>

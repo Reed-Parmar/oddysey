@@ -83,7 +83,7 @@ describe("profile helpers", () => {
 describe("onboarding helpers", () => {
   const complete = {
     full_name: "Asha K", gender: "undisclosed", trainee_code: "ITI-2026-01", centre_name: "", trade_ids: ["t1"],
-    skills: ["Wiring"], career_interest: "Electrician", background: "",
+    skills: ["Wiring"], career_interest: "Electrician", background: "", cycle_id: "",
   };
 
   it("parses an untyped draft defensively", () => {
@@ -109,8 +109,9 @@ describe("onboarding helpers", () => {
   it("builds the PUT body with nulls for empty text", () => {
     expect(onboardingBody({ ...complete, skills: ["Wiring", "wiring"] })).toEqual({
       full_name: "Asha K", gender: "undisclosed", trainee_code: "ITI-2026-01", centre_name: null, trade_ids: ["t1"],
-      skills: ["Wiring"], career_interest: "Electrician", background: null,
+      skills: ["Wiring"], career_interest: "Electrician", background: null, cycle_id: null,
     });
+    expect(onboardingBody({ ...complete, cycle_id: "c2" }).cycle_id).toBe("c2"); // explicit choice (ADR-018)
   });
 });
 
