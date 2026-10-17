@@ -22,7 +22,7 @@ A wrong role on a role route renders `Forbidden` with a link to the user's own d
 
 ## 2. Layout and navigation
 
-- **AppShell**: top bar (product name, cycle chip from CYC-01 with name and status, user menu → Account / Log out) plus a role sidebar. Below `768px` the sidebar becomes a drawer. Content max width 1200px; padding 16px mobile, 24px desktop. Each page starts with `PageHeader`.
+- **AppShell**: a fixed role sidebar (brand, grouped nav with icons, a current-cycle card from CYC-01) plus a top bar (account link → Account, Log out). Below `1024px` the sidebar becomes a drawer (Escape closes it). There is a skip link, and focus moves to `<main>` on route change. Content max width `max-w-7xl`; padding 16px mobile, 24–32px desktop. Each page starts with `PageHeader`.
 - Nav is declared **only** in `app/nav.ts`:
 
 | Student | Supervisor | Admin |
@@ -40,7 +40,11 @@ Non-nav routes (detail pages) are listed in each handbook. A self-registered stu
 
 ## 3. Design tokens and status labels
 
-- Tailwind + shadcn/ui CSS-variable theme. Light only in the MVP (dark mode in Phase 5). System font; `text-sm` body and tables, `text-xl` titles; cards `rounded-lg border p-4`.
+- Tailwind v4 `@theme` tokens in `src/index.css`. Light only in the MVP (dark mode in Phase 5). The full design system (palette, type, components, layout rules) is in [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+  - Indigo primary, with orange accent kept for AI moments; slate neutrals.
+  - Lexend headings, Source Sans 3 body text, tabular figures in data.
+  - Phosphor icons.
+  - Cards `rounded-xl border shadow-card p-5`.
 - **One label map**, `lib/statusLabels.ts`. Every badge shows text, never colour alone:
 
 | Kind: value | Label | Variant |

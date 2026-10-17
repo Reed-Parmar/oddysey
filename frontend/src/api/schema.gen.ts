@@ -438,6 +438,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resumes/{resume_id}/file-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume File Url */
+        get: operations["resume_file_url_api_v1_resumes__resume_id__file_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills": {
         parameters: {
             query?: never;
@@ -576,6 +593,40 @@ export interface paths {
         patch: operations["patch_my_trainee_api_v1_trainees_me_patch"];
         trace?: never;
     };
+    "/api/v1/trainees/me/resumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Resume */
+        post: operations["upload_resume_api_v1_trainees_me_resumes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trainees/me/resumes/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Latest Resume */
+        get: operations["my_latest_resume_api_v1_trainees_me_resumes_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trainees/{trainee_id}": {
         parameters: {
             query?: never;
@@ -592,6 +643,23 @@ export interface paths {
         head?: never;
         /** Patch Trainee */
         patch: operations["patch_trainee_api_v1_trainees__trainee_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/trainees/{trainee_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trainee Resume */
+        get: operations["trainee_resume_api_v1_trainees__trainee_id__resume_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -813,6 +881,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_resume_api_v1_trainees_me_resumes_post */
+        Body_upload_resume_api_v1_trainees_me_resumes_post: {
+            /** File */
+            file: string;
+        };
         /** CycleBrief */
         CycleBrief: {
             /**
@@ -950,6 +1023,11 @@ export interface components {
             data: components["schemas"]["ProjectOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
+        /** Envelope[ResumeOut] */
+        Envelope_ResumeOut_: {
+            data: components["schemas"]["ResumeOut"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
         /** Envelope[RunOut] */
         Envelope_RunOut_: {
             data: components["schemas"]["RunOut"];
@@ -968,6 +1046,11 @@ export interface components {
         /** Envelope[Union[CycleOut, NoneType]] */
         Envelope_Union_CycleOut__NoneType__: {
             data: components["schemas"]["CycleOut"] | null;
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[Union[ResumeOut, NoneType]] */
+        Envelope_Union_ResumeOut__NoneType__: {
+            data: components["schemas"]["ResumeOut"] | null;
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[Union[TraineeMe, NoneType]] */
@@ -1020,6 +1103,11 @@ export interface components {
          * @enum {string}
          */
         EvaluationOutcome: "evaluated" | "rework_requested";
+        /**
+         * ExtractionSource
+         * @enum {string}
+         */
+        ExtractionSource: "rule" | "ai";
         /** FactorOut */
         FactorOut: {
             /** Ai Refined */
@@ -1492,6 +1580,62 @@ export interface components {
          * @enum {string}
          */
         RecommendationSource: "rule" | "rule_ai";
+        /** ResumeExtracted */
+        ResumeExtracted: {
+            /** Career Interest Hint */
+            career_interest_hint: string | null;
+            /** Certifications */
+            certifications: string[];
+            /** Projects */
+            projects: components["schemas"]["ResumeProject"][];
+            /** Skills */
+            skills: string[];
+            /** Tools */
+            tools: string[];
+        };
+        /** ResumeOut */
+        ResumeOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Code */
+            error_code: string | null;
+            extracted: components["schemas"]["ResumeExtracted"] | null;
+            /** File Mime Type */
+            file_mime_type: string | null;
+            /** File Name */
+            file_name: string | null;
+            /** File Size Bytes */
+            file_size_bytes: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Skill Matches */
+            skill_matches: components["schemas"]["SkillMatch"][];
+            source: components["schemas"]["ExtractionSource"] | null;
+            status: components["schemas"]["ResumeStatus"];
+            /**
+             * Trainee Id
+             * Format: uuid
+             */
+            trainee_id: string;
+        };
+        /** ResumeProject */
+        ResumeProject: {
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ResumeStatus
+         * @enum {string}
+         */
+        ResumeStatus: "extracted" | "failed";
         /** RowError */
         RowError: {
             /** Column */
@@ -1625,6 +1769,15 @@ export interface components {
             safety?: number | string | null;
             /** Theory */
             theory?: number | string | null;
+        };
+        /** SkillMatch */
+        SkillMatch: {
+            /** Already On Profile */
+            already_on_profile: boolean;
+            /** Known Skill */
+            known_skill: boolean;
+            /** Name */
+            name: string;
         };
         /** SubStats */
         SubStats: {
@@ -3088,6 +3241,37 @@ export interface operations {
             };
         };
     };
+    resume_file_url_api_v1_resumes__resume_id__file_url_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_FileUrl_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_skills_api_v1_skills_get: {
         parameters: {
             query?: {
@@ -3400,6 +3584,59 @@ export interface operations {
             };
         };
     };
+    upload_resume_api_v1_trainees_me_resumes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_resume_api_v1_trainees_me_resumes_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ResumeOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_latest_resume_api_v1_trainees_me_resumes_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_Union_ResumeOut__NoneType__"];
+                };
+            };
+        };
+    };
     get_trainee_api_v1_trainees__trainee_id__get: {
         parameters: {
             query?: never;
@@ -3453,6 +3690,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_TraineeOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trainee_resume_api_v1_trainees__trainee_id__resume_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_Union_ResumeOut__NoneType__"];
                 };
             };
             /** @description Validation Error */

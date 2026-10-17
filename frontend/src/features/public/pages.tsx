@@ -1,59 +1,217 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  ChalkboardTeacher,
+  CheckCircle,
+  ClipboardText,
+  Eye,
+  EyeSlash,
+  GraduationCap,
+  type Icon,
+  Scales,
+  ShieldCheck,
+  Sparkle,
+  UserGear,
+  UploadSimple,
+} from "@phosphor-icons/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { forwardRef, useEffect, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
-import { HOME } from "@/app/nav";
+import { BrandMark } from "@/app/AppShell";
+import { HOME, ROLE_LABEL } from "@/app/nav";
 import { useAuth } from "@/auth/AuthProvider";
 import { INVITE_KEY, supabase } from "@/auth/supabase";
-import { FormError, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
-import { Alert, Button, Card, Input } from "@/components/ui";
-import { useQueryClient } from "@tanstack/react-query";
+import { Avatar, FormError, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
+import { Alert, Button, Card, Input, buttonStyles } from "@/components/ui";
 
-function PublicFrame({ children }: { children: React.ReactNode }) {
+function PublicHeader() {
   return (
-    <div className="min-h-screen">
-      <header className="flex h-14 items-center border-b border-border bg-surface px-4">
-        <Link to="/" className="font-semibold">Smart Project Allocation</Link>
-        <nav className="ml-auto flex gap-3 text-sm">
-          <Link to="/login" className="text-primary">Log in</Link>
-          <Link to="/register" className="text-primary">Register</Link>
+    <header className="sticky top-0 z-20 border-b border-border bg-surface/90 backdrop-blur-md">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2.5 rounded-lg">
+          <BrandMark />
+          <span className="font-heading text-[0.95rem] font-semibold text-text">Smart Project Allocation</span>
+        </Link>
+        <nav aria-label="Account" className="ml-auto flex items-center gap-1 sm:gap-2">
+          <Link to="/login" className={buttonStyles("ghost", "sm")}>Log in</Link>
+          <Link to="/register" className={buttonStyles("primary", "sm")}>Register</Link>
         </nav>
-      </header>
-      <main className="mx-auto w-full max-w-[1100px] p-4 md:p-8">{children}</main>
+      </div>
+    </header>
+  );
+}
+
+function PublicFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-dvh">
+      <PublicHeader />
+      <main className="mx-auto w-full max-w-6xl px-4 sm:px-6">{children}</main>
     </div>
   );
 }
+
+const HIGHLIGHTS: [Icon, string, string][] = [
+  [Sparkle, "Explainable matching", "Every score is the sum of itemised factors (trade, practical readiness, skill coverage, interests). Gender is never used."],
+  [Scales, "Humans decide", "Auto-allocation drafts the best fit within capacity. The programme team reviews, overrides with a reason and publishes."],
+  [ClipboardText, "Rubric evaluation", "Supervisors score workmanship, demo, safety, documentation and viva. The total and grade are computed on the server."],
+];
+
+/** Split layout for log-in and registration: brand panel on large screens, form always first on mobile. */
+function AuthLayout({ title, description, children, footer }: { title: string; description?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+  return (
+    <div className="min-h-dvh lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <aside className="relative hidden overflow-hidden bg-primary-ink text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <div aria-hidden className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-primary/40 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-accent/25 blur-3xl" />
+        <Link to="/" className="relative flex items-center gap-3 rounded-lg">
+          <svg viewBox="0 0 32 32" aria-hidden className="size-9">
+            <rect width="32" height="32" rx="8" fill="white" />
+            <path d="M9 20l5-5 4 4 6-8" stroke="var(--color-primary)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="font-heading text-lg font-semibold">Smart Project Allocation</span>
+        </Link>
+        <div className="relative max-w-md">
+          <p className="text-sm font-semibold tracking-wide text-white/70 uppercase">Tata STRIVE · ITI trainee projects</p>
+          <p className="mt-3 font-heading text-3xl leading-tight font-semibold">The right project for every trainee, tracked to a graded outcome.</p>
+          <ul className="mt-8 space-y-5">
+            {HIGHLIGHTS.map(([I, t, d]) => (
+              <li key={t} className="flex gap-3">
+                <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                  <I size={18} />
+                </span>
+                <div>
+                  <p className="font-semibold">{t}</p>
+                  <p className="mt-0.5 text-sm text-white/75">{d}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="relative text-xs text-white/60">Security is enforced on the server. Your data is only visible to your programme team.</p>
+      </aside>
+
+      <div className="flex min-h-dvh flex-col">
+        <div className="flex h-16 items-center px-4 sm:px-6 lg:hidden">
+          <Link to="/" className="flex items-center gap-2.5 rounded-lg">
+            <BrandMark />
+            <span className="font-heading text-[0.95rem] font-semibold">Smart Project Allocation</span>
+          </Link>
+        </div>
+        <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6">
+          <div className="w-full max-w-sm">
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            {description && <p className="mt-1.5 text-sm text-muted">{description}</p>}
+            <div className="mt-6">{children}</div>
+            {footer && <div className="mt-6 text-center text-sm text-muted">{footer}</div>}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function PasswordInput(props, ref) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input ref={ref} type={show ? "text" : "password"} className="pr-11" {...props} />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Hide password" : "Show password"}
+        aria-pressed={show}
+        className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-lg text-muted hover:text-text"
+      >
+        {show ? <EyeSlash aria-hidden size={18} /> : <Eye aria-hidden size={18} />}
+      </button>
+    </div>
+  );
+});
+
+const ROLES: [Icon, string, string][] = [
+  [GraduationCap, "Trainees", "See suggested projects with the reasons behind them, then submit your work in versions."],
+  [ChalkboardTeacher, "Supervisors", "Review submissions, request rework, and grade against the official 5-criterion rubric."],
+  [UserGear, "Programme team", "Import data, run recommendations, allocate within capacity, publish, and track progress."],
+];
+
+const FLOW: [Icon, string][] = [
+  [UploadSimple, "Import trainees & projects"],
+  [Sparkle, "Explainable recommendations"],
+  [Scales, "Allocate & publish"],
+  [ClipboardText, "Submit & evaluate"],
+];
 
 export function Landing() {
   const { user } = useAuth();
   if (user) return <Navigate to={HOME[user.role]} replace />;
   return (
     <PublicFrame>
-      <section className="py-8 md:py-14">
-        <p className="text-sm font-medium text-primary">Tata STRIVE · ITI trainee projects</p>
-        <h1 className="mt-2 max-w-3xl text-3xl font-semibold md:text-4xl">Match every trainee to the right project, and track it to a graded outcome.</h1>
-        <p className="mt-4 max-w-2xl text-muted">
-          The programme team imports trainee and project data. Explainable recommendations score each trainee against each project,
-          the team reviews and publishes allocations, trainees submit their work, and supervisors evaluate it against the official rubric.
-        </p>
-        <div className="mt-6 flex gap-3">
-          <Link to="/login"><Button>Log in</Button></Link>
-          <Link to="/register"><Button variant="secondary">Register with an invite</Button></Link>
+      <section className="grid items-center gap-10 py-12 md:py-20 lg:grid-cols-[1.15fr_1fr]">
+        <div>
+          <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-sm font-semibold text-primary-ink">
+            <Sparkle aria-hidden size={14} weight="fill" /> Tata STRIVE · ITI trainee projects
+          </p>
+          <h1 className="mt-5 text-4xl leading-[1.1] font-semibold tracking-tight md:text-5xl">
+            Match every trainee to the right project, and track it to a graded outcome.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-muted">
+            Explainable recommendations, a human-reviewed allocation, versioned submissions and rubric evaluation, in one place for trainees, supervisors and the programme team.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link to="/login" className={buttonStyles("primary", "lg")}>
+              Log in <ArrowRight aria-hidden size={18} />
+            </Link>
+            <Link to="/register" className={buttonStyles("secondary", "lg")}>Register as a trainee</Link>
+          </div>
+        </div>
+        <ol aria-label="How it works" className="grid gap-3 sm:grid-cols-2">
+          {FLOW.map(([I, t], i) => (
+            <li key={t} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 shadow-card">
+              <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <I size={20} />
+              </span>
+              <span>
+                <span className="block text-xs font-semibold text-subtle">Step {i + 1}</span>
+                <span className="block text-sm font-semibold">{t}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section aria-labelledby="features" className="pb-12">
+        <h2 id="features" className="sr-only">Features</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {HIGHLIGHTS.map(([I, t, d]) => (
+            <Card key={t} icon={<I />} title={t}>
+              <p className="text-sm leading-relaxed text-muted">{d}</p>
+            </Card>
+          ))}
         </div>
       </section>
-      <section className="grid gap-4 md:grid-cols-3">
-        {[
-          ["Explainable matching", "Each match score is the sum of five itemised factors: trade, practical readiness, skill coverage, interest alignment and theory/safety readiness. Gender is never used."],
-          ["Human decision", "Auto-allocation creates a draft that maximises placements within capacity. The programme team edits, overrides with a reason, and publishes."],
-          ["Rubric evaluation", "Supervisors score workmanship, demo, safety, documentation and viva. The total and grade are computed on the server, with a rework loop."],
-        ].map(([t, d]) => (
-          <Card key={t}><h2 className="font-semibold">{t}</h2><p className="mt-1 text-sm text-muted">{d}</p></Card>
-        ))}
+
+      <section aria-labelledby="roles" className="border-t border-border py-12">
+        <h2 id="roles" className="text-xl font-semibold">Built for three roles</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {ROLES.map(([I, t, d]) => (
+            <div key={t} className="flex gap-3">
+              <I aria-hidden size={24} className="mt-0.5 shrink-0 text-primary" />
+              <div>
+                <p className="font-semibold">{t}</p>
+                <p className="mt-1 text-sm text-muted">{d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-8 flex items-center gap-2 text-sm text-muted">
+          <ShieldCheck aria-hidden size={18} className="text-success" />
+          Every permission is enforced on the server; gender and personal details are never sent to the AI.
+        </p>
       </section>
     </PublicFrame>
   );
@@ -77,27 +235,27 @@ export function Login() {
   });
 
   return (
-    <PublicFrame>
-      <div className="mx-auto max-w-md">
-        <PageHeader title="Log in" />
-        <Card>
-          <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-            {(notice || reason === "expired") && <Alert variant="warning">{notice ?? "Your session expired. Please log in again."}</Alert>}
-            {reason === "disabled" && !notice && <Alert variant="danger">Your account has been disabled. Contact your coordinator.</Alert>}
-            {state.status === "error" && <Alert variant="danger">{state.message}</Alert>}
-            {error && <Alert variant="danger">{error}</Alert>}
-            <FormField label="Email" htmlFor="email" error={form.formState.errors.email?.message}>
-              <Input id="email" type="email" autoComplete="email" {...form.register("email")} />
-            </FormField>
-            <FormField label="Password" htmlFor="password" error={form.formState.errors.password?.message}>
-              <Input id="password" type="password" autoComplete="current-password" {...form.register("password")} />
-            </FormField>
-            <Button type="submit" loading={form.formState.isSubmitting || state.status === "provisioning" || state.status === "loading"}>Log in</Button>
-            <p className="text-sm text-muted">New here? <Link className="text-primary" to="/register">Register</Link></p>
-          </form>
-        </Card>
-      </div>
-    </PublicFrame>
+    <AuthLayout
+      title="Welcome back"
+      description="Log in to see your projects, submissions and evaluations."
+      footer={<>New here? <Link className="font-semibold text-primary hover:underline" to="/register">Create a trainee account</Link></>}
+    >
+      <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+        {(notice || reason === "expired") && <Alert variant="warning">{notice ?? "Your session expired. Please log in again."}</Alert>}
+        {reason === "disabled" && !notice && <Alert variant="danger">Your account has been disabled. Contact your coordinator.</Alert>}
+        {state.status === "error" && <Alert variant="danger">{state.message}</Alert>}
+        {error && <Alert variant="danger">{error}</Alert>}
+        <FormField label="Email" htmlFor="email" error={form.formState.errors.email?.message}>
+          <Input id="email" type="email" autoComplete="email" inputMode="email" aria-invalid={!!form.formState.errors.email} {...form.register("email")} />
+        </FormField>
+        <FormField label="Password" htmlFor="password" error={form.formState.errors.password?.message}>
+          <PasswordInput id="password" autoComplete="current-password" aria-invalid={!!form.formState.errors.password} {...form.register("password")} />
+        </FormField>
+        <Button type="submit" size="lg" className="mt-1 w-full" loading={form.formState.isSubmitting || state.status === "provisioning" || state.status === "loading"}>
+          Log in
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }
 
@@ -138,33 +296,35 @@ export function Register() {
   });
 
   return (
-    <PublicFrame>
-      <div className="mx-auto max-w-md">
-        <PageHeader title={invite ? "Accept your invitation" : "Create a student account"}
-          description={invite ? "Use the email address your coordinator invited." : "Accounts created here are student accounts. Staff join by invitation."} />
-        <Card>
-          {checkEmail ? (
-            <Alert variant="info" title="Check your email">Confirm your address using the link we sent, then log in.</Alert>
-          ) : (
-            <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-              {state.status === "signedOut" && state.notice && <Alert variant="warning">{state.notice}</Alert>}
-              {error && <Alert variant="danger">{error}</Alert>}
-              <FormField label="Full name" htmlFor="full_name" error={form.formState.errors.full_name?.message}>
-                <Input id="full_name" autoComplete="name" {...form.register("full_name")} />
-              </FormField>
-              <FormField label="Email" htmlFor="remail" error={form.formState.errors.email?.message}>
-                <Input id="remail" type="email" autoComplete="email" {...form.register("email")} />
-              </FormField>
-              <FormField label="Password" htmlFor="rpassword" error={form.formState.errors.password?.message} hint="At least 8 characters">
-                <Input id="rpassword" type="password" autoComplete="new-password" {...form.register("password")} />
-              </FormField>
-              <Button type="submit" loading={form.formState.isSubmitting || state.status === "provisioning"}>Create account</Button>
-              <p className="text-sm text-muted">Already registered? <Link className="text-primary" to="/login">Log in</Link></p>
-            </form>
-          )}
-        </Card>
-      </div>
-    </PublicFrame>
+    <AuthLayout
+      title={invite ? "Accept your invitation" : "Create a trainee account"}
+      description={invite ? "Use the email address your coordinator invited." : "Accounts created here are trainee accounts. Staff join by invitation."}
+      footer={<>Already registered? <Link className="font-semibold text-primary hover:underline" to="/login">Log in</Link></>}
+    >
+      {checkEmail ? (
+        <Alert variant="success" icon={<CheckCircle weight="fill" />} title="Check your email">
+          Confirm your address using the link we sent, then log in.
+        </Alert>
+      ) : (
+        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+          {invite && <Alert variant="info" icon={<ShieldCheck />}>Your invitation will be applied when you first log in.</Alert>}
+          {state.status === "signedOut" && state.notice && <Alert variant="warning">{state.notice}</Alert>}
+          {error && <Alert variant="danger">{error}</Alert>}
+          <FormField label="Full name" htmlFor="full_name" error={form.formState.errors.full_name?.message} required>
+            <Input id="full_name" autoComplete="name" aria-invalid={!!form.formState.errors.full_name} {...form.register("full_name")} />
+          </FormField>
+          <FormField label="Email" htmlFor="remail" error={form.formState.errors.email?.message} required>
+            <Input id="remail" type="email" autoComplete="email" inputMode="email" aria-invalid={!!form.formState.errors.email} {...form.register("email")} />
+          </FormField>
+          <FormField label="Password" htmlFor="rpassword" error={form.formState.errors.password?.message} hint="At least 8 characters" required>
+            <PasswordInput id="rpassword" autoComplete="new-password" aria-invalid={!!form.formState.errors.password} {...form.register("password")} />
+          </FormField>
+          <Button type="submit" size="lg" className="mt-1 w-full" loading={form.formState.isSubmitting || state.status === "provisioning"}>
+            Create account
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }
 
@@ -188,20 +348,35 @@ export function Account() {
   });
   if (!user) return <LoadingState />;
   return (
-    <div className="max-w-lg">
-      <PageHeader title="My account" description={`${user.email} · ${user.role}`} />
-      <Card>
-        <form className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => m.mutate(v))}>
-          <FormError error={m.error} />
-          <FormField label="Full name" htmlFor="acc_name" error={form.formState.errors.full_name?.message}>
-            <Input id="acc_name" {...form.register("full_name")} />
-          </FormField>
-          <FormField label="Department" htmlFor="acc_dept">
-            <Input id="acc_dept" {...form.register("department")} />
-          </FormField>
-          <Button type="submit" loading={m.isPending}>Save</Button>
-        </form>
-      </Card>
+    <div className="max-w-2xl">
+      <PageHeader title="My account" description="Your name is shown to supervisors and the programme team." />
+      <div className="space-y-6">
+        <Card>
+          <div className="flex items-center gap-4">
+            <Avatar name={user.full_name} />
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{user.full_name}</p>
+              <p className="truncate text-sm text-muted">{user.email} · {ROLE_LABEL[user.role]}</p>
+            </div>
+          </div>
+        </Card>
+        <Card title="Profile details">
+          <form className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => m.mutate(v))}>
+            <FormError error={m.error} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Full name" htmlFor="acc_name" error={form.formState.errors.full_name?.message} required>
+                <Input id="acc_name" autoComplete="name" {...form.register("full_name")} />
+              </FormField>
+              <FormField label="Department" htmlFor="acc_dept" hint="Optional">
+                <Input id="acc_dept" {...form.register("department")} />
+              </FormField>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" loading={m.isPending}>Save changes</Button>
+            </div>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,11 @@
 /** /admin/projects, /admin/projects/new, /admin/projects/:projectId (PRJ-01..06, IMP-02, REC-03; admin.md §3.4). */
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Archive, ArrowCounterClockwise, FolderSimple, Gauge, PaperPlaneTilt, PencilSimple, Plus, Sparkle, Trash, UploadSimple,
+  Warning,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Controller, useForm, type UseFormReturn } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -11,15 +15,16 @@ import { qk } from "@/api/queryKeys";
 import type { Project, ProjectCreate, ProjectPatch } from "@/api/types";
 import { useCurrentCycle } from "@/app/AppShell";
 import {
-  ConfirmDialog, DataTable, EmptyState, ErrorState, FormField, LoadingState, PageHeader, Pagination, StatusBadge,
-  useToast, type Column,
+  Avatar, BackLink, ConfirmDialog, DataTable, EmptyState, ErrorState, FormField, LoadingState, Meter, PageHeader,
+  Pagination, StatusBadge, useToast, type Column,
 } from "@/components/shared";
-import { Alert, Button, Card, Input, Select, Textarea } from "@/components/ui";
+import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { ProjectDetailView, RecommendationCard } from "@/features/shared/views";
 import { formatScore } from "@/lib/format";
 
 import {
-  ApiErrorAlert, CycleSelect, FilterBar, LabeledSelect, Reason, SearchInput, SkillsInput, WarningsAlert,
+  ActionStack, ApiErrorAlert, CapacityBar, CardState, CycleSelect, FilterBar, FormSection, LabeledSelect, LinkButton,
+  MetaLine, ReadOnlyBanner, Reason, SearchInput, SkillsInput, StatusTrack, TableCard, TextLink, WarningsAlert,
   applyFieldErrors, useActiveSupervisors, useDebounced, useInvalidate, useScopedCycle, useTrades,
 } from "./common";
 import { ImportDialog } from "./ImportPanel";
@@ -59,33 +64,39 @@ export function ProjectsPage() {
   const filtered = !!(dq || status || trade || difficulty || supervisor);
 
   const cols: Column<Project>[] = [
-    { key: "code", header: "Code", sort: "project_code", cell: (p) => <span className="whitespace-nowrap">{p.project_code}</span> },
-    { key: "title", header: "Title", sort: "title", cell: (p) => <Link className="font-medium text-primary" to={`/admin/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>{p.title}</Link> },
-    { key: "trade", header: "Trade", cell: (p) => p.target_trade.name },
+    { key: "code", header: "Code", sort: "project_code", cell: (p) => <span className="font-medium whitespace-nowrap text-muted tabular-nums">{p.project_code}</span> },
+    { key: "title", header: "Title", sort: "title", className: "min-w-56", cell: (p) => (
+      <span className="block">
+        <Link className="font-semibold text-text hover:text-primary hover:underline" to={`/admin/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>{p.title}</Link>
+        {p.category && <span className="mt-0.5 block text-xs text-muted">{p.category}</span>}
+      </span>
+    ) },
+    { key: "trade", header: "Trade", cell: (p) => <span className="whitespace-nowrap">{p.target_trade.name}</span> },
     { key: "difficulty", header: "Difficulty", cell: (p) => <StatusBadge kind="difficulty" value={p.difficulty} /> },
-    { key: "min", header: "Min practical", cell: (p) => `${formatScore(p.min_practical_score)}%` },
-    { key: "cap", header: "Allocated / capacity", cell: (p) => <span className="tabular-nums">{p.stats?.allocated_count ?? 0} / {p.max_trainees}</span> },
-    { key: "elig", header: "Eligible", cell: (p) => p.stats?.eligible_trainee_count ?? "—" },
-    { key: "sup", header: "Supervisor", cell: (p) => p.supervisor?.full_name ?? <span className="text-warning">Not assigned</span> },
+    { key: "min", header: "Min practical", className: "text-right tabular-nums", cell: (p) => `${formatScore(p.min_practical_score)}%` },
+    { key: "cap", header: "Allocated / capacity", cell: (p) => <CapacityBar value={p.stats?.allocated_count ?? 0} max={p.max_trainees} label={`${p.project_code} allocated of capacity`} /> },
+    { key: "elig", header: "Eligible", className: "text-right tabular-nums", cell: (p) => p.stats?.eligible_trainee_count ?? "—" },
+    { key: "sup", header: "Supervisor", cell: (p) => p.supervisor ? (
+      <span className="flex items-center gap-2 whitespace-nowrap"><Avatar name={p.supervisor.full_name} size="sm" />{p.supervisor.full_name}</span>
+    ) : <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-warning"><Warning aria-hidden size={14} />Not assigned</span> },
     { key: "status", header: "Status", cell: (p) => <StatusBadge kind="project" value={p.status} /> },
   ];
 
   return (
     <div>
       <PageHeader title="Projects" description="The project catalogue for a cycle. Assign a supervisor and publish a project before recommendations can use it."
-        actions={<div className="flex flex-col items-end gap-1">
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" disabled={!!writeReason} onClick={() => setImportOpen(true)}>Import projects</Button>
-            <Button disabled={!!newReason} onClick={() => navigate("/admin/projects/new")}>New project</Button>
-          </div>
-          <Reason>{newReason}</Reason>
-        </div>} />
+        actions={<ActionStack reason={newReason}>
+          <Button variant="secondary" icon={<UploadSimple />} disabled={!!writeReason} onClick={() => setImportOpen(true)}>Import projects</Button>
+          <Button icon={<Plus />} disabled={!!newReason} onClick={() => navigate("/admin/projects/new")}>New project</Button>
+        </ActionStack>} />
       {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.id ? (
-        <EmptyState title="No active cycle" description="Create a cycle before adding projects."
-          action={<Link className="text-primary underline" to="/admin/cycles?create=1">Create a cycle</Link>} />
+        <EmptyState icon={<FolderSimple />} title="No active cycle" description="Create a cycle before adding projects."
+          action={<LinkButton to="/admin/cycles?create=1">Create a cycle</LinkButton>} />
       ) : (
-        <>
-          <FilterBar>
+        <TableCard
+          title="Project catalogue" icon={<FolderSimple />}
+          description={list.data ? `${list.data.meta.total} ${list.data.meta.total === 1 ? "project" : "projects"}${filtered ? " match these filters" : ""}${scope.cycle ? ` in ${scope.cycle.name}` : ""}` : undefined}
+          toolbar={<FilterBar>
             <CycleSelect value={scope.id} onChange={reset(setCycleSel)} cycles={scope.cycles} activeId={scope.active?.id} />
             <SearchInput id="project-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Code or title" />
             <LabeledSelect id="project-status" label="Status" value={status} onChange={reset(setStatus)}>
@@ -107,21 +118,21 @@ export function ProjectsPage() {
             <LabeledSelect id="project-sort" label="Sort" value={sort} onChange={reset(setSort)}>
               <option value="title">Title</option><option value="project_code">Code</option><option value="-created_at">Newest first</option>
             </LabeledSelect>
-          </FilterBar>
-          {list.isLoading ? <LoadingState /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> :
+          </FilterBar>}
+          footer={list.data?.data.length ? <Pagination meta={list.data.meta} onPageChange={setPage} /> : undefined}>
+          {list.isLoading ? <CardState><LoadingState /></CardState> : list.error ? <CardState><ErrorState error={list.error} onRetry={() => list.refetch()} /></CardState> :
             !list.data?.data.length ? (
-              filtered ? <EmptyState title="No projects match these filters" /> : (
-                <EmptyState title="No projects yet" description="Import the Project Catalog sheet or create one."
-                  action={!writeReason ? <Button onClick={() => setImportOpen(true)}>Import projects</Button> : undefined} />
-              )
+              <CardState>
+                {filtered ? <EmptyState icon={<FolderSimple />} title="No projects match these filters" /> : (
+                  <EmptyState icon={<FolderSimple />} title="No projects yet" description="Import the Project Catalog sheet or create one."
+                    action={!writeReason ? <Button icon={<UploadSimple />} onClick={() => setImportOpen(true)}>Import projects</Button> : undefined} />
+                )}
+              </CardState>
             ) : (
-              <>
-                <DataTable rows={list.data.data} columns={cols} rowKey={(p) => p.id} sort={sort} onSortChange={reset(setSort)}
-                  onRowClick={(p) => navigate(`/admin/projects/${p.id}`)} caption="Projects" />
-                <Pagination meta={list.data.meta} onPageChange={setPage} />
-              </>
+              <DataTable rows={list.data.data} columns={cols} rowKey={(p) => p.id} sort={sort} onSortChange={reset(setSort)}
+                onRowClick={(p) => navigate(`/admin/projects/${p.id}`)} caption="Projects" />
             )}
-        </>
+        </TableCard>
       )}
       {scope.id && (
         <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} endpoint="/admin/imports/projects" cycleId={scope.id}
@@ -191,7 +202,8 @@ function ProjectFormFields({ form, disabled, currentSupervisor }: {
   const supOptions = sups.data?.data ?? [];
   const showCurrent = currentSupervisor && !supOptions.some((u) => u.id === currentSupervisor.id);
   return (
-    <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-6">
+      <FormSection title="Basics">
       <FormField label="Project code" htmlFor="pj-code" required error={err.project_code?.message} hint="e.g. PRJ-EL-101">
         <Input id="pj-code" maxLength={40} {...form.register("project_code")} />
       </FormField>
@@ -206,6 +218,11 @@ function ProjectFormFields({ form, disabled, currentSupervisor }: {
       <FormField label="Problem statement document" htmlFor="pj-doc" error={err.problem_doc_url?.message} hint="An https:// link">
         <Input id="pj-doc" type="url" maxLength={2048} placeholder="https://" {...form.register("problem_doc_url")} />
       </FormField>
+      <FormField label="Category / sponsor goal" htmlFor="pj-cat" error={err.category?.message}>
+        <Input id="pj-cat" maxLength={120} {...form.register("category")} />
+      </FormField>
+      </FormSection>
+      <FormSection title="Matching rules" description="Used by the recommendation engine: trade and minimum practical score are hard gates.">
       <FormField label="Target trade" htmlFor="pj-trade" required error={err.target_trade_id?.message}>
         <Select id="pj-trade" {...form.register("target_trade_id")}>
           <option value="">Choose a trade</option>
@@ -217,7 +234,7 @@ function ProjectFormFields({ form, disabled, currentSupervisor }: {
           <option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option>
         </Select>
       </FormField>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3 md:col-span-2 md:gap-4">
         <FormField label="Min practical %" htmlFor="pj-min" required error={err.min_practical_score?.message}>
           <Input id="pj-min" inputMode="decimal" {...form.register("min_practical_score")} />
         </FormField>
@@ -225,17 +242,6 @@ function ProjectFormFields({ form, disabled, currentSupervisor }: {
           <Input id="pj-cap" inputMode="numeric" {...form.register("max_trainees")} />
         </FormField>
       </div>
-      <FormField label="Category / sponsor goal" htmlFor="pj-cat" error={err.category?.message}>
-        <Input id="pj-cat" maxLength={120} {...form.register("category")} />
-      </FormField>
-      <FormField label="Supervisor" htmlFor="pj-sup" error={err.supervisor_id?.message}
-        hint={sups.isLoading ? "Loading supervisors…" : !supOptions.length ? <span>No active supervisors. <Link className="text-primary underline" to="/admin/users">Invite one</Link></span> : "Required before publishing"}>
-        <Select id="pj-sup" {...form.register("supervisor_id")}>
-          <option value="">Not assigned</option>
-          {showCurrent && <option value={currentSupervisor.id}>{currentSupervisor.full_name} (inactive)</option>}
-          {supOptions.map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.department ? ` (${u.department})` : ""}</option>)}
-        </Select>
-      </FormField>
       <div className="md:col-span-2">
         <FormField label="Prerequisite skills" htmlFor="pj-skills" error={err.skills?.message} hint="Up to 15. New names are created automatically.">
           <Controller control={form.control} name="skills" render={({ field }) => (
@@ -243,6 +249,17 @@ function ProjectFormFields({ form, disabled, currentSupervisor }: {
           )} />
         </FormField>
       </div>
+      </FormSection>
+      <FormSection title="Supervision">
+      <FormField label="Supervisor" htmlFor="pj-sup" error={err.supervisor_id?.message}
+        hint={sups.isLoading ? "Loading supervisors…" : !supOptions.length ? <span>No active supervisors. <TextLink to="/admin/users">Invite one</TextLink></span> : "Required before publishing"}>
+        <Select id="pj-sup" {...form.register("supervisor_id")}>
+          <option value="">Not assigned</option>
+          {showCurrent && <option value={currentSupervisor.id}>{currentSupervisor.full_name} (inactive)</option>}
+          {supOptions.map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.department ? ` (${u.department})` : ""}</option>)}
+        </Select>
+      </FormField>
+      </FormSection>
     </fieldset>
   );
 }
@@ -289,19 +306,19 @@ export function ProjectNewPage() {
   if (current.error) return <ErrorState error={current.error} onRetry={() => current.refetch()} />;
   return (
     <div>
-      <PageHeader title="New project" description={<Link className="text-primary underline" to="/admin/projects">All projects</Link>} />
+      <PageHeader title="New project" eyebrow={<BackLink to="/admin/projects">All projects</BackLink>}
+        description="New projects start as Draft. Publish them from the project page once a supervisor is assigned." />
       {!cycle ? (
-        <EmptyState title="No active cycle" description="Create a cycle first." action={<Link className="text-primary underline" to="/admin/cycles?create=1">Create a cycle</Link>} />
+        <EmptyState icon={<FolderSimple />} title="No active cycle" description="Create a cycle first." action={<LinkButton to="/admin/cycles?create=1">Create a cycle</LinkButton>} />
       ) : (
-        <Card title={`Project in ${cycle.name}`}>
-          <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => m.mutate(v))}>
+        <Card title={`Project in ${cycle.name}`} icon={<FolderSimple />} className="max-w-4xl">
+          <form noValidate className="flex flex-col gap-5" onSubmit={form.handleSubmit((v) => m.mutate(v))}>
             <ApiErrorAlert error={alertError} />
             <ProjectFormFields form={form} />
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" loading={m.isPending}>Create project</Button>
+            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+              <Button type="submit" icon={<Plus />} loading={m.isPending}>Create project</Button>
               <Button variant="secondary" onClick={() => navigate("/admin/projects")}>Cancel</Button>
             </div>
-            <p className="text-xs text-muted">New projects start as Draft. Publish them from the project page once a supervisor is assigned.</p>
           </form>
         </Card>
       )}
@@ -329,19 +346,47 @@ export function ProjectDetailPage() {
   const p = q.data.data;
   const archivedCycle = cycle.data?.data.status === "archived";
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader title={p.title}
-        description={<span>{p.project_code} · <Link className="text-primary underline" to="/admin/projects">All projects</Link>{cycle.data ? ` · ${cycle.data.data.name}` : ""}</span>} />
-      {archivedCycle && <Alert variant="info">Cycle is archived (read-only).</Alert>}
+    <div className="space-y-6">
+      <PageHeader title={p.title} eyebrow={<BackLink to="/admin/projects">All projects</BackLink>}
+        description={<MetaLine items={[
+          <span key="c" className="font-medium tabular-nums">{p.project_code}</span>,
+          p.target_trade.name,
+          cycle.data ? cycle.data.data.name : null,
+        ]} />}
+        actions={<StatusBadge kind="project" value={p.status} />} />
+      {archivedCycle && <ReadOnlyBanner />}
       <WarningsAlert warnings={warnings} onDismiss={() => setWarnings([])} />
-      <ProjectDetailView project={p} actions={<ProjectActions project={p} readOnly={archivedCycle} />} />
-      <ProjectEditForm key={p.updated_at} project={p} readOnly={archivedCycle} onWarnings={setWarnings} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+        <ProjectDetailView project={p} />
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card title="Status" icon={<PaperPlaneTilt />} description="Only published projects are scored and allocated.">
+            <div className="flex flex-col gap-4">
+              <StatusTrack current={p.status} stages={[
+                { key: "draft", label: "Draft" }, { key: "published", label: "Published" }, { key: "archived", label: "Archived" },
+              ]} />
+              <ProjectActions project={p} readOnly={archivedCycle} />
+            </div>
+          </Card>
+          <Card title="Capacity" icon={<Gauge />}>
+            <div className="flex flex-col gap-4">
+              <Meter label="Allocated" value={p.stats?.allocated_count ?? 0} max={p.max_trainees}
+                tone={(p.stats?.allocated_count ?? 0) >= p.max_trainees ? "success" : "primary"} />
+              <p className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted">Eligible trainees (latest run)</span>
+                <span className="font-semibold tabular-nums">{p.stats?.eligible_trainee_count ?? "—"}</span>
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
       <BestMatches project={p} />
+      <ProjectEditForm key={p.updated_at} project={p} readOnly={archivedCycle} onWarnings={setWarnings} />
     </div>
   );
 }
 
 type PTarget = "draft" | "published" | "archived";
+const P_ICON: Record<PTarget, ReactNode> = { published: <PaperPlaneTilt />, draft: <ArrowCounterClockwise />, archived: <Archive /> };
 const P_TRANSITIONS: Record<Project["status"], { to: PTarget; label: string }[]> = {
   draft: [{ to: "published", label: "Publish" }, { to: "archived", label: "Archive" }],
   published: [{ to: "draft", label: "Move to draft" }, { to: "archived", label: "Archive" }],
@@ -365,15 +410,15 @@ function ProjectActions({ project, readOnly }: { project: Project; readOnly: boo
   const reason = readOnly ? "Cycle is archived (read-only)" : undefined;
   const publishReason = !project.supervisor ? "Assign a supervisor before publishing" : undefined;
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap gap-2">
         {P_TRANSITIONS[project.status].map((o) => (
-          <Button key={o.to} size="sm" variant={o.to === "published" ? "primary" : "secondary"}
+          <Button key={o.to} size="sm" icon={P_ICON[o.to]} variant={o.to === "published" ? "primary" : "secondary"}
             disabled={!!reason || (o.to === "published" && !!publishReason) || del.isPending}
             loading={t.isPending && t.variables === o.to} onClick={() => { del.reset(); t.mutate(o.to); }}>{o.label}</Button>
         ))}
         {project.status === "draft" && (
-          <Button size="sm" variant="danger" disabled={!!reason || t.isPending} onClick={() => setConfirmDelete(true)}>Delete</Button>
+          <Button size="sm" variant="danger" icon={<Trash />} disabled={!!reason || t.isPending} onClick={() => setConfirmDelete(true)}>Delete</Button>
         )}
       </div>
       <Reason>{reason ?? (project.status === "draft" ? publishReason : undefined)}</Reason>
@@ -402,16 +447,16 @@ function ProjectEditForm({ project, readOnly, onWarnings }: { project: Project; 
     onError: (e) => { if (!mapProjectErrors(e, form.setError)) setAlertError(e); },
   });
   return (
-    <Card title="Edit project">
+    <Card title="Edit project" icon={<PencilSimple />} description="Only changed fields are saved.">
       {readOnly && <p className="mb-3 text-xs text-muted">Cycle is archived (read-only).</p>}
-      <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => {
+      <form noValidate className="flex flex-col gap-5" onSubmit={form.handleSubmit((v) => {
         const body = projectPatch(initial, v);
         if (!Object.keys(body).length) { toast.info("No changes to save"); return; }
         m.mutate(body);
       })}>
         <ApiErrorAlert error={alertError} />
         <ProjectFormFields form={form} disabled={readOnly} currentSupervisor={project.supervisor} />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button type="submit" loading={m.isPending} disabled={readOnly || !form.formState.isDirty}>Save changes</Button>
           <Button variant="secondary" disabled={readOnly || !form.formState.isDirty || m.isPending} onClick={() => form.reset(initial)}>Discard changes</Button>
         </div>
@@ -429,22 +474,24 @@ function BestMatches({ project }: { project: Project }) {
     queryFn: () => call(api.GET("/api/v1/recommendations", { params: { query: params } })),
   });
   return (
-    <Card title="Best-matching trainees (latest completed run)" actions={
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="size-4" checked={eligibleOnly} onChange={(e) => { setEligibleOnly(e.target.checked); setPage(1); }} />
+    <Card title="Best-matching trainees" icon={<Sparkle />} description="Latest completed run, highest score first" actions={
+      <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium shadow-card">
+        <input type="checkbox" className="size-4 accent-primary" checked={eligibleOnly} onChange={(e) => { setEligibleOnly(e.target.checked); setPage(1); }} />
         Eligible only
       </label>
     }>
       {q.isLoading ? <LoadingState /> : q.error ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.data.length ? (
-        <EmptyState title={eligibleOnly ? "No eligible trainees in the latest run" : "No recommendations yet"}
+        <EmptyState icon={<Sparkle />} title={eligibleOnly ? "No eligible trainees in the latest run" : "No recommendations yet"}
           description={project.status !== "published" ? "Only published projects are scored." : undefined}
-          action={<Link className="text-primary underline" to="/admin/recommendations">Run recommendations</Link>} />
+          action={<LinkButton to="/admin/recommendations">Run recommendations</LinkButton>} />
       ) : (
         <div className="flex flex-col gap-3">
-          {q.data.data.map((r) => (
-            <RecommendationCard key={r.id} recommendation={r} compact perspective="project"
-              actions={<Link className="text-sm text-primary underline" to={`/admin/trainees/${r.trainee.id}`}>View trainee</Link>} />
-          ))}
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {q.data.data.map((r) => (
+              <RecommendationCard key={r.id} recommendation={r} compact perspective="project"
+                actions={<TextLink to={`/admin/trainees/${r.trainee.id}`}>View trainee</TextLink>} />
+            ))}
+          </div>
           <Pagination meta={q.data.meta} onPageChange={setPage} />
         </div>
       )}

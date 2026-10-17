@@ -40,3 +40,11 @@ export function useMyProgress(enabled = true) {
     enabled,
   });
 }
+
+/** RES-02: latest resume of the own active-cycle trainee record (null when none). */
+export function useMyResume() {
+  return useQuery({
+    queryKey: qk.resumes.me(),
+    queryFn: () => call(api.GET("/api/v1/trainees/me/resumes/latest")),
+  });
+}

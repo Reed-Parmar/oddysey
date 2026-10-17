@@ -1,3 +1,4 @@
+import { MagnifyingGlass, UsersThree } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
@@ -6,10 +7,11 @@ import { qk } from "@/api/queryKeys";
 import type { ProgressRow } from "@/api/types";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared";
 import { Button, Input, Select } from "@/components/ui";
-import { ProgressTable } from "@/features/shared/views";
 import { LABELS } from "@/lib/statusLabels";
 
-import { compact, NotPublishedState, ProjectFilter, useCycleState, useDebounced, useParamState } from "../common";
+import {
+  compact, FilterBar, NotPublishedState, ProjectFilter, SupervisorProgressTable, useCycleState, useDebounced, useParamState,
+} from "../common";
 
 type Progress = ProgressRow["progress"];
 const PROGRESS_VALUES = Object.keys(LABELS.progress).filter((p) => p !== "unallocated") as Progress[];
@@ -39,35 +41,41 @@ export function ProgressPage() {
     placeholderData: keepPreviousData,
   });
   const filtered = Boolean(projectId || progress || lateOnly || get("q"));
+  const total = rows.data?.meta.total;
 
   return (
     <>
-      <PageHeader title="Progress" description="Where each trainee on your projects stands." />
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-[2fr_2fr_1.5fr_auto]">
-        <Input aria-label="Search trainees" placeholder="Search by trainee name or code" value={q} onChange={(e) => setQ(e.target.value)} maxLength={100} />
+      <PageHeader
+        title="Progress"
+        description={<>Where each trainee on your projects stands{cycleState.visible && total != null && <> · <span className="tabular-nums">{total}</span> {filtered ? "matching" : "trainees"}</>}.</>}
+      />
+      <FilterBar className="sm:grid-cols-2 lg:grid-cols-[2fr_2fr_1.5fr_auto]">
+        <div className="relative">
+          <MagnifyingGlass aria-hidden size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-subtle" />
+          <Input aria-label="Search trainees" placeholder="Search by trainee name or code" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} maxLength={100} />
+        </div>
         <ProjectFilter id="prog-project" value={projectId} onChange={(v) => set({ project_id: v })} />
         <Select aria-label="Progress" value={progress} onChange={(e) => set({ progress: e.target.value })}>
           <option value="">All statuses</option>
           {PROGRESS_VALUES.map((p) => <option key={p} value={p}>{LABELS.progress[p][0]}</option>)}
         </Select>
-        <label className="flex min-h-10 items-center gap-2 text-sm whitespace-nowrap">
-          <input type="checkbox" checked={lateOnly} onChange={(e) => set({ late_only: e.target.checked ? "true" : null })} /> Late only
+        <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium whitespace-nowrap transition-colors hover:border-subtle has-[:checked]:border-primary has-[:checked]:bg-primary-soft has-[:checked]:text-primary-ink">
+          <input type="checkbox" className="size-4 accent-primary" checked={lateOnly} onChange={(e) => set({ late_only: e.target.checked ? "true" : null })} /> Late only
         </label>
-      </div>
+      </FilterBar>
       {cycleState.isLoading ? <LoadingState /> : cycleState.error ? (
         <ErrorState error={cycleState.error} onRetry={() => void cycleState.refetch()} />
       ) : !cycleState.visible ? (
         <NotPublishedState cycle={cycleState.cycle} />
       ) : (
-        <ProgressTable
+        <SupervisorProgressTable
           rows={rows.data?.data ?? []} meta={rows.data?.meta} isLoading={rows.isLoading} error={rows.error}
           onRetry={() => void rows.refetch()} sort={sort} onSortChange={(s) => set({ sort: s })}
           onPageChange={(n) => set({ page: String(n) }, false)}
-          showTraineeColumn showSupervisorColumn={false} getRowHref={(r) => `/supervisor/trainees/${r.trainee.id}`}
           emptyState={filtered ? (
-            <EmptyState title="No trainees match these filters."
+            <EmptyState icon={<MagnifyingGlass />} title="No trainees match these filters."
               action={<Button variant="secondary" onClick={() => { setQ(""); set({ project_id: null, progress: null, late_only: null, q: null }); }}>Clear filters</Button>} />
-          ) : <EmptyState title="No trainees are allocated to your projects." />}
+          ) : <EmptyState icon={<UsersThree />} title="No trainees are allocated to your projects." />}
         />
       )}
     </>

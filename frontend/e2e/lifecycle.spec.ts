@@ -5,14 +5,14 @@ const PASSWORD = process.env.E2E_PASSWORD ?? "";
 async function login(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
 }
 
 async function logout(page: Page) {
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("link", { name: "Log in" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
 }
 
 test.describe.configure({ mode: "serial" });

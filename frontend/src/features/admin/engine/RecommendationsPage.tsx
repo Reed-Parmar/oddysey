@@ -1,3 +1,6 @@
+import {
+  ArrowSquareOut, ArrowsClockwise, Cpu, Funnel, Kanban, Lightning, Ranking, Sparkle, UsersThree, WarningCircle,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
@@ -5,14 +8,13 @@ import { Link } from "react-router-dom";
 import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { Cycle } from "@/api/types";
+import type { Cycle, Recommendation } from "@/api/types";
 import {
-  DateTime, EmptyState, ErrorState, LoadingState, PageHeader, Pagination, StatusBadge, useToast,
+  Avatar, DateTime, EmptyState, ErrorState, LoadingState, PageHeader, Pagination, StatusBadge, useToast,
 } from "@/components/shared";
-import { Alert, Button, Card, Select } from "@/components/ui";
-import { RecommendationCard } from "@/features/shared/views";
+import { Alert, Button, Card, Select, cx } from "@/components/ui";
 
-import { Reason, WithCycle } from "./common";
+import { CycleLine, MiniStat, Reason, RecommendationItem, WithCycle } from "./common";
 import { useCompletedRun, useLatestRun, usePublishedProjects } from "./hooks";
 import { detailMessages, isActiveRun, runProgress } from "./lib";
 
@@ -30,20 +32,18 @@ function RecommendationsBody({ cycle }: { cycle: Cycle }) {
   const start = useStartRun(cycle);
   return (
     <>
-      <PageHeader title="Recommendations"
-        description={<>Cycle <span className="font-medium">{cycle.name}</span> <StatusBadge kind="cycle" value={cycle.status} /></>} />
-      <div className="flex flex-col gap-5">
+      <PageHeader title="Recommendations" description={<CycleLine cycle={cycle} />} />
+      <div className="flex flex-col gap-6">
         <RunPanel cycle={cycle} latest={latest} start={start} />
         {completed.isLoading ? <LoadingState /> : completed.error ? (
           <ErrorState error={completed.error} onRetry={() => void completed.refetch()} />
         ) : completed.data?.data ? (
           <Results cycleId={cycle.id} runFinishedAt={completed.data.data.finished_at} />
         ) : (
-          <EmptyState title="No recommendations yet"
-            description="Generate recommendations to score every assessed trainee against every published project."
-            action={cycle.status !== "archived" && !isActiveRun(latest.data?.data?.status)
-              ? <Button loading={start.isPending} onClick={() => start.mutate(latest.data?.meta.ai_configured ?? false)}>Run recommendations</Button>
-              : undefined} />
+          <EmptyState icon={<Ranking />} title="No recommendations yet"
+            description={cycle.status !== "archived" && !isActiveRun(latest.data?.data?.status)
+              ? "Run recommendations with “Generate recommendations” above to score every assessed trainee against every published project."
+              : "No completed run yet for this cycle."} />
         )}
       </div>
     </>
@@ -77,6 +77,9 @@ function useStartRun(cycle: Cycle) {
   return { ...m, stateError };
 }
 
+
+type Run = NonNullable<NonNullable<ReturnType<typeof useLatestRun>["data"]>["data"]>;
+
 function RunPanel({ cycle, latest, start }: {
   cycle: Cycle; latest: ReturnType<typeof useLatestRun>; start: ReturnType<typeof useStartRun>;
 }) {
@@ -91,22 +94,28 @@ function RunPanel({ cycle, latest, start }: {
   const publishedCount = projects.data?.meta.total;
 
   return (
-    <Card title="Run" actions={run && <StatusBadge kind="run" value={run.status} />}>
+    <Card title="Recommendation run" icon={<Lightning />}
+      description="Rule score from itemised factors (practical readiness 35, skills 30, career interest 20, theory and safety 15), optionally refined and explained by AI."
+      actions={run && <StatusBadge kind="run" value={run.status} />}>
       {latest.isLoading ? <LoadingState label="Loading the latest run…" /> : latest.error ? (
         <ErrorState error={latest.error} onRetry={() => void latest.refetch()} />
       ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              <label htmlFor={toggleId} className="flex items-center gap-2 text-sm">
-                <input id={toggleId} type="checkbox" className="size-4" checked={aiConfigured && useAi}
+              <label htmlFor={toggleId} className={cx("flex items-center gap-2.5 text-sm font-medium", !aiConfigured || disabledReason ? "text-muted" : "text-text")}>
+                <input id={toggleId} type="checkbox" className="size-4 accent-accent" checked={aiConfigured && useAi}
                   disabled={!aiConfigured || !!disabledReason} onChange={(e) => setUseAi(e.target.checked)} />
+                <Sparkle aria-hidden size={16} weight="fill" className={aiConfigured ? "text-accent" : "text-subtle"} />
                 Use AI (Groq) refinement
               </label>
-              {!aiConfigured && <Reason>AI is not configured on the server; runs are rule-based.</Reason>}
+              {aiConfigured
+                ? <Reason>AI refines the factor detail and writes a short explanation; the rule score is the fallback.</Reason>
+                : <Reason>AI is not configured on the server; runs are rule-based.</Reason>}
             </div>
-            <div className="flex flex-col gap-1">
-              <Button loading={start.isPending} disabled={!!disabledReason} aria-describedby={disabledReason ? reasonId : undefined}
+            <div className="flex flex-col gap-1 sm:items-end">
+              <Button size="lg" loading={start.isPending} disabled={!!disabledReason} aria-describedby={disabledReason ? reasonId : undefined}
+                icon={run ? <ArrowsClockwise weight="bold" /> : <Lightning weight="fill" />}
                 onClick={() => start.mutate(aiConfigured && useAi)}>
                 {run ? "Re-run recommendations" : "Generate recommendations"}
               </Button>
@@ -114,12 +123,12 @@ function RunPanel({ cycle, latest, start }: {
             </div>
           </div>
           {publishedCount === 0 && (
-            <Alert variant="warning">
-              No published projects; the run will score nothing. <Link className="underline" to="/admin/projects">Publish projects</Link>
+            <Alert variant="warning" icon={<WarningCircle />}>
+              No published projects; the run will score nothing. <Link className="font-semibold underline" to="/admin/projects">Publish projects</Link>
             </Alert>
           )}
           {start.stateError != null && (
-            <Alert variant="danger" title="Cannot start a run">
+            <Alert variant="danger" icon={<WarningCircle />} title="Cannot start a run">
               <ul className="list-disc pl-5">{detailMessages(start.stateError).map((m) => <li key={m}>{m}</li>)}</ul>
             </Alert>
           )}
@@ -130,29 +139,64 @@ function RunPanel({ cycle, latest, start }: {
   );
 }
 
-function RunStatus({ run }: { run: NonNullable<NonNullable<ReturnType<typeof useLatestRun>["data"]>["data"]> }) {
-  const p = runProgress(run);
+/** AI vs rule-only indicator for a run. */
+function AiMode({ run }: { run: Run }) {
+  if (!run.use_ai) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-neutral-bg px-2.5 py-0.5 text-xs font-semibold text-neutral">
+        <Cpu aria-hidden size={14} /> Rule-based only
+      </span>
+    );
+  }
+  const allFellBack = run.status === "completed" && run.ai_used_count === 0;
   return (
-    <div className="flex flex-col gap-3">
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-ink">
+        <Sparkle aria-hidden size={14} weight="fill" className="text-accent" /> AI-assisted{run.ai_model ? ` · ${run.ai_model}` : ""}
+      </span>
+      {(allFellBack || run.ai_failed_count > 0) && (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning-bg px-2.5 py-0.5 text-xs font-semibold text-warning">
+          <Cpu aria-hidden size={14} />
+          {allFellBack ? "AI unavailable: rule-only fallback used" : `Rule-only fallback for ${run.ai_failed_count}`}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function RunStatus({ run }: { run: Run }) {
+  const p = runProgress(run);
+  const running = isActiveRun(run.status);
+  return (
+    <div className="flex flex-col gap-4">
       <div aria-live="polite">
-        <div className="mb-1 flex justify-between text-sm">
-          <span>{isActiveRun(run.status) ? "Scoring trainees…" : run.status === "completed" ? "Run complete" : "Run stopped"}</span>
-          <span className="tabular-nums">{p.done} / {p.total} trainees</span>
+        <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 text-sm">
+          <span className="font-medium text-text">
+            {running ? "Scoring trainees…" : run.status === "completed" ? "Run complete" : "Run stopped"}
+          </span>
+          <span className="text-muted tabular-nums">{p.done} / {p.total} trainees · {p.pct}%</span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-bg" role="progressbar" aria-valuemin={0}
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-neutral-bg" role="progressbar" aria-valuemin={0}
           aria-valuemax={100} aria-valuenow={p.pct} aria-label="Recommendation run progress">
-          <div className={`h-full rounded-full transition-all ${run.status === "failed" ? "bg-danger" : "bg-primary"}`} style={{ width: `${p.pct}%` }} />
+          <div className={cx("h-full rounded-full transition-[width] duration-500",
+            run.status === "failed" ? "bg-danger" : run.status === "completed" ? "bg-success" : "bg-primary",
+            running && "animate-pulse")} style={{ width: `${p.pct}%` }} />
         </div>
       </div>
       {run.status === "failed" && (
-        <Alert variant="danger" title="The run failed">{run.error_message ?? "Unknown error"}. Re-run to try again.</Alert>
+        <Alert variant="danger" icon={<WarningCircle />} title="The run failed">{run.error_message ?? "Unknown error"}. Re-run to try again.</Alert>
       )}
-      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Stat label="Trainees" value={run.trainee_count} />
-        <Stat label="Skipped (assessment pending)" value={run.skipped_pending_count} />
-        <Stat label="Scored pairs" value={run.scored_pairs} />
-        <Stat label={run.use_ai ? `AI used / failed (${run.ai_model ?? "Groq"})` : "AI"}
-          value={run.use_ai ? `${run.ai_used_count} / ${run.ai_failed_count}` : "Rule-based only"} />
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Scoring mode</span>
+        <AiMode run={run} />
+      </div>
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MiniStat label="Trainees" value={run.trainee_count} />
+        <MiniStat label="Skipped (assessment pending)" value={run.skipped_pending_count} tone={run.skipped_pending_count > 0 ? "warning" : undefined} />
+        <MiniStat label="Scored pairs" value={run.scored_pairs} />
+        {run.use_ai ? (
+          <MiniStat tone="accent" label={`AI used / failed (${run.ai_model ?? "Groq"})`} value={`${run.ai_used_count} / ${run.ai_failed_count}`} />
+        ) : <MiniStat label="AI" value="Rule-based only" />}
       </dl>
       <p className="text-xs text-muted">
         Started by {run.started_by.full_name} · <DateTime value={run.started_at ?? run.created_at} />
@@ -162,18 +206,21 @@ function RunStatus({ run }: { run: NonNullable<NonNullable<ReturnType<typeof use
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-md border border-border p-2">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- results
 
 type View = "trainee" | "project";
+
+/** Splits a page of rows into consecutive groups (rows arrive sorted by the grouping key). */
+function groupBy(rows: Recommendation[], key: (r: Recommendation) => string) {
+  const groups: { key: string; rows: Recommendation[] }[] = [];
+  for (const r of rows) {
+    const k = key(r);
+    const last = groups[groups.length - 1];
+    if (last && last.key === k) last.rows.push(r);
+    else groups.push({ key: k, rows: [r] });
+  }
+  return groups;
+}
 
 function Results({ cycleId, runFinishedAt }: { cycleId: string; runFinishedAt: string | null }) {
   const [view, setView] = useState<View>("trainee");
@@ -208,57 +255,94 @@ function Results({ cycleId, runFinishedAt }: { cycleId: string; runFinishedAt: s
   });
 
   const switchView = (v: View) => { setView(v); setPage(1); };
-  const perspective = view === "project" ? "project" : traineeId ? "trainee" : undefined;
+  const rows = recs.data?.data ?? [];
 
   return (
-    <Card title="Results" actions={runFinishedAt && <span className="text-xs text-muted">Latest completed run · <DateTime value={runFinishedAt} /></span>}>
-      <div role="tablist" aria-label="Recommendation view" className="mb-4 flex gap-1 border-b border-border">
-        {(["trainee", "project"] as const).map((v) => (
-          <button key={v} type="button" role="tab" aria-selected={view === v}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${view === v ? "border-primary font-medium text-primary" : "border-transparent text-muted"}`}
-            onClick={() => switchView(v)}>
-            {v === "trainee" ? "By trainee" : "By project"}
-          </button>
-        ))}
-      </div>
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-sm">
-          <label htmlFor={pickerId} className="text-sm font-medium">{view === "trainee" ? "Trainee" : "Project"}</label>
-          {view === "trainee" ? (
-            <Select id={pickerId} value={traineeId} onChange={(e) => { setTraineeId(e.target.value); setPage(1); }}>
-              <option value="">All trainees (grouped by trainee)</option>
-              {trainees.data?.data.map((t) => <option key={t.id} value={t.id}>{t.full_name} · {t.trainee_code}</option>)}
-            </Select>
-          ) : (
-            <Select id={pickerId} value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1); }}>
-              <option value="">All projects (highest score first)</option>
-              {projects.data?.data.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.project_code}</option>)}
-            </Select>
-          )}
+    <Card title="Results" icon={<Ranking />}
+      description={runFinishedAt ? <>Latest completed run · <DateTime value={runFinishedAt} /></> : undefined}>
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div role="tablist" aria-label="Recommendation view" className="inline-flex w-full rounded-lg border border-border bg-surface-2 p-1 sm:w-auto">
+          {(["trainee", "project"] as const).map((v) => (
+            <button key={v} type="button" role="tab" aria-selected={view === v}
+              className={cx("inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition-colors duration-150 sm:flex-none",
+                view === v ? "bg-surface text-primary shadow-card" : "text-muted hover:text-text")}
+              onClick={() => switchView(v)}>
+              {v === "trainee" ? <UsersThree aria-hidden size={16} /> : <Kanban aria-hidden size={16} />}
+              {v === "trainee" ? "By trainee" : "By project"}
+            </button>
+          ))}
         </div>
-        <label htmlFor={eligibleId} className="flex min-h-10 items-center gap-2 text-sm">
-          <input id={eligibleId} type="checkbox" className="size-4" checked={eligibleOnly}
-            onChange={(e) => { setEligibleOnly(e.target.checked); setPage(1); }} />
-          Eligible only
-        </label>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:w-80 sm:flex-none">
+            <label htmlFor={pickerId} className="text-sm font-semibold">{view === "trainee" ? "Trainee" : "Project"}</label>
+            {view === "trainee" ? (
+              <Select id={pickerId} value={traineeId} onChange={(e) => { setTraineeId(e.target.value); setPage(1); }}>
+                <option value="">All trainees (grouped by trainee)</option>
+                {trainees.data?.data.map((t) => <option key={t.id} value={t.id}>{t.full_name} · {t.trainee_code}</option>)}
+              </Select>
+            ) : (
+              <Select id={pickerId} value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1); }}>
+                <option value="">All projects (highest score first)</option>
+                {projects.data?.data.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.project_code}</option>)}
+              </Select>
+            )}
+          </div>
+          <label htmlFor={eligibleId} className="flex min-h-10 items-center gap-2 text-sm font-medium">
+            <input id={eligibleId} type="checkbox" className="size-4 accent-primary" checked={eligibleOnly}
+              onChange={(e) => { setEligibleOnly(e.target.checked); setPage(1); }} />
+            Eligible only
+          </label>
+        </div>
       </div>
-      {selected && view === "trainee" && (
-        <p className="mb-3 text-sm"><Link className="text-primary underline" to={`/admin/trainees/${traineeId}`}>Open trainee profile</Link></p>
+      {selected && (
+        <p className="mb-4 text-sm">
+          <Link className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+            to={view === "trainee" ? `/admin/trainees/${traineeId}` : `/admin/projects/${projectId}`}>
+            {view === "trainee" ? "Open trainee profile" : "Open project"} <ArrowSquareOut aria-hidden size={14} />
+          </Link>
+        </p>
       )}
-      {selected && view === "project" && (
-        <p className="mb-3 text-sm"><Link className="text-primary underline" to={`/admin/projects/${projectId}`}>Open project</Link></p>
-      )}
-      {recs.isLoading ? <LoadingState /> : recs.error ? <ErrorState error={recs.error} onRetry={() => void recs.refetch()} /> : !recs.data?.data.length ? (
-        <EmptyState title="No recommendations match"
+      {recs.isLoading ? <LoadingState /> : recs.error ? <ErrorState error={recs.error} onRetry={() => void recs.refetch()} /> : !rows.length ? (
+        <EmptyState icon={<Funnel />} title="No recommendations match"
           description={eligibleOnly ? "Turn off “Eligible only” to see ineligible pairs and their reasons." : "Nothing was scored for this selection."} />
       ) : (
         <>
-          <div className="flex flex-col gap-3">
-            {recs.data.data.map((r) => <RecommendationCard key={r.id} recommendation={r} perspective={perspective} compact />)}
-          </div>
-          <Pagination meta={recs.data.meta} onPageChange={setPage} />
+          {view === "trainee" ? (
+            <div className="flex flex-col gap-5">
+              {groupBy(rows, (r) => r.trainee.id).map((g) => <TraineeGroup key={g.key} rows={g.rows} />)}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {rows.map((r) => <RecommendationItem key={r.id} recommendation={r} perspective="project" />)}
+            </div>
+          )}
+          <Pagination meta={recs.data?.meta} onPageChange={setPage} />
         </>
       )}
     </Card>
+  );
+}
+
+function TraineeGroup({ rows }: { rows: Recommendation[] }) {
+  const t = rows[0]!.trainee;
+  const eligible = rows.filter((r) => r.eligible).length;
+  return (
+    <section aria-label={`Recommendations for ${t.full_name}`} className="rounded-xl border border-border bg-surface-2 p-3 sm:p-4">
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={t.full_name} />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-text">
+              <Link className="hover:text-primary hover:underline" to={`/admin/trainees/${t.id}`}>{t.full_name}</Link>
+            </h3>
+            <p className="text-xs text-muted">{t.trainee_code}</p>
+          </div>
+        </div>
+        <span className="text-xs text-muted tabular-nums">{eligible} of {rows.length} eligible</span>
+      </header>
+      <div className="flex flex-col gap-2.5">
+        {rows.map((r) => <RecommendationItem key={r.id} recommendation={r} perspective="trainee" />)}
+      </div>
+    </section>
   );
 }

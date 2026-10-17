@@ -1,3 +1,4 @@
+import { ArrowsLeftRight, Ranking, ShieldWarning, WarningCircle } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -5,10 +6,10 @@ import { api, call } from "@/api/client";
 import { ApiError } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Allocation, Recommendation } from "@/api/types";
-import { FormField, LoadingState, useToast } from "@/components/shared";
+import { Avatar, FormField, Skeleton, useToast } from "@/components/shared";
 import { Alert, Button, Dialog, Select, Textarea } from "@/components/ui";
-import { RecommendationCard } from "@/features/shared/views";
 
+import { RecommendationItem } from "./common";
 import { invalidateAllocationWrites, usePublishedProjects } from "./hooks";
 import {
   OVERRIDE_MAX, allocationBody, allocationErrorText, knownIneligibility, overrideReasonsFrom, validateOverrideReason,
@@ -26,7 +27,10 @@ export function AllocationDialog({ target, cycleId, onClose }: {
 }) {
   const title = target?.mode === "reassign" ? `Reassign ${target.allocation.trainee.full_name}` : "Allocate manually";
   return (
-    <Dialog open={!!target} onClose={onClose} title={title}>
+    <Dialog open={!!target} onClose={onClose} title={title} size="lg"
+      description={target?.mode === "reassign"
+        ? "Move this trainee to another published project. Ineligible pairs need an override reason."
+        : "Place a trainee on a published project. Ineligible pairs need an override reason."}>
       {target && <AllocationForm target={target} cycleId={cycleId} onClose={onClose} />}
     </Dialog>
   );
@@ -137,12 +141,18 @@ function AllocationForm({ target, cycleId, onClose }: { target: AllocationDialog
   return (
     <form className="flex flex-col gap-4" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {target.mode === "reassign" && (
-        <p className="text-sm text-muted">Currently on <span className="font-medium text-text">{target.allocation.project.title}</span>. Reassigning makes this a manual allocation.</p>
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm text-muted">
+          <ArrowsLeftRight aria-hidden size={16} className="mt-0.5 shrink-0" />
+          <span>Currently on <span className="font-medium text-text">{target.allocation.project.title}</span>. Reassigning makes this a manual allocation.</span>
+        </p>
       )}
       <FormField label="Trainee" htmlFor={ids.trainee} required error={errors.trainee}
         hint={!fixedTrainee ? "Only trainees without an allocation are listed." : undefined}>
         {fixedTrainee ? (
-          <p id={ids.trainee} className="text-sm">{fixedTrainee.full_name} · {fixedTrainee.trainee_code}</p>
+          <p id={ids.trainee} className="flex items-center gap-2.5 text-sm">
+            <Avatar name={fixedTrainee.full_name} size="sm" />
+            <span><span className="font-medium text-text">{fixedTrainee.full_name}</span> <span className="text-muted">· {fixedTrainee.trainee_code}</span></span>
+          </p>
         ) : (
           <Select id={ids.trainee} value={traineeId} disabled={unallocated.isLoading}
             onChange={(e) => { setTraineeId(e.target.value); chooseProject(""); }}>
@@ -170,27 +180,34 @@ function AllocationForm({ target, cycleId, onClose }: { target: AllocationDialog
       </FormField>
 
       {traineeId && (
-        <details className="rounded-md border border-border p-2 text-sm" open={recList.length > 0 && recList.length <= 5}>
-          <summary className="cursor-pointer font-medium">Recommendations for this trainee ({recList.length})</summary>
-          {recs.isLoading ? <LoadingState /> : !recList.length ? (
-            <p className="mt-2 text-muted">No recommendations for this trainee in the latest completed run. A manual pick without a recommendation has no match score.</p>
-          ) : (
-            <div className="mt-2 flex max-h-72 flex-col gap-2 overflow-y-auto">
-              {recList.map((r) => (
-                <RecommendationCard key={r.id} recommendation={r} perspective="trainee" compact
-                  actions={<Button size="sm" variant={projectId === r.project.id ? "primary" : "secondary"}
-                    disabled={r.project.id === currentProjectId} onClick={() => chooseProject(r.project.id)}>
-                    {projectId === r.project.id ? "Chosen" : "Choose"}
-                  </Button>} />
-              ))}
-            </div>
-          )}
+        <details className="rounded-lg border border-border bg-surface-2 text-sm" open={recList.length > 0 && recList.length <= 5}>
+          <summary className="flex cursor-pointer items-center gap-2 px-3 py-2.5 font-semibold text-text select-none">
+            <Ranking aria-hidden size={16} className="shrink-0 text-primary" />
+            Recommendations for this trainee ({recList.length})
+          </summary>
+          <div className="border-t border-border p-3">
+            {recs.isLoading ? (
+              <div aria-hidden className="flex flex-col gap-2"><Skeleton className="h-20 rounded-lg" /><Skeleton className="h-20 rounded-lg" /></div>
+            ) : !recList.length ? (
+              <p className="text-muted">No recommendations for this trainee in the latest completed run. A manual pick without a recommendation has no match score.</p>
+            ) : (
+              <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+                {recList.map((r) => (
+                  <RecommendationItem key={r.id} recommendation={r} perspective="trainee" highlight={projectId === r.project.id}
+                    actions={<Button size="sm" variant={projectId === r.project.id ? "primary" : "secondary"}
+                      disabled={r.project.id === currentProjectId} onClick={() => chooseProject(r.project.id)}>
+                      {projectId === r.project.id ? "Chosen" : "Choose"}
+                    </Button>} />
+                ))}
+              </div>
+            )}
+          </div>
         </details>
       )}
 
       {reasonShown && (
-        <div className="flex flex-col gap-2">
-          <Alert variant="warning" title="This pair is ineligible">
+        <div className="flex flex-col gap-3">
+          <Alert variant="warning" icon={<ShieldWarning />} title="This pair is ineligible">
             <ul className="list-disc pl-5">{reasons.map((r) => <li key={r}>{r}</li>)}</ul>
             Allocating anyway is an override; it is recorded with your reason and shown to the programme team.
           </Alert>
@@ -202,11 +219,11 @@ function AllocationForm({ target, cycleId, onClose }: { target: AllocationDialog
         </div>
       )}
 
-      {errors.form && <Alert variant="danger">{errors.form}</Alert>}
+      {errors.form && <Alert variant="danger" icon={<WarningCircle />}>{errors.form}</Alert>}
 
-      <div className="flex justify-end gap-2 border-t border-border pt-3">
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap justify-end gap-2 rounded-b-2xl border-t border-border bg-surface-2 px-5 py-3">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button type="submit" loading={m.isPending}>{reasonShown ? "Allocate with override" : target.mode === "reassign" ? "Reassign" : "Allocate"}</Button>
+        <Button type="submit" variant={reasonShown ? "accent" : "primary"} icon={reasonShown ? <ShieldWarning /> : undefined} loading={m.isPending}>{reasonShown ? "Allocate with override" : target.mode === "reassign" ? "Reassign" : "Allocate"}</Button>
       </div>
     </form>
   );

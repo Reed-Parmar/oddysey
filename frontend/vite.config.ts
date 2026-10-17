@@ -17,6 +17,8 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react(), tailwindcss()],
     resolve: { alias: { "@": path.resolve(__dirname, "src") } },
     server: { port: 5173 },
+    // Pre-bundle deps used only by lazily loaded role chunks, so dev never re-optimises mid-session.
+    optimizeDeps: { include: ["@phosphor-icons/react"] },
     build: {
       rollupOptions: {
         output: {

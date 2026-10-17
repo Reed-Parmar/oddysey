@@ -3,6 +3,34 @@ import { z } from "zod";
 
 import type { Cycle, ProgressRow, Submission, TraineeMe } from "@/api/types";
 
+// ---------------------------------------------------------------- resume (RES-01, ADR-015)
+
+export const RESUME_MAX_BYTES = 5 * 1024 * 1024;
+export const RESUME_ACCEPT = ".pdf,.docx";
+
+/** Client-side pre-check (the server re-checks size, extension and file signature). */
+export function resumeFileError(file: { name: string; size: number }): string | null {
+  const ext = file.name.toLowerCase().split(".").pop();
+  if (!file.name.includes(".") || (ext !== "pdf" && ext !== "docx")) return "Upload a PDF or DOCX";
+  if (file.size === 0) return "This file is empty";
+  if (file.size > RESUME_MAX_BYTES) return "Resume must be 5 MB or smaller";
+  return null;
+}
+
+/** student.md §3.3a error copy; anything else falls back to the server message. */
+export function resumeUploadMessage(status: number, code: string, fallback: string): string {
+  if (status === 413) return "Resume must be 5 MB or smaller";
+  if (status === 415) return "Upload a PDF or DOCX";
+  if (code === "RATE_LIMITED") return "Too many uploads. Try again in an hour.";
+  return fallback;
+}
+
+/** Current skills plus the chosen suggestions, de-duplicated; null when the total would exceed SKILL_MAX. */
+export function mergeSkills(current: string[], add: string[]): string[] | null {
+  const merged = normaliseSkills([...current, ...add]);
+  return merged.length > SKILL_MAX ? null : merged;
+}
+
 // ---------------------------------------------------------------- profile (TRN-02)
 
 export const SKILL_MAX = 20;

@@ -1,3 +1,7 @@
+import {
+  ArrowCounterClockwise, ArrowsLeftRight, CheckCircle, Eye, EyeSlash, Gauge, LockKey, MagicWand, PaperPlaneTilt,
+  ShieldWarning, Trash, UserMinus, UserPlus, UsersThree, Warning, WarningCircle,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
@@ -7,15 +11,14 @@ import { ApiError } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Allocation, AllocationRun, Cycle } from "@/api/types";
 import {
-  ConfirmDialog, DataTable, DateTime, EmptyState, ErrorState, LoadingState, PageHeader, Pagination, StatusBadge,
-  useToast, type Column,
+  Avatar, ConfirmDialog, DataTable, DateTime, EmptyState, ErrorState, LoadingState, Meter, PageHeader, Pagination,
+  ScoreBar, Skeleton, StatCard, StatusBadge, useToast, type Column,
 } from "@/components/shared";
-import { Alert, Button, Card, Input, Select } from "@/components/ui";
-import { FactorTable } from "@/features/shared/views";
+import { Alert, Button, Card, Input, Select, cx } from "@/components/ui";
 import { formatScore } from "@/lib/format";
 
 import { AllocationDialog, type AllocationDialogTarget } from "./AllocationDialog";
-import { Reason, WithCycle } from "./common";
+import { CycleLine, FactorBreakdown, MiniStat, Reason, WithCycle } from "./common";
 import {
   invalidateAllocationWrites, invalidateCycleTransition, useCompletedRun, useDebounced, useLatestRun, usePublishedProjects,
 } from "./hooks";
@@ -46,16 +49,17 @@ function AllocationsBody({ cycle }: { cycle: Cycle }) {
   return (
     <>
       <PageHeader title="Allocations"
-        description={<>Cycle <span className="font-medium">{cycle.name}</span> <StatusBadge kind="cycle" value={cycle.status} /></>}
+        description={<CycleLine cycle={cycle} />}
         actions={!archived && (
-          <Button variant="secondary" onClick={() => setDialog({ mode: "create" })}>Allocate manually</Button>
+          <Button variant="secondary" icon={<UserPlus />} onClick={() => setDialog({ mode: "create" })}>Allocate manually</Button>
         )} />
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
         {archived ? (
-          <Alert variant="info" title="Cycle is archived">Allocations are read-only.</Alert>
+          <Alert variant="info" icon={<LockKey />} title="Cycle is archived">Allocations are read-only.</Alert>
         ) : (
           <PublishPanel cycle={cycle} allocationCount={allocationCount} runActive={runActive} />
         )}
+        <AllocationStats cycleId={cycle.id} />
         {cycle.status === "draft" && (
           <AutoAllocatePanel cycle={cycle} runActive={runActive} lastRun={lastRun} onRun={setLastRun}
             onAllocate={(t) => setDialog({ mode: "create", trainee: t })} />
@@ -68,6 +72,37 @@ function AllocationsBody({ cycle }: { cycle: Cycle }) {
       </div>
       <AllocationDialog target={dialog} cycleId={cycle.id} onClose={() => setDialog(null)} />
     </>
+  );
+}
+
+// ---------------------------------------------------------------- KPIs (RPT-01 allocation stats)
+
+function AllocationStats({ cycleId }: { cycleId: string }) {
+  const overview = useQuery({
+    queryKey: qk.reports.overview(cycleId),
+    queryFn: () => call(api.GET("/api/v1/admin/reports/overview", { params: { query: { cycle_id: cycleId } } })),
+  });
+  if (overview.isLoading) {
+    return (
+      <div aria-hidden className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+      </div>
+    );
+  }
+  const a = overview.data?.data.allocation;
+  if (overview.error || !a) return null;
+  const capPct = a.capacity_total ? Math.round((a.capacity_used / a.capacity_total) * 100) : 0;
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <StatCard label="Allocated" value={a.allocated} icon={<UsersThree />} tone="primary"
+        hint={<>{a.auto} auto · {a.manual} manual · avg match {formatScore(a.average_match_score)}</>} />
+      <StatCard label="Unallocated" value={a.unallocated} icon={<UserMinus />} tone={a.unallocated > 0 ? "warning" : "success"}
+        hint={a.unallocated > 0 ? "Trainees still without a project" : "Every trainee has a project"} />
+      <StatCard label="Capacity used" value={<>{a.capacity_used}<span className="text-lg font-medium text-muted"> / {a.capacity_total}</span></>}
+        icon={<Gauge />} tone="neutral" hint={`${capPct}% of places across published projects`} />
+      <StatCard label="Overrides" value={a.overrides} icon={<ShieldWarning />} tone={a.overrides > 0 ? "accent" : "neutral"}
+        hint={a.overrides > 0 ? "Ineligible pairs allocated with a recorded reason" : "No eligibility overrides"} />
+    </div>
   );
 }
 
@@ -105,22 +140,35 @@ function PublishPanel({ cycle, allocationCount, runActive }: { cycle: Cycle; all
   return (
     <>
       {cycle.status === "draft" ? (
-        <Card title="Publish">
-          <p className="mb-3 text-sm text-muted">
-            This is a draft. Students and supervisors never see draft allocations; they see them only after you publish.
-          </p>
-          <div className="flex flex-col items-start gap-1">
-            <Button disabled={!!publishReason || allocationCount === undefined} loading={m.isPending} onClick={() => setConfirm(true)}>
+        <section className="flex flex-col gap-4 rounded-xl border border-info/25 bg-info-bg p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface text-info">
+              <EyeSlash size={20} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold text-text">
+                Draft allocations
+                <span className="rounded-full border border-info/25 bg-surface px-2 py-0.5 text-xs font-semibold text-info">Not visible to trainees</span>
+              </h2>
+              <p className="mt-0.5 text-sm text-muted">
+                Students and supervisors never see draft allocations; they see them only after you publish.
+                {allocationCount != null && <> <span className="font-medium text-text tabular-nums">{allocationCount}</span> allocation{allocationCount === 1 ? "" : "s"} ready.</>}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+            <Button size="lg" icon={<PaperPlaneTilt weight="fill" />} disabled={!!publishReason || allocationCount === undefined}
+              loading={m.isPending} onClick={() => setConfirm(true)}>
               Publish allocations
             </Button>
             <Reason>{publishReason}</Reason>
           </div>
-        </Card>
+        </section>
       ) : (
-        <Alert variant="success" title="Allocations are published">
+        <Alert variant="success" icon={<Eye />} title="Allocations are published">
           <p>Trainees and supervisors can see their allocations.</p>
-          <div className="mt-2 flex flex-col items-start gap-1">
-            <Button size="sm" variant="secondary" disabled={!!unpublishReason} loading={m.isPending} onClick={() => setConfirm(true)}>
+          <div className="mt-3 flex flex-col items-start gap-1">
+            <Button size="sm" variant="secondary" icon={<ArrowCounterClockwise />} disabled={!!unpublishReason} loading={m.isPending} onClick={() => setConfirm(true)}>
               Return to planning
             </Button>
             {unpublishReason && <p className="text-xs">{unpublishReason}</p>}
@@ -128,7 +176,7 @@ function PublishPanel({ cycle, allocationCount, runActive }: { cycle: Cycle; all
         </Alert>
       )}
       {error != null && (
-        <Alert variant="danger" title={to === "published" ? "Cannot publish" : "Cannot return to planning"}>
+        <Alert variant="danger" icon={<WarningCircle />} title={to === "published" ? "Cannot publish" : "Cannot return to planning"}>
           <ul className="list-disc pl-5">{detailMessages(error).map((x) => <li key={x}>{x}</li>)}</ul>
         </Alert>
       )}
@@ -175,17 +223,19 @@ function AutoAllocatePanel({ cycle, runActive, lastRun, onRun, onAllocate }: {
   const code = error instanceof ApiError ? error.code : null;
 
   return (
-    <Card title="Auto-allocate">
-      <p className="mb-3 text-sm text-muted">
-        Places as many trainees as possible, then maximises the total match score within capacity, using eligible pairs from the latest completed recommendation run.
-      </p>
-      <div className="flex flex-col items-start gap-1">
-        <Button disabled={!!reason || completed.isLoading} loading={m.isPending} onClick={() => setConfirm(true)}>Auto-allocate</Button>
-        <Reason>{reason}{reason === "Run recommendations first" && <> · <Link className="text-primary underline" to="/admin/recommendations">Go to recommendations</Link></>}</Reason>
-      </div>
+    <Card title="Auto-allocate" icon={<MagicWand />}
+      description="Places as many trainees as possible, then maximises the total match score within capacity, using eligible pairs from the latest completed recommendation run."
+      actions={
+        <div className="flex flex-col items-start gap-1 sm:items-end">
+          <Button variant="secondary" icon={<MagicWand />} disabled={!!reason || completed.isLoading} loading={m.isPending} onClick={() => setConfirm(true)}>
+            Auto-allocate
+          </Button>
+          <Reason>{reason}{reason === "Run recommendations first" && <> · <Link className="text-primary underline" to="/admin/recommendations">Go to recommendations</Link></>}</Reason>
+        </div>
+      }>
       {error != null && (
-        <div className="mt-3">
-          <Alert variant="danger" title="Auto-allocate failed">
+        <div className="mb-4">
+          <Alert variant="danger" icon={<WarningCircle />} title="Auto-allocate failed">
             {code === "NO_RECOMMENDATIONS" ? (
               <>Run recommendations first. <Link className="underline" to="/admin/recommendations">Go to recommendations</Link></>
             ) : code === "INVALID_STATE" ? (
@@ -195,7 +245,7 @@ function AutoAllocatePanel({ cycle, runActive, lastRun, onRun, onAllocate }: {
         </div>
       )}
       {lastRun ? <RunSummary run={lastRun} onAllocate={onAllocate} /> : (
-        <p className="mt-3 text-sm text-muted">Auto-allocate has not run in this session.</p>
+        <p className="text-sm text-muted">Auto-allocate has not run in this session. Existing <strong className="font-semibold text-text">Auto</strong> allocations are replaced; <strong className="font-semibold text-text">Manual</strong> allocations are kept.</p>
       )}
       <ConfirmDialog open={confirm} onClose={() => setConfirm(false)} loading={m.isPending} onConfirm={() => m.mutate()}
         title="Run auto-allocation?" confirmLabel="Auto-allocate"
@@ -208,32 +258,43 @@ function AutoAllocatePanel({ cycle, runActive, lastRun, onRun, onAllocate }: {
 }
 
 function RunSummary({ run, onAllocate }: { run: AllocationRun; onAllocate: (t: { id: string; full_name: string; trainee_code: string }) => void }) {
+  const left = run.unallocated_trainees.length;
   return (
-    <div className="mt-4 flex flex-col gap-3" aria-live="polite">
+    <div className="flex flex-col gap-4" aria-live="polite">
       <p className="text-xs text-muted">Last run <DateTime value={run.ran_at} /></p>
-      <dl className="grid grid-cols-3 gap-3 text-sm">
-        <div className="rounded-md border border-border p-2"><dt className="text-xs text-muted">Allocated</dt><dd className="font-semibold tabular-nums">{run.allocated_count}</dd></div>
-        <div className="rounded-md border border-border p-2"><dt className="text-xs text-muted">Manual kept</dt><dd className="font-semibold tabular-nums">{run.manual_kept_count}</dd></div>
-        <div className="rounded-md border border-border p-2"><dt className="text-xs text-muted">Avg match</dt><dd className="font-semibold tabular-nums">{formatScore(run.average_match_score)}</dd></div>
+      <dl className="grid grid-cols-3 gap-3">
+        <MiniStat label="Allocated" value={run.allocated_count} tone="success" />
+        <MiniStat label="Manual kept" value={run.manual_kept_count} />
+        <MiniStat label="Avg match" value={formatScore(run.average_match_score)} />
       </dl>
-      {run.unallocated_trainees.length > 0 ? (
-        <div>
-          <h3 className="mb-2 text-sm font-medium">Unallocated trainees ({run.unallocated_trainees.length})</h3>
-          <ul className="divide-y divide-border rounded-md border border-border text-sm">
+      {left > 0 ? (
+        <section className="rounded-lg border border-warning/30 bg-warning-bg">
+          <h3 className="flex items-center gap-2 px-4 pt-3 pb-2 text-sm font-semibold text-warning">
+            <Warning aria-hidden size={18} weight="fill" className="shrink-0" />
+            {left} trainee{left === 1 ? "" : "s"} could not be placed automatically
+          </h3>
+          <ul className="divide-y divide-warning/20 border-t border-warning/20 text-sm">
             {run.unallocated_trainees.map((t) => (
-              <li key={t.trainee_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                <span>
-                  <Link className="text-primary" to={`/admin/trainees/${t.trainee_id}`}>{t.full_name}</Link>
-                  <span className="text-muted"> · {t.trainee_code} · {UNALLOCATED_REASON_LABEL[t.reason]}</span>
+              <li key={t.trainee_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar name={t.full_name} size="sm" />
+                  <span className="min-w-0">
+                    <Link className="font-medium text-text hover:text-primary hover:underline" to={`/admin/trainees/${t.trainee_id}`}>{t.full_name}</Link>
+                    <span className="block text-xs text-muted">{t.trainee_code} · {UNALLOCATED_REASON_LABEL[t.reason]}</span>
+                  </span>
                 </span>
-                <Button size="sm" variant="secondary" onClick={() => onAllocate({ id: t.trainee_id, full_name: t.full_name, trainee_code: t.trainee_code })}>
+                <Button size="sm" variant="secondary" icon={<UserPlus />} onClick={() => onAllocate({ id: t.trainee_id, full_name: t.full_name, trainee_code: t.trainee_code })}>
                   Allocate manually
                 </Button>
               </li>
             ))}
           </ul>
-        </div>
-      ) : <p className="text-sm text-success">Every eligible trainee was placed.</p>}
+        </section>
+      ) : (
+        <p className="flex items-center gap-2 text-sm font-medium text-success">
+          <CheckCircle aria-hidden size={18} weight="fill" /> Every eligible trainee was placed.
+        </p>
+      )}
     </div>
   );
 }
@@ -246,35 +307,25 @@ function CapacityPanel({ cycleId }: { cycleId: string }) {
   const used = rows.reduce((s, p) => s + (p.stats?.allocated_count ?? 0), 0);
   const cap = rows.reduce((s, p) => s + p.max_trainees, 0);
   return (
-    <Card>
-      <details>
-        <summary className="cursor-pointer font-semibold">
-          Project capacity {projects.isSuccess && <span className="font-normal text-muted">· {used} / {cap} places used across {rows.length} published projects</span>}
-        </summary>
-        <div className="mt-3">
-          {projects.isLoading ? <LoadingState /> : projects.error ? <ErrorState error={projects.error} onRetry={() => void projects.refetch()} /> : !rows.length ? (
-            <p className="text-sm text-muted">No published projects. <Link className="text-primary underline" to="/admin/projects">Publish projects</Link></p>
-          ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {rows.map((p) => {
-                const n = p.stats?.allocated_count ?? 0;
-                const pct = p.max_trainees ? Math.min(100, (n / p.max_trainees) * 100) : 0;
-                return (
-                  <li key={p.id} className="rounded-md border border-border p-2 text-sm">
-                    <div className="flex justify-between gap-2">
-                      <Link className="truncate text-primary" to={`/admin/projects/${p.id}`}>{p.title}</Link>
-                      <span className="shrink-0 tabular-nums">{n} / {p.max_trainees}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-bg" aria-hidden>
-                      <div className={`h-full ${n >= p.max_trainees ? "bg-warning" : "bg-primary"}`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </details>
+    <Card title="Project capacity" icon={<Gauge />}
+      description={projects.isSuccess ? `${used} / ${cap} places used across ${rows.length} published projects` : undefined}>
+      {projects.isLoading ? <LoadingState /> : projects.error ? <ErrorState error={projects.error} onRetry={() => void projects.refetch()} /> : !rows.length ? (
+        <p className="text-sm text-muted">No published projects. <Link className="text-primary underline" to="/admin/projects">Publish projects</Link></p>
+      ) : (
+        <ul className="grid gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((p) => {
+            const n = p.stats?.allocated_count ?? 0;
+            const full = n >= p.max_trainees;
+            return (
+              <li key={p.id}>
+                <Meter tone={full ? "warning" : n > 0 ? "primary" : "neutral"} label={p.title}
+                  value={n} max={p.max_trainees} valueLabel={<>{n} / {p.max_trainees}{full && <span className="ml-1 font-semibold text-warning">Full</span>}</>} />
+                <Link className="mt-1 inline-block text-xs text-muted hover:text-primary hover:underline" to={`/admin/projects/${p.id}`}>{p.project_code}</Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Card>
   );
 }
@@ -327,75 +378,91 @@ function AllocationTable({ cycle, onReassign }: { cycle: Cycle; onReassign: (a: 
 
   const cols: Column<Allocation>[] = [
     { key: "trainee", header: "Trainee", sort: "trainee_name", cell: (a) => (
-      <Link className="text-primary" to={`/admin/trainees/${a.trainee.id}`}>
-        {a.trainee.full_name}<span className="block text-xs text-muted">{a.trainee.trainee_code} · {a.trainee.trade.name}</span>
-      </Link>
+      <span className={cx("flex items-center gap-2.5", a.is_override && "-ml-4 border-l-4 border-accent pl-3")}>
+        <Avatar name={a.trainee.full_name} size="sm" />
+        <span className="min-w-0">
+          <Link className="font-medium text-text hover:text-primary hover:underline" to={`/admin/trainees/${a.trainee.id}`}>{a.trainee.full_name}</Link>
+          <span className="block text-xs text-muted">{a.trainee.trainee_code} · {a.trainee.trade.name}</span>
+        </span>
+      </span>
     ) },
     { key: "project", header: "Project", sort: "project_title", cell: (a) => (
-      <Link className="text-primary" to={`/admin/projects/${a.project.id}`}>
-        {a.project.title}<span className="block text-xs text-muted">{a.project.project_code}</span>
-      </Link>
+      <span className="block min-w-40">
+        <Link className="font-medium text-text hover:text-primary hover:underline" to={`/admin/projects/${a.project.id}`}>{a.project.title}</Link>
+        <span className="block text-xs text-muted">{a.project.project_code}</span>
+      </span>
     ) },
     { key: "sup", header: "Supervisor", cell: (a) => a.project.supervisor ? (
       <span>{a.project.supervisor.full_name}{a.project.supervisor.department && <span className="block text-xs text-muted">{a.project.supervisor.department}</span>}</span>
     ) : <span className="text-muted">Not assigned</span> },
-    { key: "score", header: "Match", sort: "-match_score", cell: (a) => <span className="tabular-nums">{formatScore(a.match_score)}</span> },
+    { key: "score", header: "Match", sort: "-match_score", cell: (a) => a.match_score == null
+      ? <span className="text-muted">—</span>
+      : <ScoreBar value={Math.round(a.match_score * 10) / 10} tone="auto" label="Match score" /> },
     { key: "source", header: "Source", cell: (a) => (
-      <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-col items-start gap-1.5">
         <span className="flex flex-wrap gap-1">
           <StatusBadge kind="allocationSource" value={a.source} />
           {a.is_override && <StatusBadge kind="allocationSource" value="override" />}
         </span>
-        {a.is_override && a.override_reason && <span className="max-w-56 text-xs text-muted">“{a.override_reason}”</span>}
-        <span className="text-xs text-muted">by {a.created_by.full_name} · <DateTime value={a.updated_at} dateOnly /></span>
+        {a.is_override && a.override_reason && (
+          <span className="flex max-w-64 gap-1.5 rounded-md border border-warning/25 bg-warning-bg px-2 py-1.5 text-xs text-warning">
+            <ShieldWarning aria-hidden size={14} className="mt-px shrink-0" />
+            <span className="[overflow-wrap:anywhere]"><span className="sr-only">Override reason: </span>“{a.override_reason}”</span>
+          </span>
+        )}
+        <span className="text-xs whitespace-nowrap text-muted">by {a.created_by.full_name} · <DateTime value={a.updated_at} dateOnly /></span>
       </div>
     ) },
     { key: "factors", header: "Why", cell: (a) => a.factors ? (
-      <details className="min-w-48 text-sm"><summary className="cursor-pointer text-primary">Factors</summary><FactorTable factors={a.factors} /></details>
-    ) : <span className="text-xs text-muted">Manual allocation without a recommendation: match score only</span> },
+      <details className="min-w-56 text-sm">
+        <summary className="cursor-pointer font-medium text-primary select-none hover:underline">Factors</summary>
+        <div className="mt-2"><FactorBreakdown factors={a.factors} /></div>
+      </details>
+    ) : <span className="block max-w-48 text-xs text-muted">Manual allocation without a recommendation: match score only</span> },
     ...(archived ? [] : [{ key: "actions", header: <span className="sr-only">Actions</span>, cell: (a: Allocation) => (
       <div className="flex flex-wrap gap-1">
-        <Button size="sm" variant="secondary" onClick={() => onReassign(a)}>Reassign</Button>
-        <Button size="sm" variant="ghost" className="text-danger" onClick={() => setRemoving(a)}>Remove</Button>
+        <Button size="sm" variant="secondary" icon={<ArrowsLeftRight />} onClick={() => onReassign(a)}>Reassign</Button>
+        <Button size="sm" variant="ghost" icon={<Trash />} className="text-danger hover:text-danger" onClick={() => setRemoving(a)}>Remove</Button>
       </div>
     ) }]),
   ];
 
   return (
-    <Card title="Allocation table">
-      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="flex flex-col gap-1 lg:col-span-1">
-          <label htmlFor={ids.q} className="text-xs font-medium">Search trainee</label>
+    <Card title="Allocation table" icon={<UsersThree />}
+      description={list.data ? `${list.data.meta.total} allocation${list.data.meta.total === 1 ? "" : "s"}${dq || projectId || source || override ? " match these filters" : ""}` : undefined}>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={ids.q} className="text-xs font-semibold text-muted">Search trainee</label>
           <Input id={ids.q} type="search" placeholder="Name or code" maxLength={100} value={q} onChange={(e) => reset(setQ)(e.target.value)} />
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={ids.project} className="text-xs font-medium">Project</label>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={ids.project} className="text-xs font-semibold text-muted">Project</label>
           <Select id={ids.project} value={projectId} onChange={(e) => reset(setProjectId)(e.target.value)}>
             <option value="">All projects</option>
             {projects.data?.data.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </Select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={ids.source} className="text-xs font-medium">Source</label>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={ids.source} className="text-xs font-semibold text-muted">Source</label>
           <Select id={ids.source} value={source} onChange={(e) => reset(setSource)(e.target.value as typeof source)}>
             <option value="">Any</option><option value="auto">Auto</option><option value="manual">Manual</option>
           </Select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={ids.override} className="text-xs font-medium">Override</label>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={ids.override} className="text-xs font-semibold text-muted">Override</label>
           <Select id={ids.override} value={override} onChange={(e) => reset(setOverride)(e.target.value as typeof override)}>
             <option value="">Any</option><option value="true">Overrides only</option><option value="false">No override</option>
           </Select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={ids.sort} className="text-xs font-medium">Sort</label>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={ids.sort} className="text-xs font-semibold text-muted">Sort</label>
           <Select id={ids.sort} value={sort} onChange={(e) => reset(setSort)(e.target.value)}>
             <option value="project_title">Project</option><option value="trainee_name">Trainee</option><option value="-match_score">Match score (high first)</option>
           </Select>
         </div>
       </div>
       {list.isLoading ? <LoadingState /> : list.error ? <ErrorState error={list.error} onRetry={() => void list.refetch()} /> : !list.data?.data.length ? (
-        <EmptyState title={params.q || projectId || source || override ? "No allocations match these filters" : "No allocations yet"}
+        <EmptyState icon={<UsersThree />} title={params.q || projectId || source || override ? "No allocations match these filters" : "No allocations yet"}
           description={cycle.status === "draft" ? "Run Auto-allocate or allocate trainees manually." : undefined} />
       ) : (
         <>
@@ -409,4 +476,3 @@ function AllocationTable({ cycle, onReassign }: { cycle: Cycle; onReassign: (a: 
     </Card>
   );
 }
-

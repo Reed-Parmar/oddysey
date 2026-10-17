@@ -1,34 +1,152 @@
 @import "tailwindcss";
 
-/* Design tokens (frontend.md §3). Light theme only in the MVP. */
+/*
+ * Design tokens (frontend.md §3). Light theme only in the MVP.
+ * Style: Minimalism / Swiss for enterprise dashboards. Indigo primary, orange accent used sparingly,
+ * slate neutrals. Text pairs meet WCAG AA (4.5:1) on surface and bg.
+ */
 @theme {
-  --color-bg: #f8fafc;
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Lexend", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #f6f7fb;
   --color-surface: #ffffff;
+  --color-surface-2: #f8fafc;
   --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
   --color-text: #0f172a;
-  --color-muted: #64748b;
-  --color-primary: #1d4ed8;
+  --color-muted: #475569;
+  --color-subtle: #64748b;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
   --color-primary-fg: #ffffff;
+  --color-primary-soft: #eef2ff;
+  --color-primary-ink: #3730a3;
+
+  --color-accent: #ea580c;
+  --color-accent-soft: #fff7ed;
+  --color-accent-ink: #9a3412;
+
   --color-info: #1d4ed8;
-  --color-info-bg: #dbeafe;
+  --color-info-bg: #eff6ff;
   --color-success: #15803d;
-  --color-success-bg: #dcfce7;
+  --color-success-bg: #f0fdf4;
   --color-warning: #a16207;
-  --color-warning-bg: #fef9c3;
+  --color-warning-bg: #fefce8;
   --color-danger: #b91c1c;
-  --color-danger-bg: #fee2e2;
+  --color-danger-bg: #fef2f2;
   --color-neutral: #334155;
   --color-neutral-bg: #f1f5f9;
+
+  /* Data-viz series (distinct in hue and lightness; always paired with labels). */
+  --color-chart-1: #4f46e5;
+  --color-chart-2: #0d9488;
+  --color-chart-3: #ea580c;
+  --color-chart-4: #ca8a04;
+  --color-chart-5: #64748b;
+
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-overlay: 0 20px 40px -12px rgb(15 23 42 / 0.25);
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-slide-in: slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-html,
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-primary-soft);
+    color: var(--color-primary-ink);
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  dialog[open] {
+    animation: var(--animate-slide-in);
+  }
+
+  dialog::backdrop {
+    background: rgb(15 23 42 / 0.5);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

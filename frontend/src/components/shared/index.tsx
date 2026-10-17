@@ -1,25 +1,61 @@
 /** Shared building blocks (frontend.md §4). Page-state standard: frontend.md §7. */
+import {
+  ArrowRight,
+  CaretDown,
+  CaretUpDown,
+  Check,
+  LockKey,
+  MagnifyingGlass,
+  Tray,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError, errorMessage } from "@/api/errors";
 import type { PageMeta } from "@/api/types";
-import { Alert, Button, Dialog } from "@/components/ui";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { Alert, Button, Dialog, cx } from "@/components/ui";
+import { formatDate, formatDateTime, formatScore } from "@/lib/format";
 
 export { StatusBadge } from "./StatusBadge";
 export { useToast } from "./Toaster";
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  eyebrow,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  /** Small context line above the title (e.g. a back link or section name). */
+  eyebrow?: ReactNode;
+}) {
   return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        {eyebrow && <div className="mb-1.5 text-sm font-medium text-muted">{eyebrow}</div>}
+        <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-[1.75rem]">{title}</h1>
+        {description && <p className="mt-1.5 max-w-3xl text-[0.95rem] text-muted">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
+}
+
+/** Back link for detail pages, rendered in PageHeader's eyebrow slot. */
+export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link to={to} className="inline-flex items-center gap-1 rounded text-sm font-medium text-muted transition-colors hover:text-primary">
+      <ArrowRight aria-hidden size={14} className="rotate-180" />
+      {children}
+    </Link>
+  );
+}
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden className={cx("animate-pulse rounded-md bg-neutral-bg", className)} />;
 }
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
@@ -29,19 +65,38 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
     return () => clearTimeout(t);
   }, []);
   return (
-    <div role="status" className="flex items-center gap-3 py-10 text-sm text-muted">
-      <span className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      {slow ? "Waking the server… this can take up to a minute." : label}
+    <div role="status" className="space-y-4 py-2">
+      <span className="sr-only">{slow ? "Waking the server… this can take up to a minute." : label}</span>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+      </div>
+      <Skeleton className="h-48 rounded-xl" />
+      {slow && <p aria-hidden className="text-sm text-muted">Waking the server… this can take up to a minute.</p>}
     </div>
   );
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: ReactNode; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  description,
+  action,
+  icon,
+}: {
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  icon?: ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-10 text-center">
-      <p className="font-medium">{title}</p>
-      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-border-strong bg-surface px-6 py-12 text-center">
+      <span aria-hidden className="mb-3 inline-flex size-12 items-center justify-center rounded-full bg-primary-soft text-primary [&>svg]:size-6">
+        {icon ?? <Tray />}
+      </span>
+      <p className="font-heading text-base font-semibold text-text">{title}</p>
+      {description && <p className="mt-1 max-w-md text-sm text-muted">{description}</p>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );
 }
@@ -51,28 +106,44 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (error instanceof ApiError && error.status === 403) return <Forbidden />;
   const rid = error instanceof ApiError ? error.requestId : null;
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger-bg p-4 text-sm text-danger" role="alert">
-      <p className="font-medium">{errorMessage(error)}</p>
-      {rid && (
-        <p className="mt-1 text-xs">
-          Request ID: <code className="select-all">{rid}</code>
-        </p>
-      )}
-      {onRetry && (
-        <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
-          Retry
-        </Button>
-      )}
+    <div className="flex gap-3 rounded-xl border border-danger/25 bg-danger-bg p-4 text-sm text-danger" role="alert">
+      <WarningCircle aria-hidden size={20} className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-semibold">{errorMessage(error)}</p>
+        {rid && (
+          <p className="mt-1 text-xs">
+            Request ID: <code className="select-all [overflow-wrap:anywhere]">{rid}</code>
+          </p>
+        )}
+        {onRetry && (
+          <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
+            Try again
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
 
+const dashboardLink = (
+  <Link className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" to="/app">
+    Go to my dashboard <ArrowRight aria-hidden size={14} />
+  </Link>
+);
+
 export function NotFound() {
-  return <EmptyState title="Not found" description="This page or record does not exist, or you do not have access to it." action={<Link className="text-primary underline" to="/app">Go to my dashboard</Link>} />;
+  return (
+    <EmptyState
+      icon={<MagnifyingGlass />}
+      title="Not found"
+      description="This page or record does not exist, or you do not have access to it."
+      action={dashboardLink}
+    />
+  );
 }
 
 export function Forbidden() {
-  return <EmptyState title="You don't have access to this page" action={<Link className="text-primary underline" to="/app">Go to my dashboard</Link>} />;
+  return <EmptyState icon={<LockKey />} title="You don't have access to this page" action={dashboardLink} />;
 }
 
 export function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger, loading, onConfirm, onClose }: {
@@ -84,7 +155,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", 
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
       <Button variant={danger ? "danger" : "primary"} loading={loading} onClick={onConfirm}>{confirmLabel}</Button>
     </>}>
-      <div className="text-sm">{message}</div>
+      <div className="text-sm leading-relaxed text-muted">{message}</div>
     </Dialog>
   );
 }
@@ -93,35 +164,40 @@ export function FormField({ label, htmlFor, error, hint, children, required }: {
   label: string; htmlFor: string; error?: string; hint?: ReactNode; children: ReactNode; required?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-medium">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={htmlFor} className="text-sm font-semibold text-text">
         {label} {required && <span className="text-danger" aria-hidden>*</span>}
       </label>
       {children}
       {hint && !error && <p className="text-xs text-muted">{hint}</p>}
-      {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+      {error && (
+        <p className="flex items-center gap-1 text-xs font-medium text-danger" role="alert">
+          <WarningCircle aria-hidden size={14} className="shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
 export function FormError({ error }: { error: unknown }) {
   if (!error) return null;
-  return <Alert variant="danger">{errorMessage(error)}</Alert>;
+  return <Alert variant="danger" icon={<WarningCircle />}>{errorMessage(error)}</Alert>;
 }
 
 export function Pagination({ meta, onPageChange }: { meta?: PageMeta; onPageChange: (page: number) => void }) {
   if (!meta || meta.total <= meta.page_size) return null;
   const pages = Math.ceil(meta.total / meta.page_size);
   return (
-    <div className="mt-3 flex items-center justify-between text-sm">
-      <span className="text-muted">
+    <nav aria-label="Pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+      <span className="text-muted tabular-nums">
         Page {meta.page} of {pages} · {meta.total} items
       </span>
       <div className="flex gap-2">
         <Button size="sm" variant="secondary" disabled={meta.page <= 1} onClick={() => onPageChange(meta.page - 1)}>Previous</Button>
         <Button size="sm" variant="secondary" disabled={meta.page >= pages} onClick={() => onPageChange(meta.page + 1)}>Next</Button>
       </div>
-    </div>
+    </nav>
   );
 }
 
@@ -133,27 +209,43 @@ export function DataTable<T>({ rows, columns, rowKey, sort, onSortChange, onRowC
   onRowClick?: (row: T) => void; caption?: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
       <table className="w-full text-left text-sm">
         {caption && <caption className="sr-only">{caption}</caption>}
-        <thead className="border-b border-border bg-neutral-bg text-xs uppercase text-muted">
+        <thead className="border-b border-border bg-surface-2">
           <tr>
-            {columns.map((c) => (
-              <th key={c.key} scope="col" className={`px-3 py-2 font-medium ${c.className ?? ""}`}>
-                {c.sort && onSortChange ? (
-                  <button type="button" className="inline-flex items-center gap-1 uppercase" onClick={() => onSortChange(c.sort!)}>
-                    {c.header} {sort === c.sort ? "▾" : ""}
-                  </button>
-                ) : c.header}
-              </th>
-            ))}
+            {columns.map((c) => {
+              const active = !!c.sort && sort === c.sort;
+              return (
+                <th
+                  key={c.key}
+                  scope="col"
+                  aria-sort={c.sort && onSortChange ? (active ? "descending" : "none") : undefined}
+                  className={cx("px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap text-muted uppercase", c.className)}
+                >
+                  {c.sort && onSortChange ? (
+                    <button
+                      type="button"
+                      className={cx("-mx-1 inline-flex items-center gap-1 rounded px-1 uppercase transition-colors hover:text-text", active && "text-text")}
+                      onClick={() => onSortChange(c.sort!)}
+                    >
+                      {c.header}
+                      {active ? <CaretDown aria-hidden size={12} weight="bold" /> : <CaretUpDown aria-hidden size={12} className="opacity-60" />}
+                    </button>
+                  ) : c.header}
+                </th>
+              );
+            })}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {rows.map((r) => (
-            <tr key={rowKey(r)} onClick={onRowClick ? () => onRowClick(r) : undefined}
-              className={`border-b border-border last:border-0 ${onRowClick ? "cursor-pointer hover:bg-neutral-bg" : ""}`}>
-              {columns.map((c) => <td key={c.key} className={`px-3 py-2 align-top ${c.className ?? ""}`}>{c.cell(r)}</td>)}
+            <tr
+              key={rowKey(r)}
+              onClick={onRowClick ? () => onRowClick(r) : undefined}
+              className={cx("transition-colors", onRowClick ? "cursor-pointer hover:bg-primary-soft/50" : "hover:bg-surface-2")}
+            >
+              {columns.map((c) => <td key={c.key} className={cx("px-4 py-3 align-middle", c.className)}>{c.cell(r)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -162,14 +254,25 @@ export function DataTable<T>({ rows, columns, rowKey, sort, onSortChange, onRowC
   );
 }
 
-export function ScoreBar({ value, max = 100, label }: { value: number | null | undefined; max?: number; label?: string }) {
+function scoreTone(pct: number) {
+  if (pct >= 75) return "bg-success";
+  if (pct >= 50) return "bg-primary";
+  if (pct >= 30) return "bg-warning";
+  return "bg-danger";
+}
+
+export function ScoreBar({ value, max = 100, label, tone }: {
+  value: number | null | undefined; max?: number; label?: string;
+  /** "auto" colours by band (always paired with the number); default is primary. */
+  tone?: "primary" | "auto";
+}) {
   const pct = value == null ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
   return (
-    <div className="flex items-center gap-2" aria-label={label ? `${label}: ${value ?? "not set"} of ${max}` : undefined}>
+    <div className="flex items-center gap-2.5" aria-label={label ? `${label}: ${value ?? "not set"} of ${max}` : undefined}>
       <div className="h-2 w-24 overflow-hidden rounded-full bg-neutral-bg">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+        <div className={cx("h-full rounded-full transition-[width] duration-500", tone === "auto" ? scoreTone(pct) : "bg-primary")} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-sm tabular-nums">{value == null ? "—" : value}{max !== 100 ? ` / ${max}` : ""}</span>
+      <span className="text-sm font-semibold tabular-nums">{formatScore(value)}{max !== 100 ? <span className="font-normal text-muted"> / {max}</span> : ""}</span>
     </div>
   );
 }
@@ -178,18 +281,29 @@ export function SkillChips({ skills, highlight }: { skills: { id?: string; name:
   if (!skills.length) return <span className="text-sm text-muted">None listed</span>;
   return (
     <ul className="flex flex-wrap gap-1.5">
-      {skills.map((s) => (
-        <li key={s.id ?? s.name} className={`rounded-full border px-2 py-0.5 text-xs ${highlight?.has(s.name.toLowerCase()) ? "border-success/40 bg-success-bg text-success" : "border-border bg-neutral-bg"}`}>
-          {s.name}
-        </li>
-      ))}
+      {skills.map((s) => {
+        const hit = highlight?.has(s.name.toLowerCase());
+        return (
+          <li
+            key={s.id ?? s.name}
+            className={cx(
+              "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium",
+              hit ? "border-success/30 bg-success-bg text-success" : "border-border bg-surface-2 text-neutral",
+            )}
+          >
+            {hit && <Check aria-hidden size={12} weight="bold" />}
+            {s.name}
+            {hit && <span className="sr-only"> (matches)</span>}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 export function DateTime({ value, dateOnly }: { value?: string | null; dateOnly?: boolean }) {
   if (!value) return <span>—</span>;
-  return <time dateTime={value}>{dateOnly ? formatDate(value) : formatDateTime(value)}</time>;
+  return <time dateTime={value} className="tabular-nums">{dateOnly ? formatDate(value) : formatDateTime(value)}</time>;
 }
 
 export function FileField({ id, accept, maxBytes = 10 * 1024 * 1024, onChange, error }: {
@@ -198,7 +312,8 @@ export function FileField({ id, accept, maxBytes = 10 * 1024 * 1024, onChange, e
   const [local, setLocal] = useState<string>();
   return (
     <div>
-      <input id={id} type="file" accept={accept} className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-2"
+      <input id={id} type="file" accept={accept}
+        className="block w-full rounded-lg border border-dashed border-border-strong bg-surface-2 p-2 text-sm text-muted transition-colors hover:border-primary file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-primary-soft file:px-3 file:py-2 file:font-semibold file:text-primary-ink"
         onChange={(e) => {
           const f = e.target.files?.[0] ?? null;
           if (f && f.size > maxBytes) {
@@ -210,20 +325,168 @@ export function FileField({ id, accept, maxBytes = 10 * 1024 * 1024, onChange, e
           setLocal(undefined);
           onChange(f);
         }} />
-      {(local || error) && <p className="mt-1 text-xs text-danger" role="alert">{local || error}</p>}
+      {(local || error) && <p className="mt-1 text-xs font-medium text-danger" role="alert">{local || error}</p>}
     </div>
   );
 }
 
 export function KeyValue({ items }: { items: [ReactNode, ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
+    <dl className="grid grid-cols-1 gap-x-8 gap-y-1 text-sm sm:grid-cols-[max-content_1fr] sm:gap-y-3">
       {items.map(([k, v], i) => (
         <div key={i} className="contents">
-          <dt className="text-muted">{k}</dt>
-          <dd>{v}</dd>
+          <dt className="text-muted max-sm:mt-2 max-sm:text-xs max-sm:font-semibold max-sm:uppercase max-sm:tracking-wide">{k}</dt>
+          <dd className="font-medium text-text [overflow-wrap:anywhere]">{v}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+/* ---------------------------------------------------------------- data visualisation */
+
+type Tone = "primary" | "success" | "warning" | "danger" | "neutral" | "accent";
+
+const TONE_ICON: Record<Tone, string> = {
+  primary: "bg-primary-soft text-primary",
+  success: "bg-success-bg text-success",
+  warning: "bg-warning-bg text-warning",
+  danger: "bg-danger-bg text-danger",
+  neutral: "bg-neutral-bg text-neutral",
+  accent: "bg-accent-soft text-accent-ink",
+};
+
+/** KPI tile: big number, label, optional hint and link. */
+export function StatCard({ label, value, hint, icon, tone = "primary", to }: {
+  label: string; value: ReactNode; hint?: ReactNode; icon?: ReactNode; tone?: Tone; to?: string;
+}) {
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-muted">{label}</p>
+        {icon && (
+          <span aria-hidden className={cx("inline-flex size-9 shrink-0 items-center justify-center rounded-lg [&>svg]:size-5", TONE_ICON[tone])}>
+            {icon}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 font-heading text-3xl font-semibold tracking-tight text-text tabular-nums">{value}</p>
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
+    </>
+  );
+  const base = "block rounded-xl border border-border bg-surface p-5 shadow-card";
+  return to ? (
+    <Link to={to} className={cx(base, "transition-[border-color,box-shadow] duration-150 hover:border-primary/40 hover:shadow-raised")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={base}>{body}</div>
+  );
+}
+
+const TONE_BAR: Record<Tone, string> = {
+  primary: "bg-primary",
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  neutral: "bg-subtle",
+  accent: "bg-accent",
+};
+
+/** Labelled horizontal meter (e.g. capacity filled, completion rate). */
+export function Meter({ label, value, max, tone = "primary", valueLabel, ariaLabel }: {
+  label: ReactNode; value: number; max: number; tone?: Tone; valueLabel?: ReactNode;
+  /** Accessible name when `label` is not plain text. */
+  ariaLabel?: string;
+}) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
+        <span className="min-w-0 truncate font-medium text-text">{label}</span>
+        <span className="shrink-0 text-muted tabular-nums">{valueLabel ?? `${value} / ${max}`}</span>
+      </div>
+      <div
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
+        className="h-2 overflow-hidden rounded-full bg-neutral-bg"
+      >
+        <div className={cx("h-full rounded-full transition-[width] duration-500", TONE_BAR[tone])} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+const SERIES = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
+
+/** Proportion bar with a legend that carries the numbers (no colour-only meaning). */
+export function StackedBar({ segments, label }: {
+  segments: { label: string; value: number; className?: string }[]; label: string;
+}) {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  const summary = segments.map((s) => `${s.label} ${s.value}`).join(", ");
+  return (
+    <figure>
+      <div role="img" aria-label={`${label}: ${summary}`} className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-neutral-bg">
+        {total > 0 &&
+          segments.map((s, i) =>
+            s.value > 0 ? (
+              <div key={s.label} className={cx("h-full first:rounded-l-full last:rounded-r-full", s.className ?? SERIES[i % SERIES.length])} style={{ width: `${(s.value / total) * 100}%` }} />
+            ) : null,
+          )}
+      </div>
+      <figcaption className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        {segments.map((s, i) => (
+          <span key={s.label} className="inline-flex items-center gap-2">
+            <span aria-hidden className={cx("size-2.5 rounded-sm", s.className ?? SERIES[i % SERIES.length])} />
+            <span className="text-muted">{s.label}</span>
+            <span className="font-semibold tabular-nums">{s.value}</span>
+          </span>
+        ))}
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Initials avatar (decorative; the name is always shown next to it). */
+export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
+  return (
+    <span aria-hidden className={cx(
+      "inline-flex shrink-0 items-center justify-center rounded-full bg-primary-soft font-semibold text-primary-ink",
+      size === "sm" ? "size-7 text-xs" : "size-9 text-sm",
+    )}>
+      {initials}
+    </span>
+  );
+}
+
+/** Ordered lifecycle steps (e.g. student journey). */
+export function Steps({ steps }: { steps: { label: string; state: "done" | "current" | "todo"; hint?: ReactNode }[] }) {
+  return (
+    <ol className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
+      {steps.map((s, i) => (
+        <li key={s.label} className="flex items-start gap-3 sm:flex-col sm:gap-2" aria-current={s.state === "current" ? "step" : undefined}>
+          <span aria-hidden className={cx(
+            "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+            s.state === "done" && "bg-success text-white",
+            s.state === "current" && "bg-primary text-white ring-4 ring-primary/15",
+            s.state === "todo" && "border border-border-strong bg-surface text-muted",
+          )}>
+            {s.state === "done" ? <Check size={14} weight="bold" /> : i + 1}
+          </span>
+          <div className="min-w-0">
+            <p className={cx("text-sm font-semibold", s.state === "todo" ? "text-muted" : "text-text")}>
+              {s.label}
+              <span className="sr-only"> ({s.state === "done" ? "done" : s.state === "current" ? "current step" : "not started"})</span>
+            </p>
+            {s.hint && <p className="mt-0.5 text-xs text-muted">{s.hint}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }

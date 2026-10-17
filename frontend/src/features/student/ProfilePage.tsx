@@ -1,3 +1,4 @@
+import { FloppyDisk, IdentificationCard, LockKey, NotePencil, X } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
@@ -7,12 +8,13 @@ import { api, call } from "@/api/client";
 import { ApiError } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { TraineeMe } from "@/api/types";
-import { FormError, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
-import { Alert, Button, Card, Input, Textarea } from "@/components/ui";
-import { TraineeProfileView } from "@/features/shared/views";
+import { Avatar, FormError, FormField, LoadingState, PageHeader, ScoreBar, StatusBadge, useToast } from "@/components/shared";
+import { Button, Card, Input, Textarea } from "@/components/ui";
 
 import { BACKGROUND_MAX, CAREER_MAX, SKILL_MAX, normaliseSkills, profileBody, profileSchema, skillAddError, type ProfileValues } from "./forms";
 import { useStudentContext } from "./hooks";
+import { ResumePanel } from "./ResumePanel";
+import { Fact } from "./ui";
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -54,21 +56,21 @@ function SkillsInput({ value, onChange, error }: { value: string[]; onChange: (v
       {value.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5" aria-label="Your skills">
           {value.map((s) => (
-            <li key={s.toLowerCase()} className="inline-flex items-center gap-1 rounded-full border border-border bg-neutral-bg py-0.5 pr-1 pl-2 text-xs">
+            <li key={s.toLowerCase()} className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary-soft py-0.5 pr-0.5 pl-3 text-sm font-medium text-primary-ink">
               {s}
               <button
                 type="button"
-                className="rounded-full px-1 hover:bg-border"
+                className="inline-flex size-7 items-center justify-center rounded-full transition-colors hover:bg-primary/15"
                 aria-label={`Remove ${s}`}
                 onClick={() => onChange(value.filter((x) => x !== s))}
               >
-                ×
+                <X aria-hidden size={12} weight="bold" />
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted">No skills listed yet.</p>
+        <p className="rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm text-muted">No skills listed yet.</p>
       )}
       <div className="flex gap-2">
         <Input
@@ -103,7 +105,7 @@ function SkillsInput({ value, onChange, error }: { value: string[]; onChange: (v
         {value.length} / {SKILL_MAX} skills. Press Enter to add; pick a suggestion or type your own.
       </p>
       {(localError || error) && (
-        <p className="text-xs text-danger" role="alert">
+        <p className="text-xs font-medium text-danger" role="alert">
           {localError || error}
         </p>
       )}
@@ -161,7 +163,7 @@ function ProfileForm({ me }: { me: TraineeMe }) {
   });
 
   return (
-    <Card title="Edit my details">
+    <Card title="About you" description="You can edit these. They shape your project suggestions." icon={<NotePencil />}>
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -190,16 +192,57 @@ function ProfileForm({ me }: { me: TraineeMe }) {
           <Textarea id="background" rows={5} maxLength={BACKGROUND_MAX} placeholder="Prior work, hobbies, projects you have done…" {...register("background")} />
         </FormField>
         <FormError error={formError} />
-        <p className="text-xs text-muted">Changes are used the next time the programme team generates recommendations.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" loading={save.isPending} disabled={!formState.isDirty}>
-            Save changes
-          </Button>
-          <Button variant="secondary" disabled={!formState.isDirty || save.isPending} onClick={() => form.reset()}>
-            Discard changes
-          </Button>
+        <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted">Changes are used the next time the programme team generates recommendations.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" icon={<FloppyDisk />} loading={save.isPending} disabled={!formState.isDirty}>
+              Save changes
+            </Button>
+            <Button variant="secondary" disabled={!formState.isDirty || save.isPending} onClick={() => form.reset()}>
+              Discard changes
+            </Button>
+          </div>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** Fields owned by the programme team (read-only for the trainee). Gender is never shown here. */
+function ManagedRecord({ me }: { me: TraineeMe }) {
+  const scores = [["Theory", me.scores.theory], ["Practical", me.scores.practical], ["Safety compliance", me.scores.safety]] as const;
+  return (
+    <Card
+      title="Programme record"
+      description="Trade, trainee code, centre and assessment scores are managed by the programme team. Ask your coordinator if something is wrong."
+      icon={<LockKey />}
+    >
+      <div className="flex items-center gap-3 rounded-lg bg-surface-2 p-3">
+        <Avatar name={me.full_name} />
+        <div className="min-w-0">
+          <p className="font-semibold text-text [overflow-wrap:anywhere]">{me.full_name}</p>
+          <p className="flex items-center gap-1 text-xs text-muted">
+            <IdentificationCard aria-hidden size={14} />
+            {me.trainee_code}
+          </p>
+        </div>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-4">
+        <Fact label="Trade">{me.trade.name}</Fact>
+        <Fact label="Training centre">{me.centre_name ?? "—"}</Fact>
+        <div className="col-span-2">
+          <Fact label="Assessment"><StatusBadge kind="assessment" value={me.assessment_status} /></Fact>
+        </div>
+      </dl>
+      <h3 className="mt-5 mb-3 text-xs font-semibold tracking-wide text-muted uppercase">Assessment scores</h3>
+      <dl className="flex flex-col gap-3">
+        {scores.map(([k, v]) => (
+          <div key={k} className="flex flex-wrap items-center justify-between gap-2">
+            <dt className="text-sm text-muted">{k}</dt>
+            <dd><ScoreBar value={v} label={k} tone="auto" /></dd>
+          </div>
+        ))}
+      </dl>
     </Card>
   );
 }
@@ -208,14 +251,14 @@ export function ProfilePage() {
   const { me } = useStudentContext();
   if (!me) return <LoadingState />;
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title="My profile" description="Keep your skills and interests current so suggestions fit you better." />
-      <div className="flex flex-col gap-4">
-        <Alert variant="info">
-          Trade, trainee code, centre and assessment scores are managed by the programme team. Ask your coordinator if something is wrong.
-        </Alert>
-        <TraineeProfileView trainee={me} showSensitive={false} />
-        <ProfileForm key={me.updated_at} me={me} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-start">
+        <ManagedRecord me={me} />
+        <div className="min-w-0 space-y-6">
+          <ProfileForm key={me.updated_at} me={me} />
+          <ResumePanel me={me} />
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 /** Minimal accessible primitives (shadcn-style, Tailwind tokens). Owned by the foundation. */
+import { X } from "@phosphor-icons/react";
 import {
   forwardRef,
   useEffect,
+  useId,
   useRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -13,21 +15,35 @@ import {
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "danger" | "ghost";
-  size?: "sm" | "md";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "accent";
+  size?: "sm" | "md" | "lg";
   loading?: boolean;
+  /** Leading icon (decorative; the button text is the accessible name). */
+  icon?: ReactNode;
 };
 
+const BUTTON_VARIANTS = {
+  primary: "bg-primary text-primary-fg shadow-card hover:bg-primary-hover",
+  accent: "bg-accent text-white shadow-card hover:bg-accent-ink",
+  secondary: "border border-border-strong bg-surface text-text shadow-card hover:border-subtle hover:bg-surface-2",
+  danger: "bg-danger text-white shadow-card hover:bg-danger/90",
+  ghost: "text-neutral hover:bg-neutral-bg hover:text-text",
+};
+
+const BUTTON_SIZES = { sm: "min-h-9 px-3 text-sm", md: "min-h-10 px-4 text-sm", lg: "min-h-12 px-5 text-base" };
+
+const BUTTON_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors duration-150 select-none";
+
+/** Button look for links (`<Link className={buttonStyles("secondary")}>`): never nest a <button> in an <a>. */
+export function buttonStyles(variant: NonNullable<ButtonProps["variant"]> = "primary", size: NonNullable<ButtonProps["size"]> = "md") {
+  return cx(BUTTON_BASE, BUTTON_SIZES[size], BUTTON_VARIANTS[variant]);
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", loading, disabled, className, children, type = "button", ...rest },
+  { variant = "primary", size = "md", loading, disabled, className, children, icon, type = "button", ...rest },
   ref,
 ) {
-  const styles = {
-    primary: "bg-primary text-primary-fg hover:bg-primary/90",
-    secondary: "border border-border bg-surface hover:bg-neutral-bg",
-    danger: "bg-danger text-white hover:bg-danger/90",
-    ghost: "hover:bg-neutral-bg",
-  }[variant];
   return (
     <button
       ref={ref}
@@ -35,31 +51,42 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cx(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" ? "px-3 text-sm" : "px-4 text-sm",
-        styles,
+        BUTTON_BASE,
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
+        BUTTON_SIZES[size],
+        BUTTON_VARIANTS[variant],
         className,
       )}
       {...rest}
     >
-      {loading && <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+      {loading ? (
+        <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      ) : (
+        icon && <span aria-hidden className="inline-flex shrink-0 [&>svg]:size-4">{icon}</span>
+      )}
       {children}
     </button>
   );
 });
 
-const field = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm disabled:bg-neutral-bg";
+const field = cx(
+  "w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-base text-text shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] sm:text-sm",
+  "placeholder:text-subtle transition-colors duration-150 hover:border-subtle",
+  "focus:border-primary focus:ring-3 focus:ring-primary/15 focus:outline-none",
+  "disabled:cursor-not-allowed disabled:bg-neutral-bg disabled:text-muted",
+  "aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15",
+);
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...rest },
   ref,
 ) {
-  return <input ref={ref} className={cx(field, "min-h-10", className)} {...rest} />;
+  return <input ref={ref} className={cx(field, "min-h-11 sm:min-h-10", className)} {...rest} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function Textarea({ className, ...rest }, ref) {
-    return <textarea ref={ref} className={cx(field, "min-h-24", className)} {...rest} />;
+    return <textarea ref={ref} className={cx(field, "min-h-24 leading-relaxed", className)} {...rest} />;
   },
 );
 
@@ -68,19 +95,57 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   ref,
 ) {
   return (
-    <select ref={ref} className={cx(field, "min-h-10", className)} {...rest}>
+    <select
+      ref={ref}
+      className={cx(
+        field,
+        "min-h-11 appearance-none bg-[length:16px] bg-[right_0.6rem_center] bg-no-repeat pr-9 sm:min-h-10",
+        "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%2364748b' d='M213.7 101.7l-80 80a8 8 0 0 1-11.4 0l-80-80a8 8 0 0 1 11.4-11.4L128 164.7l74.3-74.4a8 8 0 0 1 11.4 11.4Z'/%3E%3C/svg%3E\")]",
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </select>
   );
 });
 
-export function Card({ className, children, title, actions }: { className?: string; children: ReactNode; title?: ReactNode; actions?: ReactNode }) {
+export function Card({
+  className,
+  children,
+  title,
+  description,
+  actions,
+  icon,
+  flush,
+}: {
+  className?: string;
+  children: ReactNode;
+  title?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  /** Decorative icon shown before the title. */
+  icon?: ReactNode;
+  /** Remove body padding (for tables/lists that run edge to edge). */
+  flush?: boolean;
+}) {
+  const hasHeader = title || actions;
   return (
-    <section className={cx("rounded-lg border border-border bg-surface p-4", className)}>
-      {(title || actions) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="text-base font-semibold">{title}</h2>}
-          {actions}
+    <section className={cx("rounded-xl border border-border bg-surface shadow-card", !flush && "p-5", className)}>
+      {hasHeader && (
+        <div className={cx("flex flex-wrap items-start justify-between gap-3", flush ? "px-5 pt-5 pb-4" : "mb-4")}>
+          <div className="flex min-w-0 items-start gap-3">
+            {icon && (
+              <span aria-hidden className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary [&>svg]:size-[18px]">
+                {icon}
+              </span>
+            )}
+            <div className="min-w-0">
+              {title && <h2 className="text-base font-semibold text-text">{title}</h2>}
+              {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+            </div>
+          </div>
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
       )}
       {children}
@@ -88,24 +153,54 @@ export function Card({ className, children, title, actions }: { className?: stri
   );
 }
 
-export function Alert({ variant = "info", children, title }: { variant?: "info" | "success" | "warning" | "danger"; children: ReactNode; title?: string }) {
+export function Alert({
+  variant = "info",
+  children,
+  title,
+  icon,
+}: {
+  variant?: "info" | "success" | "warning" | "danger";
+  children: ReactNode;
+  title?: string;
+  icon?: ReactNode;
+}) {
   const styles = {
-    info: "border-info/30 bg-info-bg text-info",
-    success: "border-success/30 bg-success-bg text-success",
+    info: "border-info/25 bg-info-bg text-info",
+    success: "border-success/25 bg-success-bg text-success",
     warning: "border-warning/30 bg-warning-bg text-warning",
-    danger: "border-danger/30 bg-danger-bg text-danger",
+    danger: "border-danger/25 bg-danger-bg text-danger",
   }[variant];
   return (
-    <div role={variant === "danger" ? "alert" : "status"} className={cx("rounded-md border px-3 py-2 text-sm", styles)}>
-      {title && <p className="font-medium">{title}</p>}
-      <div>{children}</div>
+    <div role={variant === "danger" ? "alert" : "status"} className={cx("flex gap-3 rounded-lg border px-4 py-3 text-sm", styles)}>
+      {icon && <span aria-hidden className="mt-0.5 shrink-0 [&>svg]:size-[18px]">{icon}</span>}
+      <div className="min-w-0">
+        {title && <p className="font-semibold">{title}</p>}
+        <div className={cx(title && "mt-0.5", "[overflow-wrap:anywhere]")}>{children}</div>
+      </div>
     </div>
   );
 }
 
 /** Native <dialog> modal: focus is trapped by the browser; Escape closes. */
-export function Dialog({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  size = "md",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  description?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: "md" | "lg";
+}) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -120,21 +215,34 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
         e.preventDefault();
         onClose();
       }}
-      aria-labelledby="dialog-title"
-      className="m-auto w-[min(560px,calc(100vw-2rem))] rounded-lg border border-border p-0 backdrop:bg-black/40"
+      aria-labelledby={titleId}
+      className={cx(
+        "m-auto rounded-2xl border border-border bg-surface p-0 text-text shadow-overlay",
+        size === "lg" ? "w-[min(760px,calc(100vw-2rem))]" : "w-[min(560px,calc(100vw-2rem))]",
+      )}
     >
       {open && (
-        <div className="flex max-h-[85vh] flex-col">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 id="dialog-title" className="font-semibold">
-              {title}
-            </h2>
-            <button type="button" aria-label="Close" className="rounded p-1 hover:bg-neutral-bg" onClick={onClose}>
-              ✕
+        <div className="flex max-h-[85dvh] flex-col">
+          <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
+            <div className="min-w-0">
+              <h2 id={titleId} className="text-lg font-semibold">
+                {title}
+              </h2>
+              {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              className="-mt-1 -mr-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-neutral-bg hover:text-text"
+              onClick={onClose}
+            >
+              <X aria-hidden size={18} />
             </button>
           </div>
-          <div className="overflow-y-auto px-4 py-3">{children}</div>
-          {footer && <div className="flex justify-end gap-2 border-t border-border px-4 py-3">{footer}</div>}
+          <div className="overflow-y-auto px-5 pb-5">{children}</div>
+          {footer && (
+            <div className="flex flex-wrap justify-end gap-2 rounded-b-2xl border-t border-border bg-surface-2 px-5 py-3">{footer}</div>
+          )}
         </div>
       )}
     </dialog>

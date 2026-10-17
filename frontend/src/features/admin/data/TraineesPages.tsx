@@ -1,5 +1,6 @@
 /** /admin/trainees and /admin/trainees/:traineeId (TRN-03/04/06, IMP-01, INV-02, REC-03, ALLOC-01; admin.md §3.2–3.3). */
 import { zodResolver } from "@hookform/resolvers/zod";
+import { GraduationCap, LinkSimple, PencilSimple, Sparkle, Target, UploadSimple, UserPlus } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -11,16 +12,17 @@ import { ApiError } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Trainee, TraineeAdminPatch } from "@/api/types";
 import {
-  DataTable, EmptyState, ErrorState, FormField, KeyValue, LoadingState, PageHeader, Pagination, ScoreBar, SkillChips,
-  StatusBadge, useToast, type Column,
+  Avatar, BackLink, DataTable, EmptyState, ErrorState, FormField, KeyValue, LoadingState, PageHeader, Pagination,
+  ScoreBar, SkillChips, StatusBadge, useToast, type Column,
 } from "@/components/shared";
-import { Alert, Button, Card, Dialog, Input, Select, Textarea } from "@/components/ui";
-import { FactorTable, RecommendationCard, TraineeProfileView } from "@/features/shared/views";
+import { Button, Card, Dialog, Input, Select, Textarea } from "@/components/ui";
+import { FactorTable, RecommendationCard, TraineeProfileView, TraineeResumeCard } from "@/features/shared/views";
 import { formatScore } from "@/lib/format";
 
 import {
-  ApiErrorAlert, CycleSelect, FilterBar, InviteUrlReveal, LabeledSelect, Reason, SearchInput, SkillsInput,
-  WarningsAlert, applyFieldErrors, triState, useDebounced, useInvalidate, useScopedCycle, useTrades,
+  ActionStack, ApiErrorAlert, CardState, CycleSelect, FilterBar, FormSection, InviteUrlReveal, LabeledSelect, LinkButton,
+  MetaLine, ReadOnlyBanner, SearchInput, SkillsInput, TableCard, TextLink, WarningsAlert, applyFieldErrors, triState,
+  useDebounced, useInvalidate, useScopedCycle, useTrades,
 } from "./common";
 import { ImportDialog } from "./ImportPanel";
 
@@ -59,31 +61,39 @@ export function TraineesPage() {
   const filtered = !!(dq || trade || assessment || allocated || linked || openInv);
 
   const cols: Column<Trainee>[] = [
-    { key: "code", header: "Code", sort: "trainee_code", cell: (t) => <span className="whitespace-nowrap">{t.trainee_code}</span> },
-    { key: "name", header: "Name", sort: "full_name", cell: (t) => <Link className="font-medium text-primary" to={`/admin/trainees/${t.id}`} onClick={(e) => e.stopPropagation()}>{t.full_name}</Link> },
-    { key: "trade", header: "Trade", cell: (t) => t.trade.name },
-    { key: "centre", header: "Centre", cell: (t) => t.centre_name ?? "—" },
+    { key: "code", header: "Code", sort: "trainee_code", cell: (t) => <span className="font-medium whitespace-nowrap text-muted tabular-nums">{t.trainee_code}</span> },
+    { key: "name", header: "Name", sort: "full_name", cell: (t) => (
+      <span className="flex min-w-40 items-center gap-2.5">
+        <Avatar name={t.full_name} size="sm" />
+        <Link className="font-semibold text-text hover:text-primary hover:underline" to={`/admin/trainees/${t.id}`} onClick={(e) => e.stopPropagation()}>{t.full_name}</Link>
+      </span>
+    ) },
+    { key: "trade", header: "Trade", cell: (t) => <span className="whitespace-nowrap">{t.trade.name}</span> },
+    { key: "centre", header: "Centre", cell: (t) => t.centre_name ?? <span className="text-muted">—</span> },
     { key: "scores", header: "Theory / Practical / Safety", sort: "-practical_score", cell: (t) => (
       <span className="tabular-nums whitespace-nowrap">{formatScore(t.scores.theory)} / {formatScore(t.scores.practical)} / {formatScore(t.scores.safety)}</span>
     ) },
     { key: "assessment", header: "Assessment", cell: (t) => <StatusBadge kind="assessment" value={t.assessment_status} /> },
-    { key: "account", header: "Account", cell: (t) => t.account ? <span className="break-all">{t.account.email}</span> : <span className="text-muted">No account</span> },
-    { key: "skills", header: "Skills", cell: (t) => <SkillChips skills={t.skills} /> },
+    { key: "account", header: "Account", cell: (t) => t.account ? (
+      <span className="inline-flex items-center gap-1.5 break-all"><LinkSimple aria-hidden size={14} className="shrink-0 text-success" />{t.account.email}</span>
+    ) : <span className="text-muted">No account</span> },
+    { key: "skills", header: "Skills", className: "min-w-56", cell: (t) => <SkillChips skills={t.skills} /> },
   ];
 
   return (
     <div>
       <PageHeader title="Trainees" description="Trainee records owned by the programme team. Import the Trainee Profiles sheet or edit records one by one."
-        actions={<div className="flex flex-col items-end gap-1">
-          <Button disabled={!!importReason} onClick={() => setImportOpen(true)}>Import trainees</Button>
-          <Reason>{importReason}</Reason>
-        </div>} />
+        actions={<ActionStack reason={importReason}>
+          <Button icon={<UploadSimple />} disabled={!!importReason} onClick={() => setImportOpen(true)}>Import trainees</Button>
+        </ActionStack>} />
       {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.id ? (
-        <EmptyState title="No active cycle" description="Create a cycle before importing trainees."
-          action={<Link className="text-primary underline" to="/admin/cycles?create=1">Create a cycle</Link>} />
+        <EmptyState icon={<GraduationCap />} title="No active cycle" description="Create a cycle before importing trainees."
+          action={<LinkButton to="/admin/cycles?create=1">Create a cycle</LinkButton>} />
       ) : (
-        <>
-          <FilterBar>
+        <TableCard
+          title="Trainee records" icon={<GraduationCap />}
+          description={list.data ? `${list.data.meta.total} ${list.data.meta.total === 1 ? "trainee" : "trainees"}${filtered ? " match these filters" : ""}${scope.cycle ? ` in ${scope.cycle.name}` : ""}` : undefined}
+          toolbar={<FilterBar>
             <CycleSelect value={scope.id} onChange={reset(setCycleSel)} cycles={scope.cycles} activeId={scope.active?.id} />
             <SearchInput id="trainee-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Name, code or centre" />
             <LabeledSelect id="trainee-trade" label="Trade" value={trade} onChange={reset(setTrade)}>
@@ -109,21 +119,21 @@ export function TraineesPage() {
               <option value="trainee_code">Code</option>
               <option value="-practical_score">Practical score (high first)</option>
             </LabeledSelect>
-          </FilterBar>
-          {list.isLoading ? <LoadingState /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> :
+          </FilterBar>}
+          footer={list.data?.data.length ? <Pagination meta={list.data.meta} onPageChange={setPage} /> : undefined}>
+          {list.isLoading ? <CardState><LoadingState /></CardState> : list.error ? <CardState><ErrorState error={list.error} onRetry={() => list.refetch()} /></CardState> :
             !list.data?.data.length ? (
-              filtered ? <EmptyState title="No trainees match these filters" /> : (
-                <EmptyState title="No trainees yet" description="Import the Trainee Profiles sheet to add trainees to this cycle."
-                  action={!importReason ? <Button onClick={() => setImportOpen(true)}>Import trainees</Button> : undefined} />
-              )
+              <CardState>
+                {filtered ? <EmptyState icon={<GraduationCap />} title="No trainees match these filters" /> : (
+                  <EmptyState icon={<GraduationCap />} title="No trainees yet" description="Import the Trainee Profiles sheet to add trainees to this cycle."
+                    action={!importReason ? <Button icon={<UploadSimple />} onClick={() => setImportOpen(true)}>Import trainees</Button> : undefined} />
+                )}
+              </CardState>
             ) : (
-              <>
-                <DataTable rows={list.data.data} columns={cols} rowKey={(t) => t.id} sort={sort} onSortChange={reset(setSort)}
-                  onRowClick={(t) => navigate(`/admin/trainees/${t.id}`)} caption="Trainees" />
-                <Pagination meta={list.data.meta} onPageChange={setPage} />
-              </>
+              <DataTable rows={list.data.data} columns={cols} rowKey={(t) => t.id} sort={sort} onSortChange={reset(setSort)}
+                onRowClick={(t) => navigate(`/admin/trainees/${t.id}`)} caption="Trainees" />
             )}
-        </>
+        </TableCard>
       )}
       {scope.id && (
         <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} endpoint="/admin/imports/trainees" cycleId={scope.id}
@@ -158,17 +168,23 @@ export function TraineeDetailPage() {
     : trainee.account ? `Account already linked (${trainee.account.email})` : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader title={trainee.full_name}
-        description={<span>{trainee.trainee_code} · <Link className="text-primary underline" to="/admin/trainees">All trainees</Link>{cycle.data ? ` · ${cycle.data.data.name}` : ""}</span>}
-        actions={<div className="flex flex-col items-end gap-1">
-          <Button variant="secondary" disabled={!!inviteReason} onClick={() => setInviteOpen(true)}>Invite student</Button>
-          <Reason>{inviteReason}</Reason>
-        </div>} />
-      {archived && <Alert variant="info">Cycle is archived (read-only).</Alert>}
+    <div className="space-y-6">
+      <PageHeader title={trainee.full_name} eyebrow={<BackLink to="/admin/trainees">All trainees</BackLink>}
+        description={<MetaLine items={[
+          <span key="c" className="font-medium tabular-nums">{trainee.trainee_code}</span>,
+          trainee.trade.name,
+          cycle.data ? cycle.data.data.name : null,
+        ]} />}
+        actions={<ActionStack reason={inviteReason}>
+          <Button variant="secondary" icon={<UserPlus />} disabled={!!inviteReason} onClick={() => setInviteOpen(true)}>Invite student</Button>
+        </ActionStack>} />
+      {archived && <ReadOnlyBanner />}
       <WarningsAlert warnings={warnings} onDismiss={() => setWarnings([])} />
-      <TraineeProfileView trainee={trainee} showSensitive />
-      <AllocationPanel trainee={trainee} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+        <TraineeProfileView trainee={trainee} showSensitive />
+        <AllocationPanel trainee={trainee} />
+      </div>
+      <TraineeResumeCard traineeId={trainee.id} canDownload />
       <TraineeRecommendations trainee={trainee} />
       <TraineeEditForm key={trainee.updated_at} trainee={trainee} readOnly={archived} onWarnings={setWarnings} />
       <InviteStudentDialog open={inviteOpen} onClose={() => setInviteOpen(false)} trainee={trainee} />
@@ -190,9 +206,9 @@ function AllocationPanel({ trainee }: { trainee: Trainee }) {
   const a = alloc.data?.data[0];
   const row = prog.data?.data[0];
   return (
-    <Card title="Allocation" actions={<Link className="text-sm text-primary underline" to="/admin/allocations">Manage allocations</Link>}>
+    <Card title="Allocation" icon={<Target />} actions={<TextLink to="/admin/allocations">Manage allocations</TextLink>}>
       {alloc.isLoading || prog.isLoading ? <LoadingState /> : alloc.error ? <ErrorState error={alloc.error} onRetry={() => alloc.refetch()} /> : !a ? (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2 p-4 text-sm">
           <StatusBadge kind="progress" value="unallocated" />
           <span className="text-muted">Not allocated yet. Allocate on the Allocations page.</span>
         </div>
@@ -203,7 +219,7 @@ function AllocationPanel({ trainee }: { trainee: Trainee }) {
               <StatusBadge kind="progress" value={row?.progress ?? "allocated"} />
               {row?.latest_submission?.is_late && <StatusBadge kind="late" value="late" />}
             </span>],
-            ["Project", <Link key="p" className="text-primary underline" to={`/admin/projects/${a.project.id}`}>{a.project.title} · {a.project.project_code}</Link>],
+            ["Project", <TextLink key="p" to={`/admin/projects/${a.project.id}`}>{a.project.title} · {a.project.project_code}</TextLink>],
             ["Supervisor", a.project.supervisor ? `${a.project.supervisor.full_name}${a.project.supervisor.department ? ` (${a.project.supervisor.department})` : ""}` : "Not assigned"],
             ["Source", <span key="src" className="flex flex-wrap gap-1">
               <StatusBadge kind="allocationSource" value={a.source} />
@@ -211,10 +227,13 @@ function AllocationPanel({ trainee }: { trainee: Trainee }) {
             </span>],
             ...(a.is_override ? [["Override reason", a.override_reason ?? "—"] as [string, string]] : []),
             ["Match score", <ScoreBar key="m" value={a.match_score} label="Match score" />],
-            ...(row?.latest_submission ? [["Latest submission", <Link key="sub" className="text-primary underline" to={`/admin/submissions/${row.latest_submission.id}`}>Version {row.latest_submission.version}</Link>] as [string, ReactNode]] : []),
+            ...(row?.latest_submission ? [["Latest submission", <TextLink key="sub" to={`/admin/submissions/${row.latest_submission.id}`}>Version {row.latest_submission.version}</TextLink>] as [string, ReactNode]] : []),
           ]} />
           {a.factors ? (
-            <details className="text-sm"><summary className="cursor-pointer text-primary">Why this match?</summary><FactorTable factors={a.factors} /></details>
+            <details className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+              <summary className="cursor-pointer font-semibold text-primary">Why this match?</summary>
+              <FactorTable factors={a.factors} />
+            </details>
           ) : <p className="text-xs text-muted">Manual allocation without a recommendation: match score only.</p>}
         </div>
       )}
@@ -229,12 +248,13 @@ function TraineeRecommendations({ trainee }: { trainee: Trainee }) {
     queryFn: () => call(api.GET("/api/v1/recommendations", { params: { query: params } })),
   });
   return (
-    <Card title="Recommendations (latest completed run)" actions={<Link className="text-sm text-primary underline" to="/admin/recommendations">All recommendations</Link>}>
+    <Card title="Recommendations" icon={<Sparkle />} description="Latest completed run, best match first"
+      actions={<TextLink to="/admin/recommendations">All recommendations</TextLink>}>
       {q.isLoading ? <LoadingState /> : q.error ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.data.length ? (
-        <EmptyState title="No recommendations for this trainee yet"
-          description={trainee.assessment_status === "pending" ? "Assessment pending: recommendations need all three scores." : <Link className="text-primary underline" to="/admin/recommendations">Run recommendations</Link>} />
+        <EmptyState icon={<Sparkle />} title="No recommendations for this trainee yet"
+          description={trainee.assessment_status === "pending" ? "Assessment pending: recommendations need all three scores." : <TextLink to="/admin/recommendations">Run recommendations</TextLink>} />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {q.data.data.map((r) => <RecommendationCard key={r.id} recommendation={r} perspective="trainee" />)}
         </div>
       )}
@@ -315,15 +335,16 @@ function TraineeEditForm({ trainee, readOnly, onWarnings }: { trainee: Trainee; 
     },
   });
   return (
-    <Card title="Edit trainee record">
+    <Card title="Edit trainee record" icon={<PencilSimple />} description="Only changed fields are saved.">
       {readOnly && <p className="mb-3 text-xs text-muted">Cycle is archived (read-only).</p>}
-      <form noValidate className="flex flex-col gap-3" onSubmit={form.handleSubmit((v) => {
+      <form noValidate className="flex flex-col gap-5" onSubmit={form.handleSubmit((v) => {
         const body = traineePatch(initial, v);
         if (!Object.keys(body).length) { toast.info("No changes to save"); return; }
         m.mutate(body);
       })}>
         <ApiErrorAlert error={alertError} />
-        <fieldset disabled={readOnly} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <fieldset disabled={readOnly} className="flex min-w-0 flex-col gap-6">
+          <FormSection title="Identity">
           <FormField label="Trainee code" htmlFor="tr-code" required error={err.trainee_code?.message}>
             <Input id="tr-code" maxLength={40} {...form.register("trainee_code")} />
           </FormField>
@@ -348,7 +369,9 @@ function TraineeEditForm({ trainee, readOnly, onWarnings }: { trainee: Trainee; 
           <FormField label="Training centre" htmlFor="tr-centre" error={err.centre_name?.message}>
             <Input id="tr-centre" maxLength={200} {...form.register("centre_name")} />
           </FormField>
-          <div className="grid grid-cols-3 gap-2">
+          </FormSection>
+          <FormSection title="Assessment scores" description="Percentages from the ITI assessment. Leave blank while the assessment is pending.">
+          <div className="grid grid-cols-3 gap-3 md:col-span-2 md:max-w-xl">
             <FormField label="Theory %" htmlFor="tr-theory" error={err.theory?.message}>
               <Input id="tr-theory" inputMode="decimal" {...form.register("theory")} />
             </FormField>
@@ -359,6 +382,8 @@ function TraineeEditForm({ trainee, readOnly, onWarnings }: { trainee: Trainee; 
               <Input id="tr-safety" inputMode="decimal" {...form.register("safety")} />
             </FormField>
           </div>
+          </FormSection>
+          <FormSection title="Skills and interests">
           <div className="md:col-span-2">
             <FormField label="Skills" htmlFor="tr-skills" hint="Up to 15. New names are created automatically." error={err.skills?.message}>
               <Controller control={form.control} name="skills" render={({ field }) => (
@@ -374,8 +399,9 @@ function TraineeEditForm({ trainee, readOnly, onWarnings }: { trainee: Trainee; 
               <Textarea id="tr-bg" maxLength={2000} {...form.register("background")} />
             </FormField>
           </div>
+          </FormSection>
         </fieldset>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button type="submit" loading={m.isPending} disabled={readOnly || !form.formState.isDirty}>Save changes</Button>
           <Button variant="secondary" disabled={readOnly || !form.formState.isDirty || m.isPending} onClick={() => form.reset(initial)}>Discard changes</Button>
         </div>
@@ -406,7 +432,7 @@ function InviteStudentDialog({ open, onClose, trainee }: { open: boolean; onClos
   });
   const close = () => { setUrl(null); setAlertError(null); form.reset(); m.reset(); onClose(); };
   return (
-    <Dialog open={open} onClose={close} title={`Invite ${trainee.full_name}`} footer={url ? <Button onClick={close}>Done</Button> : <>
+    <Dialog open={open} onClose={close} title={`Invite ${trainee.full_name}`} description="Creates a one-time sign-up link bound to this trainee record." footer={url ? <Button onClick={close}>Done</Button> : <>
       <Button variant="secondary" onClick={close}>Cancel</Button>
       <Button type="submit" form="invite-student" loading={m.isPending}>Create invitation</Button>
     </>}>

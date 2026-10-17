@@ -1,9 +1,9 @@
 /** /admin/users (USR-01/02, INV-01..03; admin.md §3.10). */
 import { zodResolver } from "@hookform/resolvers/zod";
+import { EnvelopeSimple, Prohibit, UserCheck, UserGear, UserPlus, Users, Warning, XCircle } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
 import { z } from "zod";
 
 import { api, call } from "@/api/client";
@@ -12,13 +12,14 @@ import { qk } from "@/api/queryKeys";
 import type { AdminUser, Invitation, UserRole } from "@/api/types";
 import { useAuth } from "@/auth/AuthProvider";
 import {
-  ConfirmDialog, DataTable, DateTime, EmptyState, ErrorState, FormField, LoadingState, PageHeader, Pagination,
+  Avatar, ConfirmDialog, DataTable, DateTime, EmptyState, ErrorState, FormField, LoadingState, PageHeader, Pagination,
   StatusBadge, useToast, type Column,
 } from "@/components/shared";
-import { Alert, Button, Dialog, Input, Select } from "@/components/ui";
+import { Alert, Button, Dialog, Input, Select, cx } from "@/components/ui";
 
 import {
-  ApiErrorAlert, FilterBar, InviteUrlReveal, LabeledSelect, SearchInput, applyFieldErrors, useDebounced, useInvalidate,
+  ApiErrorAlert, CardState, FilterBar, InviteUrlReveal, LabeledSelect, SearchInput, TableCard, TextLink, applyFieldErrors,
+  useDebounced, useInvalidate,
 } from "./common";
 
 const ROLE_LABEL: Record<UserRole, string> = { student: "Student", supervisor: "Supervisor", admin: "Admin" };
@@ -29,11 +30,15 @@ export function UsersPage() {
   return (
     <div>
       <PageHeader title="Users & invites" description="Staff join by invitation only. Students register themselves or through a trainee-bound invite."
-        actions={<Button onClick={() => setInviteOpen(true)}>Invite user</Button>} />
-      <div role="tablist" aria-label="Users and invitations" className="mb-4 flex gap-1 border-b border-border">
+        actions={<Button icon={<UserPlus />} onClick={() => setInviteOpen(true)}>Invite user</Button>} />
+      <div role="tablist" aria-label="Users and invitations" className="mb-4 inline-flex gap-1 rounded-lg border border-border bg-surface-2 p-1">
         {(["users", "invitations"] as const).map((t) => (
           <button key={t} role="tab" type="button" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`min-h-10 px-4 text-sm ${tab === t ? "border-b-2 border-primary font-medium text-primary" : "text-muted hover:text-neutral"}`}>
+            className={cx(
+              "inline-flex min-h-9 items-center gap-2 rounded-md px-4 text-sm font-semibold transition-colors duration-150",
+              tab === t ? "bg-surface text-primary shadow-card" : "text-muted hover:text-text",
+            )}>
+            {t === "users" ? <Users aria-hidden size={16} /> : <EnvelopeSimple aria-hidden size={16} />}
             {t === "users" ? "Users" : "Invitations"}
           </button>
         ))}
@@ -69,22 +74,28 @@ function UsersTab() {
   const selfReason = "You cannot change your own account";
 
   const cols: Column<AdminUser>[] = [
-    { key: "name", header: "Name", sort: "full_name", cell: (u) => <span className="font-medium">{u.full_name}{u.id === me?.id && <span className="ml-1 text-xs text-muted">(you)</span>}</span> },
-    { key: "email", header: "Email", sort: "email", cell: (u) => <span className="break-all">{u.email}</span> },
+    { key: "name", header: "Name", sort: "full_name", cell: (u) => (
+      <span className="flex min-w-40 items-center gap-2.5">
+        <Avatar name={u.full_name} size="sm" />
+        <span className="font-semibold text-text">{u.full_name}{u.id === me?.id && <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-xs font-semibold text-primary-ink">(you)</span>}</span>
+      </span>
+    ) },
+    { key: "email", header: "Email", sort: "email", cell: (u) => <span className="break-all text-muted">{u.email}</span> },
     { key: "role", header: "Role", cell: (u) => <StatusBadge kind="role" value={u.role} /> },
     { key: "status", header: "Status", cell: (u) => <StatusBadge kind="user" value={u.status} /> },
-    { key: "dept", header: "Department", cell: (u) => u.department ?? "—" },
-    { key: "trainee", header: "Linked trainee", cell: (u) => u.trainee ? <Link className="text-primary underline" to={`/admin/trainees/${u.trainee.id}`}>{u.trainee.trainee_code}</Link> : "—" },
-    { key: "created", header: "Joined", sort: "-created_at", cell: (u) => <DateTime value={u.created_at} dateOnly /> },
+    { key: "dept", header: "Department", cell: (u) => u.department ?? <span className="text-muted">—</span> },
+    { key: "trainee", header: "Linked trainee", cell: (u) => u.trainee ? <TextLink to={`/admin/trainees/${u.trainee.id}`}>{u.trainee.trainee_code}</TextLink> : <span className="text-muted">—</span> },
+    { key: "created", header: "Joined", sort: "-created_at", cell: (u) => <span className="whitespace-nowrap text-muted"><DateTime value={u.created_at} dateOnly /></span> },
     { key: "actions", header: <span className="sr-only">Actions</span>, cell: (u) => {
       const self = u.id === me?.id;
       return (
-        <div className="flex flex-wrap gap-1" title={self ? selfReason : undefined}>
-          <Button size="sm" variant="secondary" disabled={self} onClick={() => setAction({ kind: "role", user: u })}>Change role</Button>
-          <Button size="sm" variant={u.status === "active" ? "danger" : "secondary"} disabled={self} onClick={() => setAction({ kind: "status", user: u })}>
+        <div className="flex min-w-52 flex-wrap justify-end gap-1.5" title={self ? selfReason : undefined}>
+          <Button size="sm" variant="secondary" icon={<UserGear />} disabled={self} onClick={() => setAction({ kind: "role", user: u })}>Change role</Button>
+          <Button size="sm" variant={u.status === "active" ? "danger" : "secondary"} icon={u.status === "active" ? <Prohibit /> : <UserCheck />}
+            disabled={self} onClick={() => setAction({ kind: "status", user: u })}>
             {u.status === "active" ? "Disable" : "Enable"}
           </Button>
-          {self && <span className="w-full text-xs text-muted">{selfReason}</span>}
+          {self && <span className="w-full text-right text-xs text-muted">{selfReason}</span>}
         </div>
       );
     } },
@@ -92,7 +103,8 @@ function UsersTab() {
 
   return (
     <>
-      <FilterBar>
+      <TableCard
+        toolbar={<FilterBar>
         <SearchInput id="user-q" label="Search" value={q} onChange={reset(setQ)} placeholder="Name or email" />
         <LabeledSelect id="user-role" label="Role" value={role} onChange={reset(setRole)}>
           <option value="">All roles</option><option value="student">Student</option>
@@ -104,14 +116,13 @@ function UsersTab() {
         <LabeledSelect id="user-sort" label="Sort" value={sort} onChange={reset(setSort)}>
           <option value="full_name">Name</option><option value="email">Email</option><option value="-created_at">Newest first</option>
         </LabeledSelect>
-      </FilterBar>
-      {list.isLoading ? <LoadingState /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> :
-        !list.data?.data.length ? <EmptyState title={dq || role || status ? "No users match these filters" : "No users yet"} /> : (
-          <>
-            <DataTable rows={list.data.data} columns={cols} rowKey={(u) => u.id} sort={sort} onSortChange={reset(setSort)} caption="Users" />
-            <Pagination meta={list.data.meta} onPageChange={setPage} />
-          </>
+      </FilterBar>}
+        footer={list.data?.data.length ? <Pagination meta={list.data.meta} onPageChange={setPage} /> : undefined}>
+      {list.isLoading ? <CardState><LoadingState /></CardState> : list.error ? <CardState><ErrorState error={list.error} onRetry={() => list.refetch()} /></CardState> :
+        !list.data?.data.length ? <CardState><EmptyState icon={<Users />} title={dq || role || status ? "No users match these filters" : "No users yet"} /></CardState> : (
+          <DataTable rows={list.data.data} columns={cols} rowKey={(u) => u.id} sort={sort} onSortChange={reset(setSort)} caption="Users" />
         )}
+      </TableCard>
       {action?.kind === "role" && <RoleDialog user={action.user} onClose={() => setAction(null)} />}
       {action?.kind === "status" && <StatusDialog user={action.user} onClose={() => setAction(null)} />}
     </>
@@ -141,7 +152,7 @@ function RoleDialog({ user, onClose }: { user: AdminUser; onClose: () => void })
   const [role, setRole] = useState<UserRole>(user.role);
   const m = usePatchUser(user, onClose, `${user.full_name} is now ${ROLE_LABEL[role]}`);
   return (
-    <Dialog open onClose={onClose} title={`Change role: ${user.full_name}`} footer={<>
+    <Dialog open onClose={onClose} title={`Change role: ${user.full_name}`} description={<span className="inline-flex items-center gap-2">Current role <StatusBadge kind="role" value={user.role} /></span>} footer={<>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
       <Button loading={m.isPending} disabled={role === user.role} onClick={() => m.mutate({ role })}>Save role</Button>
     </>}>
@@ -170,7 +181,7 @@ function StatusDialog({ user, onClose }: { user: AdminUser; onClose: () => void 
     <div className="flex flex-col gap-2">
       <p>{disabling ? `${user.full_name} will be signed out and unable to use the app until re-enabled.` : `${user.full_name} will be able to sign in again.`}</p>
       {disabling && user.role === "supervisor" && (supProjects.isLoading ? <p className="text-muted">Checking assigned projects…</p> :
-        activeProjects > 0 && <Alert variant="warning">This supervisor has {activeProjects} active project{activeProjects === 1 ? "" : "s"}. Their trainees will have no evaluator until you reassign them.</Alert>)}
+        activeProjects > 0 && <Alert variant="warning" icon={<Warning />}>This supervisor has {activeProjects} active project{activeProjects === 1 ? "" : "s"}. Their trainees will have no evaluator until you reassign them.</Alert>)}
       <ApiErrorAlert error={m.error} extra={GUARD_MESSAGES} />
     </div>
   );
@@ -209,23 +220,28 @@ function InvitationsTab() {
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
 
   const cols: Column<Invitation>[] = [
-    { key: "email", header: "Email", cell: (i) => <span className="break-all">{i.email}</span> },
+    { key: "email", header: "Email", cell: (i) => (
+      <span className="flex min-w-48 items-center gap-2 font-medium break-all text-text"><EnvelopeSimple aria-hidden size={16} className="shrink-0 text-subtle" />{i.email}</span>
+    ) },
     { key: "role", header: "Role", cell: (i) => <StatusBadge kind="role" value={i.role} /> },
-    { key: "trainee", header: "Trainee", cell: (i) => i.trainee ? <Link className="text-primary underline" to={`/admin/trainees/${i.trainee.id}`}>{i.trainee.trainee_code} · {i.trainee.full_name}</Link> : "—" },
+    { key: "trainee", header: "Trainee", cell: (i) => i.trainee ? <TextLink to={`/admin/trainees/${i.trainee.id}`}>{i.trainee.trainee_code} · {i.trainee.full_name}</TextLink> : <span className="text-muted">—</span> },
     { key: "status", header: "Status", cell: (i) => <StatusBadge kind="invitation" value={i.status} /> },
-    { key: "by", header: "Invited by", cell: (i) => i.invited_by.full_name },
-    { key: "created", header: "Sent", cell: (i) => <DateTime value={i.created_at} /> },
-    { key: "expires", header: "Expires", cell: (i) => <DateTime value={i.expires_at} /> },
-    { key: "done", header: "Accepted / revoked", cell: (i) => i.accepted_at ? <DateTime value={i.accepted_at} /> : i.revoked_at ? <DateTime value={i.revoked_at} /> : "—" },
-    { key: "actions", header: <span className="sr-only">Actions</span>, cell: (i) => (
-      <Button size="sm" variant="secondary" disabled={i.status !== "pending"} title={i.status !== "pending" ? "Only pending invitations can be revoked" : undefined}
+    { key: "by", header: "Invited by", cell: (i) => <span className="whitespace-nowrap">{i.invited_by.full_name}</span> },
+    { key: "created", header: "Sent", cell: (i) => <span className="whitespace-nowrap text-muted"><DateTime value={i.created_at} /></span> },
+    { key: "expires", header: "Expires", cell: (i) => <span className="whitespace-nowrap text-muted"><DateTime value={i.expires_at} /></span> },
+    { key: "done", header: "Accepted / revoked", cell: (i) => <span className="whitespace-nowrap text-muted">{i.accepted_at ? <DateTime value={i.accepted_at} /> : i.revoked_at ? <DateTime value={i.revoked_at} /> : "—"}</span> },
+    { key: "actions", header: <span className="sr-only">Actions</span>, className: "text-right", cell: (i) => (
+      <Button size="sm" variant="secondary" icon={<XCircle />} disabled={i.status !== "pending"} title={i.status !== "pending" ? "Only pending invitations can be revoked" : undefined}
         onClick={() => { revoke.reset(); setRevoking(i); }}>Revoke</Button>
     ) },
   ];
 
   return (
     <>
-      <FilterBar>
+      <TableCard
+        title="Invitations" icon={<EnvelopeSimple />}
+        description="Invite links are shown only once, when created. A lost link means revoke and invite again."
+        toolbar={<FilterBar>
         <LabeledSelect id="inv-status" label="Status" value={status} onChange={reset(setStatus)}>
           <option value="">Any</option><option value="pending">Pending</option><option value="accepted">Accepted</option>
           <option value="revoked">Revoked</option><option value="expired">Expired</option>
@@ -234,15 +250,13 @@ function InvitationsTab() {
           <option value="">All roles</option><option value="student">Student</option>
           <option value="supervisor">Supervisor</option><option value="admin">Admin</option>
         </LabeledSelect>
-      </FilterBar>
-      <p className="mb-3 text-xs text-muted">Invite links are shown only once, when created. A lost link means revoke and invite again.</p>
-      {list.isLoading ? <LoadingState /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> :
-        !list.data?.data.length ? <EmptyState title={status || role ? "No invitations match these filters" : "No invitations yet"} /> : (
-          <>
-            <DataTable rows={list.data.data} columns={cols} rowKey={(i) => i.id} caption="Invitations" />
-            <Pagination meta={list.data.meta} onPageChange={setPage} />
-          </>
+      </FilterBar>}
+        footer={list.data?.data.length ? <Pagination meta={list.data.meta} onPageChange={setPage} /> : undefined}>
+      {list.isLoading ? <CardState><LoadingState /></CardState> : list.error ? <CardState><ErrorState error={list.error} onRetry={() => list.refetch()} /></CardState> :
+        !list.data?.data.length ? <CardState><EmptyState icon={<EnvelopeSimple />} title={status || role ? "No invitations match these filters" : "No invitations yet"} /></CardState> : (
+          <DataTable rows={list.data.data} columns={cols} rowKey={(i) => i.id} caption="Invitations" />
         )}
+      </TableCard>
       <ConfirmDialog open={!!revoking} title="Revoke invitation?" danger confirmLabel="Revoke" loading={revoke.isPending}
         message={<div className="flex flex-col gap-2"><p>The link sent to {revoking?.email} will stop working.</p><ApiErrorAlert error={revoke.error} /></div>}
         onClose={() => setRevoking(null)} onConfirm={() => revoking && revoke.mutate(revoking.id)} />
@@ -297,7 +311,7 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
   };
   const err = form.formState.errors;
   return (
-    <Dialog open={open} onClose={close} title="Invite user" footer={url ? <Button onClick={close}>Done</Button> : <>
+    <Dialog open={open} onClose={close} title="Invite user" description="Creates a one-time sign-up link valid for 7 days. Staff can only join this way." footer={url ? <Button onClick={close}>Done</Button> : <>
       <Button variant="secondary" onClick={close}>Cancel</Button>
       <Button type="submit" form="invite-user" loading={m.isPending}>Create invitation</Button>
     </>}>

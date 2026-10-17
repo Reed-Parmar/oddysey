@@ -1,6 +1,9 @@
+import {
+  ChatCircleText, ClockCounterClockwise, Files, Hourglass, Info, NotePencil, PaperPlaneTilt, Ruler, WarningCircle,
+} from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 
@@ -9,8 +12,10 @@ import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Submission } from "@/api/types";
 import { uploadMultipart } from "@/api/upload";
-import { EmptyState, ErrorState, FileField, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
-import { Alert, Button, Card, Input, Textarea } from "@/components/ui";
+import {
+  BackLink, DateTime, EmptyState, ErrorState, FileField, FormField, LoadingState, PageHeader, StatusBadge, useToast,
+} from "@/components/shared";
+import { Alert, Button, Card, Input, Textarea, cx } from "@/components/ui";
 import { SubmissionDetailView } from "@/features/shared/views";
 
 import { AllocationPanel, NoAllocationPanel } from "./AllocationPanel";
@@ -32,6 +37,20 @@ const CONFLICT_TEXT: Record<string, string> = {
   SUBMISSION_ALREADY_EVALUATED: "Your project has been evaluated; no further versions are accepted.",
   NO_TRAINEE_RECORD: "Your trainee record is not linked.",
 };
+
+/** A titled group of form fields. */
+function FieldGroup({ legend, description, icon, children }: { legend: string; description?: ReactNode; icon: ReactNode; children: ReactNode }) {
+  return (
+    <fieldset className="rounded-lg border border-border p-4">
+      <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold text-text">
+        <span aria-hidden className="inline-flex text-primary [&>svg]:size-4">{icon}</span>
+        {legend}
+      </legend>
+      {description && <p className="-mt-1 mb-3 text-xs text-muted">{description}</p>}
+      <div className="flex flex-col gap-4">{children}</div>
+    </fieldset>
+  );
+}
 
 function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean }) {
   const qc = useQueryClient();
@@ -88,47 +107,54 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
   });
 
   return (
-    <Card title={nextVersion === 1 ? "Submit your work" : `Submit version ${nextVersion}`}>
+    <Card
+      title={nextVersion === 1 ? "Submit your work" : `Submit version ${nextVersion}`}
+      description="Share links or a file showing your finished project. Your supervisor evaluates it against the rubric."
+      icon={<PaperPlaneTilt />}
+    >
       <form
         noValidate
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
         onSubmit={handleSubmit((v) => {
           setFormAlert(null);
           submit.mutate(v);
         })}
       >
-        {late && <Alert variant="warning">The deadline has passed. Your submission will be accepted but marked Late.</Alert>}
-        <p className="text-sm text-muted">{ARTIFACT_REQUIRED}</p>
-        <FormField label="Video link" htmlFor="video_url" error={errors.video_url?.message} hint="A public https:// link, e.g. YouTube or Google Drive">
-          <Input id="video_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("video_url")} />
-        </FormField>
-        <FormField label="Report link" htmlFor="report_url" error={errors.report_url?.message}>
-          <Input id="report_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("report_url")} />
-        </FormField>
-        <FormField label="Report file" htmlFor="file" hint="Up to 10 MB: pdf, docx, pptx, zip, png, jpg">
-          <FileField
-            key={fileKey}
-            id="file"
-            accept={FILE_ACCEPT}
-            maxBytes={MAX_FILE_BYTES}
-            error={errors.file?.message}
-            onChange={(f) => setValue("file", f, { shouldValidate: true })}
-          />
-        </FormField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Logbook hours" htmlFor="logbook_hours" error={errors.logbook_hours?.message} hint="0 to 1000">
-            <Input id="logbook_hours" type="number" inputMode="decimal" min={0} max={1000} step="0.1" {...register("logbook_hours")} />
+        {late && <Alert variant="warning" icon={<WarningCircle />}>The deadline has passed. Your submission will be accepted but marked Late.</Alert>}
+        <FieldGroup legend="Your work" description={ARTIFACT_REQUIRED} icon={<Files />}>
+          <FormField label="Video link" htmlFor="video_url" error={errors.video_url?.message} hint="A public https:// link, e.g. YouTube or Google Drive">
+            <Input id="video_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("video_url")} />
           </FormField>
-          <FormField label="Bill of materials cost (INR)" htmlFor="bom_cost_inr" error={errors.bom_cost_inr?.message} hint="0 to 1,00,00,000">
-            <Input id="bom_cost_inr" type="number" inputMode="decimal" min={0} max={10_000_000} step="0.01" {...register("bom_cost_inr")} />
+          <FormField label="Report link" htmlFor="report_url" error={errors.report_url?.message} hint="A shared document or folder link starting with https://">
+            <Input id="report_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} {...register("report_url")} />
           </FormField>
-        </div>
+          <FormField label="Report file" htmlFor="file" hint="Up to 10 MB: pdf, docx, pptx, zip, png, jpg">
+            <FileField
+              key={fileKey}
+              id="file"
+              accept={FILE_ACCEPT}
+              maxBytes={MAX_FILE_BYTES}
+              error={errors.file?.message}
+              onChange={(f) => setValue("file", f, { shouldValidate: true })}
+            />
+          </FormField>
+        </FieldGroup>
+        <FieldGroup legend="Project log" description="Optional, but it helps your supervisor score documentation." icon={<Ruler />}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Logbook hours" htmlFor="logbook_hours" error={errors.logbook_hours?.message} hint="0 to 1000">
+              <Input id="logbook_hours" type="number" inputMode="decimal" min={0} max={1000} step="0.1" {...register("logbook_hours")} />
+            </FormField>
+            <FormField label="Bill of materials cost (INR)" htmlFor="bom_cost_inr" error={errors.bom_cost_inr?.message} hint="0 to 1,00,00,000">
+              <Input id="bom_cost_inr" type="number" inputMode="decimal" min={0} max={10_000_000} step="0.01" {...register("bom_cost_inr")} />
+            </FormField>
+          </div>
+        </FieldGroup>
         <FormField label="Note to your supervisor" htmlFor="note" error={errors.note?.message} hint={`${form.watch("note").length} / 2000`}>
-          <Textarea id="note" rows={3} maxLength={2000} {...register("note")} />
+          <Textarea id="note" rows={3} maxLength={2000} placeholder="Anything your supervisor should know about this version" {...register("note")} />
         </FormField>
-        {errors.root?.message && <Alert variant="danger">{errors.root.message}</Alert>}
+        {errors.root?.message && <Alert variant="danger" icon={<WarningCircle />}>{errors.root.message}</Alert>}
         {formAlert && (
-          <Alert variant="danger">
+          <Alert variant="danger" icon={<WarningCircle />}>
             {formAlert.text}
             {formAlert.requestId && <span className="mt-1 block text-xs">Request ID: <code className="select-all">{formAlert.requestId}</code></span>}
           </Alert>
@@ -141,13 +167,79 @@ function SubmitForm({ nextVersion, late }: { nextVersion: number; late: boolean 
             <p className="mt-1 text-xs text-muted" aria-live="polite">Uploading… {Math.round(progress * 100)}%</p>
           </div>
         )}
-        <div>
-          <Button type="submit" loading={submit.isPending} className="w-full sm:w-auto">
+        <div className="border-t border-border pt-4">
+          <Button type="submit" size="lg" loading={submit.isPending} icon={<PaperPlaneTilt />} className="w-full sm:w-auto">
             Submit version {nextVersion}
           </Button>
         </div>
       </form>
     </Card>
+  );
+}
+
+const DOT: Record<Submission["status"], string> = {
+  submitted: "bg-info",
+  rework_requested: "bg-warning",
+  evaluated: "bg-success",
+};
+
+/** Vertical timeline of every version, newest first. */
+function VersionTimeline({ versions, currentId }: { versions: Submission[]; currentId?: string }) {
+  return (
+    <Card title="Version history" icon={<ClockCounterClockwise />} description={`${versions.length} version${versions.length === 1 ? "" : "s"} submitted`}>
+      <ol className="relative ml-1.5 border-l-2 border-border">
+        {versions.map((h) => {
+          const current = h.id === currentId;
+          return (
+            <li key={h.id} className="relative pb-5 pl-5 last:pb-0">
+              <span aria-hidden className={cx("absolute top-1 -left-[7px] size-3 rounded-full ring-4 ring-surface", DOT[h.status])} />
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-sm font-semibold text-text">
+                  Version {h.version}
+                  {current && <span className="ml-1.5 text-xs font-medium text-muted">(shown)</span>}
+                </p>
+                <span className="text-xs text-muted"><DateTime value={h.submitted_at} /></span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <StatusBadge kind="submission" value={h.status} />
+                {h.is_late && <StatusBadge kind="late" value="late" />}
+                {h.evaluation?.grade && <StatusBadge kind="grade" value={h.evaluation.grade} />}
+              </div>
+              {h.evaluation?.feedback && (
+                <p className="mt-2 line-clamp-3 rounded-md bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted whitespace-pre-wrap">
+                  {h.evaluation.feedback}
+                </p>
+              )}
+              {!current && (
+                <Link className="mt-1.5 inline-flex min-h-9 items-center text-sm font-semibold text-primary hover:underline" to={`/student/submissions/${h.id}`}>
+                  View version {h.version}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
+/** Highlighted supervisor feedback asking for rework. */
+function ReworkFeedback({ title, feedback }: { title: string; feedback: string }) {
+  return (
+    <section aria-label="Supervisor feedback" className="rounded-xl border border-warning/30 bg-warning-bg p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span aria-hidden className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface text-warning">
+          <ChatCircleText size={20} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-warning">{title}</h2>
+          <blockquote className="mt-2 border-l-2 border-warning/40 pl-3 text-sm leading-relaxed whitespace-pre-wrap text-text [overflow-wrap:anywhere]">
+            {feedback}
+          </blockquote>
+          <p className="mt-2 text-xs text-muted">Make the changes, then submit a new version below.</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -162,9 +254,9 @@ export function SubmissionPage() {
   const late = Date.now() > new Date(cycle.submission_deadline).getTime();
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title="My project & submission" description="Your allocated project, your submitted work and your supervisor's evaluation." />
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {me.allocation ? <AllocationPanel allocation={me.allocation} cycle={cycle} defaultOpen /> : <NoAllocationPanel cycle={cycle} />}
 
         {history.isLoading ? (
@@ -174,26 +266,38 @@ export function SubmissionPage() {
         ) : (
           <>
             {latest?.status === "rework_requested" && (
-              <Alert variant="warning" title={`Rework requested on version ${latest.version}`}>
-                <span className="whitespace-pre-wrap">{latest.evaluation?.feedback ?? "Your supervisor asked for changes. Submit a new version."}</span>
-              </Alert>
+              <ReworkFeedback
+                title={`Rework requested on version ${latest.version}`}
+                feedback={latest.evaluation?.feedback ?? "Your supervisor asked for changes. Submit a new version."}
+              />
             )}
-            {blocked ? (
-              me.allocation && (
-                <Card title="Submit your work">
-                  <p className="text-sm text-muted" role="status">{blocked}</p>
-                </Card>
-              )
-            ) : (
-              <SubmitForm nextVersion={(latest?.version ?? 0) + 1} late={late} />
-            )}
-            {latest ? (
-              <section aria-label="Latest version">
-                <SubmissionDetailView submission={latest} history={versions} historyHref={(s) => `/student/submissions/${s.id}`} />
-              </section>
-            ) : (
-              me.allocation && <EmptyState title="You have not submitted yet" description="Your submitted versions and feedback will appear here." />
-            )}
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+              <div className="flex min-w-0 flex-col gap-6">
+                {blocked ? (
+                  me.allocation && (
+                    <Card title="Submit your work" icon={latest?.status === "submitted" ? <Hourglass /> : <Info />}>
+                      <p className="text-sm text-muted" role="status">{blocked}</p>
+                    </Card>
+                  )
+                ) : (
+                  <SubmitForm nextVersion={(latest?.version ?? 0) + 1} late={late} />
+                )}
+                {latest ? (
+                  <section aria-label="Latest version">
+                    <SubmissionDetailView submission={latest} />
+                  </section>
+                ) : (
+                  me.allocation && (
+                    <EmptyState icon={<NotePencil />} title="You have not submitted yet" description="Your submitted versions and feedback will appear here." />
+                  )
+                )}
+              </div>
+              {versions.length > 0 && (
+                <div className="min-w-0 lg:sticky lg:top-6">
+                  <VersionTimeline versions={versions} currentId={latest?.id} />
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -221,25 +325,24 @@ export function SubmissionDetailPage() {
   const versions = (history.data?.data ?? []).filter((h) => h.allocation_id === s.allocation_id);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
+        eyebrow={<BackLink to="/student/submission">Back to My project</BackLink>}
         title={`Submission · version ${s.version}`}
         description={`${s.project.project_code} · ${s.project.title}`}
-        actions={<Link className="text-sm text-primary underline" to="/student/submission">Back to My project</Link>}
       />
       {s.status === "rework_requested" && s.evaluation?.feedback && (
-        <div className="mb-4">
-          <Alert variant="warning" title="Rework requested">
-            <span className="whitespace-pre-wrap">{s.evaluation.feedback}</span>
-          </Alert>
-        </div>
+        <ReworkFeedback title="Rework requested" feedback={s.evaluation.feedback} />
       )}
-      <SubmissionDetailView submission={s} history={versions} historyHref={(x) => `/student/submissions/${x.id}`} />
-      {history.error && (
-        <div className="mt-4">
-          <ErrorState error={history.error} onRetry={() => history.refetch()} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+        <div className="min-w-0">
+          <SubmissionDetailView submission={s} />
         </div>
-      )}
+        <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
+          {versions.length > 1 && <VersionTimeline versions={versions} currentId={s.id} />}
+          {history.error && <ErrorState error={history.error} onRetry={() => history.refetch()} />}
+        </div>
+      </div>
     </div>
   );
 }

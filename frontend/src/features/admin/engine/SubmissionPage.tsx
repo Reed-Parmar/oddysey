@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
-import { ErrorState, LoadingState, PageHeader } from "@/components/shared";
+import { Avatar, BackLink, ErrorState, LoadingState, PageHeader } from "@/components/shared";
 import { SubmissionDetailView } from "@/features/shared/views";
 
 /** SUB-03 detail with version history (SUB-02). Read-only: admins cannot evaluate (admin.md §3.8). */
@@ -24,11 +24,14 @@ export function AdminSubmissionPage() {
 
   return (
     <>
-      <PageHeader title="Submission"
-        description={s ? <>
-          <Link className="text-primary underline" to={`/admin/trainees/${s.trainee.id}`}>{s.trainee.full_name}</Link>
-          {" · "}<Link className="text-primary underline" to="/admin/progress">Back to progress</Link>
-        </> : undefined} />
+      <PageHeader title="Submission" eyebrow={<BackLink to="/admin/progress">Back to progress</BackLink>}
+        description={s ? (
+          <span className="inline-flex items-center gap-2">
+            <Avatar name={s.trainee.full_name} size="sm" />
+            <Link className="font-medium text-primary hover:underline" to={`/admin/trainees/${s.trainee.id}`}>{s.trainee.full_name}</Link>
+            <span>· {s.trainee.trainee_code}</span>
+          </span>
+        ) : undefined} />
       {sub.isLoading ? <LoadingState /> : sub.error ? <ErrorState error={sub.error} onRetry={() => void sub.refetch()} /> : s ? (
         <>
           <SubmissionDetailView submission={s} history={history.data?.data} historyHref={(x) => `/admin/submissions/${x.id}`} />

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Cycle, ProgressRow, Submission, TraineeMe } from "@/api/types";
 
 import {
-  ARTIFACT_REQUIRED, buildSubmissionFormData, emptySubmission, nextStep, normaliseSkills, profileBody,
-  skillAddError, submissionSchema, submitBlockedReason,
+  ARTIFACT_REQUIRED, buildSubmissionFormData, emptySubmission, mergeSkills, nextStep, normaliseSkills, profileBody,
+  resumeFileError, resumeUploadMessage, skillAddError, submissionSchema, submitBlockedReason,
 } from "./forms";
 
 const issues = (v: Partial<typeof emptySubmission>) => {
@@ -79,5 +79,30 @@ describe("state derivation", () => {
     expect(nextStep(cycle, me, { progress: "rework_requested" } as ProgressRow).to).toBe("/student/submission");
     const row = { progress: "evaluated", latest_submission: { id: "s1" }, evaluation: { grade: "A" } } as ProgressRow;
     expect(nextStep(cycle, me, row)).toMatchObject({ text: "Evaluated: grade A", to: "/student/submissions/s1" });
+  });
+});
+
+describe("resume helpers", () => {
+  it("pre-checks type and size", () => {
+    expect(resumeFileError({ name: "cv.pdf", size: 1000 })).toBeNull();
+    expect(resumeFileError({ name: "CV.DOCX", size: 1000 })).toBeNull();
+    expect(resumeFileError({ name: "cv.txt", size: 1000 })).toBe("Upload a PDF or DOCX");
+    expect(resumeFileError({ name: "pdf", size: 1000 })).toBe("Upload a PDF or DOCX");
+    expect(resumeFileError({ name: "cv.pdf", size: 0 })).toBe("This file is empty");
+    expect(resumeFileError({ name: "cv.pdf", size: 5 * 1024 * 1024 + 1 })).toBe("Resume must be 5 MB or smaller");
+  });
+
+  it("maps upload errors to the handbook copy", () => {
+    expect(resumeUploadMessage(413, "FILE_TOO_LARGE", "x")).toBe("Resume must be 5 MB or smaller");
+    expect(resumeUploadMessage(415, "UNSUPPORTED_FILE_TYPE", "x")).toBe("Upload a PDF or DOCX");
+    expect(resumeUploadMessage(429, "RATE_LIMITED", "x")).toBe("Too many uploads. Try again in an hour.");
+    expect(resumeUploadMessage(409, "NO_TRAINEE_RECORD", "No trainee record")).toBe("No trainee record");
+  });
+
+  it("merges chosen skills without duplicates and enforces the cap", () => {
+    expect(mergeSkills(["Wiring"], ["wiring", "Soldering"])).toEqual(["Wiring", "Soldering"]);
+    const full = Array.from({ length: 20 }, (_, i) => `S${i}`);
+    expect(mergeSkills(full, ["S1"])).toHaveLength(20);
+    expect(mergeSkills(full, ["New"])).toBeNull();
   });
 });

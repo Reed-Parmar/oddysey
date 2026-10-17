@@ -1,13 +1,13 @@
+import { FolderSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
-import { EmptyState, ErrorState, LoadingState, PageHeader, Pagination, StatusBadge } from "@/components/shared";
+import { EmptyState, ErrorState, LoadingState, PageHeader, Pagination } from "@/components/shared";
 import { Button, Input, Select } from "@/components/ui";
-import { ProjectCard } from "@/features/shared/views";
 
-import { compact, useDebounced, useParamState } from "../common";
+import { compact, FilterBar, SupervisorProjectCard, useDebounced, useParamState } from "../common";
 
 const SORTS = [["title", "Title"], ["project_code", "Project code"]] as const;
 
@@ -29,12 +29,19 @@ export function ProjectsPage() {
   });
   const filtered = Boolean(get("q") || status);
   const list = projects.data?.data ?? [];
+  const total = projects.data?.meta.total;
 
   return (
     <>
-      <PageHeader title="My projects" description="Projects you supervise in the active cycle." />
-      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <Input aria-label="Search projects" placeholder="Search by title or code" value={q} onChange={(e) => setQ(e.target.value)} maxLength={100} />
+      <PageHeader
+        title="My projects"
+        description={<>Projects you supervise in the active cycle{total != null && <> · <span className="tabular-nums">{total}</span> in total</>}.</>}
+      />
+      <FilterBar className="sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="relative">
+          <MagnifyingGlass aria-hidden size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-subtle" />
+          <Input aria-label="Search projects" placeholder="Search by title or code" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} maxLength={100} />
+        </div>
         <Select aria-label="Status" value={status} onChange={(e) => set({ status: e.target.value })}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -44,25 +51,18 @@ export function ProjectsPage() {
         <Select aria-label="Sort" value={sort} onChange={(e) => set({ sort: e.target.value })}>
           {SORTS.map(([v, l]) => <option key={v} value={v}>Sort: {l}</option>)}
         </Select>
-      </div>
+      </FilterBar>
       {projects.isLoading ? <LoadingState /> : projects.error ? (
         <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />
       ) : !list.length ? (
         filtered ? (
-          <EmptyState title="No projects match these filters" action={<Button variant="secondary" onClick={() => { setQ(""); set({ q: null, status: null }); }}>Clear filters</Button>} />
-        ) : <EmptyState title="No projects are assigned to you in this cycle." />
+          <EmptyState icon={<MagnifyingGlass />} title="No projects match these filters"
+            action={<Button variant="secondary" onClick={() => { setQ(""); set({ q: null, status: null }); }}>Clear filters</Button>} />
+        ) : <EmptyState icon={<FolderSimple />} title="No projects are assigned to you in this cycle." />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((p) => (
-              <div key={p.id} className="flex flex-col gap-1">
-                <ProjectCard project={p} to={`/supervisor/projects/${p.id}`} badge={<StatusBadge kind="project" value={p.status} />} />
-                <p className="px-1 text-xs text-muted">
-                  Capacity {p.max_trainees} · Allocated {p.stats?.allocated_count ?? "—"}
-                  {p.stats?.eligible_trainee_count != null && ` · Eligible ${p.stats.eligible_trainee_count}`}
-                </p>
-              </div>
-            ))}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {list.map((p) => <SupervisorProjectCard key={p.id} project={p} />)}
           </div>
           <Pagination meta={projects.data?.meta} onPageChange={(n) => set({ page: String(n) }, false)} />
         </>

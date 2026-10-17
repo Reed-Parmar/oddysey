@@ -26,5 +26,6 @@ export type ProjectCreate = S["ProjectCreate"];
 export type ProjectPatch = S["ProjectPatch"];
 export type TraineeAdminPatch = S["TraineeAdminPatch"];
 export type EvaluationIn = S["EvaluationIn"];
+export type Resume = S["ResumeOut"];
 
 export type UserRole = User["role"];

@@ -1,3 +1,6 @@
+import {
+  ArrowCounterClockwise, ArrowRight, ChartBar, CheckCircle, Clock, FolderSimple, Hourglass, Info, ListChecks, UsersThree,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -5,29 +8,34 @@ import { Link } from "react-router-dom";
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
 import type { ProgressRow } from "@/api/types";
-import { EmptyState, ErrorState, LoadingState, PageHeader, StatusBadge } from "@/components/shared";
-import { Alert } from "@/components/ui";
-import { ProjectCard } from "@/features/shared/views";
+import {
+  DateTime, EmptyState, ErrorState, LoadingState, Meter, PageHeader, Skeleton, StackedBar, StatCard, StatusBadge,
+} from "@/components/shared";
+import { Alert, Card, buttonStyles } from "@/components/ui";
+import { label } from "@/lib/statusLabels";
 
-import { NoCycleState, useCycleState, useMyProjects } from "../common";
+import { NoCycleState, PersonCell, SupervisorProjectCard, useCycleState, useMyProjects } from "../common";
 import type { Grade } from "../lib/grade";
 
 const GRADES: Grade[] = ["A1", "A", "B+", "B", "C", "D"];
 
-function StatCard({ title, to, linkLabel, query }: {
-  title: string; to?: string; linkLabel?: string;
-  query: { isLoading: boolean; error: unknown; refetch: () => unknown; data?: number };
+type CountQuery = { isLoading: boolean; error: unknown; refetch: () => unknown; data?: number };
+
+/** KPI tile backed by a count query: skeleton while loading, retry hint on error. */
+function CountTile({ label: title, query, to, icon, tone, hint }: {
+  label: string; query: CountQuery; to: string; icon: ReactNode; tone: "primary" | "warning" | "danger" | "success"; hint: string;
 }) {
+  if (query.error) {
+    return (
+      <StatCard label={title} icon={icon} tone={tone} value="—"
+        hint={<>Could not load. <button type="button" className="font-semibold text-primary underline" onClick={() => void query.refetch()}>Try again</button></>} />
+    );
+  }
   return (
-    <section className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-sm text-muted">{title}</h2>
-      {query.isLoading ? <LoadingState label="Counting…" /> : query.error ? (
-        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : (
-        <p className="mt-1 text-3xl font-semibold tabular-nums">{query.data ?? 0}</p>
-      )}
-      {to && <Link to={to} className="mt-2 inline-block text-sm text-primary underline">{linkLabel ?? "View"}</Link>}
-    </section>
+    <StatCard label={title} icon={icon} tone={tone} to={to} hint={hint}
+      value={query.isLoading ? (
+        <><span aria-hidden className="inline-block h-8 w-14 animate-pulse rounded-md bg-neutral-bg align-middle" /><span className="sr-only">Loading</span></>
+      ) : (query.data ?? 0)} />
   );
 }
 
@@ -50,20 +58,74 @@ function ProjectsSection() {
   if (projects.isLoading) return <LoadingState />;
   if (projects.error) return <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />;
   const list = projects.data?.data ?? [];
-  if (!list.length) return <EmptyState title="No projects are assigned to you yet." />;
+  if (!list.length) return <EmptyState icon={<FolderSimple />} title="No projects are assigned to you yet." />;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {list.map((p) => (
-        <div key={p.id} className="flex flex-col gap-1">
-          <ProjectCard project={p} to={`/supervisor/projects/${p.id}`} badge={<StatusBadge kind="project" value={p.status} />} />
-          <p className="px-1 text-xs text-muted">
-            Eligible trainees: {p.stats?.eligible_trainee_count ?? "—"} · Allocated: {p.stats?.allocated_count ?? "—"}
-          </p>
-        </div>
-      ))}
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {list.map((p) => <SupervisorProjectCard key={p.id} project={p} />)}
     </div>
   );
 }
+
+function ProjectsHeading() {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="flex items-center gap-2 text-base font-semibold"><FolderSimple aria-hidden size={18} className="text-primary" /> My projects</h2>
+      <Link to="/supervisor/projects" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        All projects <ArrowRight aria-hidden size={14} />
+      </Link>
+    </div>
+  );
+}
+
+const QUEUE_PARAMS = { status: "submitted", sort: "submitted_at", page_size: 5 } as const;
+
+/** Oldest submissions still waiting for an evaluation, with a direct "Evaluate" action. */
+function EvaluationQueue({ enabled, total }: { enabled: boolean; total?: number }) {
+  const q = useQuery({
+    queryKey: qk.submissions.list(QUEUE_PARAMS),
+    queryFn: () => call(api.GET("/api/v1/submissions", { params: { query: QUEUE_PARAMS } })),
+    enabled,
+  });
+  const rows = q.data?.data ?? [];
+  return (
+    <Card
+      flush
+      icon={<ListChecks />}
+      title="Evaluation queue"
+      description="Oldest first, so nobody waits too long."
+      actions={<Link to="/supervisor/submissions" className={buttonStyles("secondary", "sm")}>Open queue{total ? ` (${total})` : ""}</Link>}
+    >
+      {q.isLoading ? (
+        <div className="space-y-3 px-5 pb-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+      ) : q.error ? (
+        <div className="px-5 pb-5"><ErrorState error={q.error} onRetry={() => void q.refetch()} /></div>
+      ) : !rows.length ? (
+        <div className="flex items-center gap-3 border-t border-border px-5 py-6 text-sm text-muted">
+          <CheckCircle aria-hidden size={20} className="shrink-0 text-success" />
+          Nothing is waiting for evaluation. You are all caught up.
+        </div>
+      ) : (
+        <ul className="divide-y divide-border border-t border-border">
+          {rows.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <PersonCell name={s.trainee.full_name} meta={<>{s.project.project_code} · {s.project.title}</>} />
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                <span className="inline-flex items-center gap-1"><Clock aria-hidden size={14} /> v{s.version} · <DateTime value={s.submitted_at} /></span>
+                {s.is_late && <StatusBadge kind="late" value="late" />}
+                <Link to={`/supervisor/submissions/${s.id}`} className={buttonStyles("primary", "sm")}>
+                  Evaluate<span className="sr-only"> {s.trainee.full_name}, version {s.version}</span>
+                  <ArrowRight aria-hidden size={14} />
+                </Link>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+const GRADE_TONE = { success: "success", info: "primary", warning: "warning", danger: "danger", neutral: "neutral" } as const;
 
 export function DashboardPage() {
   const { cycle, visible, isLoading, error, refetch } = useCycleState();
@@ -72,11 +134,17 @@ export function DashboardPage() {
   const P_REWORK = { status: "rework_requested", page_size: 1 } as const;
   const P_ALLOC = { page_size: 1 } as const;
   const P_LATE = { late_only: true, page_size: 1 } as const;
+  const P_NOT_SUBMITTED = { progress: "allocated", page_size: 1 } as const;
+  const P_PROG_SUB = { progress: "submitted", page_size: 1 } as const;
+  const P_PROG_REWORK = { progress: "rework_requested", page_size: 1 } as const;
 
   const pending = useCount(qk.submissions.list(P_SUB), () => call(api.GET("/api/v1/submissions", { params: { query: P_SUB } })), visible);
   const rework = useCount(qk.submissions.list(P_REWORK), () => call(api.GET("/api/v1/submissions", { params: { query: P_REWORK } })), visible);
   const allocated = useCount(qk.allocations.list(P_ALLOC), () => call(api.GET("/api/v1/allocations", { params: { query: P_ALLOC } })), visible);
   const late = useCount(qk.progress.list(P_LATE), () => call(api.GET("/api/v1/progress", { params: { query: P_LATE } })), visible);
+  const notSubmitted = useCount(qk.progress.list(P_NOT_SUBMITTED), () => call(api.GET("/api/v1/progress", { params: { query: P_NOT_SUBMITTED } })), visible);
+  const progSubmitted = useCount(qk.progress.list(P_PROG_SUB), () => call(api.GET("/api/v1/progress", { params: { query: P_PROG_SUB } })), visible);
+  const progRework = useCount(qk.progress.list(P_PROG_REWORK), () => call(api.GET("/api/v1/progress", { params: { query: P_PROG_REWORK } })), visible);
   const grades = useQuery({ queryKey: qk.progress.list({ progress: "evaluated", all: true }), queryFn: fetchAllEvaluated, enabled: visible });
 
   let body: ReactNode;
@@ -85,43 +153,75 @@ export function DashboardPage() {
   else if (!cycle) body = <NoCycleState />;
   else if (!visible) {
     body = (
-      <div className="flex flex-col gap-4">
-        <Alert variant="info" title="Allocations are not published yet">
+      <div className="space-y-6">
+        <Alert variant="info" icon={<Info />} title="Allocations are not published yet">
           You can review your assigned projects now. Trainees, submissions and evaluations open once the programme team publishes allocations.
         </Alert>
-        <h2 className="text-base font-semibold">My projects</h2>
-        <ProjectsSection />
+        <section>
+          <ProjectsHeading />
+          <ProjectsSection />
+        </section>
       </div>
     );
   } else {
     const counts = new Map<string, number>();
     for (const r of grades.data ?? []) if (r.evaluation?.grade) counts.set(r.evaluation.grade, (counts.get(r.evaluation.grade) ?? 0) + 1);
     const gradeRows = GRADES.filter((g) => counts.get(g));
+    const evaluatedTotal = grades.data?.length ?? 0;
+    const breakdownLoading = notSubmitted.isLoading || progSubmitted.isLoading || progRework.isLoading || grades.isLoading;
+    const breakdownError = notSubmitted.error || progSubmitted.error || progRework.error;
     body = (
-      <div className="flex flex-col gap-6">
-        {cycle.status === "archived" && <Alert variant="info">This cycle is archived. Evaluations are closed; records are read-only.</Alert>}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Pending evaluations" query={pending} to="/supervisor/submissions" linkLabel="Open evaluation queue" />
-          <StatCard title="Rework requested" query={rework} to="/supervisor/submissions?status=rework_requested" linkLabel="View rework" />
-          <StatCard title="Allocated trainees" query={allocated} to="/supervisor/progress" linkLabel="View progress" />
-          <StatCard title="Late submissions" query={late} to="/supervisor/progress?late_only=true" linkLabel="View late" />
+      <div className="space-y-6">
+        {cycle.status === "archived" && (
+          <Alert variant="info" icon={<Info />}>This cycle is archived. Evaluations are closed; records are read-only.</Alert>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <CountTile label="Pending evaluations" query={pending} to="/supervisor/submissions" icon={<Hourglass />} tone="primary" hint="Open evaluation queue" />
+          <CountTile label="Rework requested" query={rework} to="/supervisor/submissions?status=rework_requested" icon={<ArrowCounterClockwise />} tone="warning" hint="View rework" />
+          <CountTile label="Allocated trainees" query={allocated} to="/supervisor/progress" icon={<UsersThree />} tone="success" hint="View progress" />
+          <CountTile label="Late submissions" query={late} to="/supervisor/progress?late_only=true" icon={<Clock />} tone="danger" hint="View late" />
         </div>
-        <section className="rounded-lg border border-border bg-surface p-4">
-          <h2 className="mb-2 text-base font-semibold">Grade distribution</h2>
-          {grades.isLoading ? <LoadingState /> : grades.error ? (
-            <ErrorState error={grades.error} onRetry={() => void grades.refetch()} />
-          ) : gradeRows.length ? (
-            <ul className="flex flex-col gap-1.5 text-sm">
-              {gradeRows.map((g) => (
-                <li key={g} className="flex items-center justify-between gap-2"><StatusBadge kind="grade" value={g} /><span className="tabular-nums">{counts.get(g)}</span></li>
-              ))}
-            </ul>
-          ) : <p className="text-sm text-muted">No evaluations yet.</p>}
-        </section>
-        <div>
-          <h2 className="mb-3 text-base font-semibold">My projects</h2>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <EvaluationQueue enabled={visible} total={pending.data} />
+
+          <Card icon={<ChartBar />} title="Trainee progress" description="Where every trainee on your projects stands.">
+            {breakdownLoading ? <Skeleton className="h-16 rounded-lg" /> : breakdownError ? (
+              <ErrorState error={breakdownError} onRetry={() => { void notSubmitted.refetch(); void progSubmitted.refetch(); void progRework.refetch(); }} />
+            ) : (
+              <StackedBar
+                label="Trainee progress"
+                segments={[
+                  { label: "Not submitted", value: notSubmitted.data ?? 0, className: "bg-subtle" },
+                  { label: "Awaiting evaluation", value: progSubmitted.data ?? 0, className: "bg-primary" },
+                  { label: "Rework requested", value: progRework.data ?? 0, className: "bg-warning" },
+                  { label: "Evaluated", value: evaluatedTotal, className: "bg-success" },
+                ]}
+              />
+            )}
+
+            <h3 className="mt-6 mb-3 text-sm font-semibold text-text">Grade distribution</h3>
+            {grades.isLoading ? <Skeleton className="h-24 rounded-lg" /> : grades.error ? (
+              <ErrorState error={grades.error} onRetry={() => void grades.refetch()} />
+            ) : gradeRows.length ? (
+              <ul className="space-y-3">
+                {gradeRows.map((g) => {
+                  const [text, variant] = label("grade", g);
+                  return (
+                    <li key={g}>
+                      <Meter label={text} value={counts.get(g) ?? 0} max={evaluatedTotal} tone={GRADE_TONE[variant]} valueLabel={`${counts.get(g)} of ${evaluatedTotal}`} />
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="text-sm text-muted">No evaluations yet.</p>}
+          </Card>
+        </div>
+
+        <section>
+          <ProjectsHeading />
           <ProjectsSection />
-        </div>
+        </section>
       </div>
     );
   }
@@ -131,6 +231,11 @@ export function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description={cycle ? <span className="inline-flex flex-wrap items-center gap-2">{cycle.name} <StatusBadge kind="cycle" value={cycle.status} /></span> : undefined}
+        actions={visible ? (
+          <Link to="/supervisor/submissions" className={buttonStyles("primary")}>
+            <ListChecks aria-hidden size={16} /> Evaluation queue
+          </Link>
+        ) : undefined}
       />
       {body}
     </>

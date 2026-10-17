@@ -23,6 +23,11 @@ export const qk = {
     list: (p?: P) => k("trainees", "list", p),
     detail: (id: string) => ["trainees", "detail", id],
   },
+  resumes: {
+    all: () => ["resumes"],
+    me: () => ["resumes", "me"],
+    trainee: (traineeId: string) => ["resumes", "trainee", traineeId],
+  },
   submissions: {
     all: () => ["submissions"],
     list: (p?: P) => k("submissions", "list", p),
