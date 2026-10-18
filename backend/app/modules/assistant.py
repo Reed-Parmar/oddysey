@@ -25,7 +25,7 @@ from spa_ai.resume.redact import redact
 
 router = APIRouter(tags=["assistant"])
 
-ai_client_factory = ai.default_ai_client  # tests patch this
+ai_client_factory = ai.assistant_ai_client  # tests patch this
 ASK_LIMIT = 20  # questions per user per window
 ASK_WINDOW = timedelta(minutes=10)
 

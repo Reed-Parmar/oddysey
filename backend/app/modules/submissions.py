@@ -30,7 +30,15 @@ from app.db.enums import (
     SubmissionStatus,
     UserRole,
 )
-from app.domain import VISIBLE_ALLOC, effective_deadline, lock_cycle, no_student_record, resolve_cycles, student_trainee
+from app.domain import (
+    VISIBLE_ALLOC,
+    effective_deadline,
+    lock_cycle,
+    no_student_record,
+    now_utc,
+    resolve_cycles,
+    student_trainee,
+)
 from app.modules.report_export import render_report_html
 from app.schemas import ReportEvaluationSummary, SubmissionOut, submission_out
 from app.storage import get_storage
@@ -486,7 +494,7 @@ class AmendedCriterion(BaseModel):
 
 
 class ReviewIn(In):
-    action: Literal["confirm", "annotate", "amend", "request_explanation", "request_rework"]
+    action: Literal["confirm", "annotate", "amend", "request_explanation", "request_rework", "lift_rework"]
     note: str = Field(min_length=3, max_length=3000)
     amended_criteria: list[AmendedCriterion] | None = None
 
@@ -494,7 +502,7 @@ class ReviewIn(In):
     def _amend(self) -> "ReviewIn":
         if self.action == "amend" and not self.amended_criteria:
             raise ValueError("amended_criteria is required for an amendment")
-        if self.action in ("amend", "request_rework") and len(self.note.strip()) < 10:
+        if self.action in ("amend", "request_rework", "lift_rework") and len(self.note.strip()) < 10:
             raise ValueError("give a reason of at least 10 characters")
         return self
 
@@ -505,6 +513,7 @@ REVIEW_STATE = {
     "amend": "amended",
     "request_explanation": "explanation_requested",
     "request_rework": "rework_requested",
+    "lift_rework": "confirmed",  # the history entry keeps the specific action (ADR-026)
 }
 
 
@@ -553,6 +562,19 @@ def review_analysis(
         db.execute(
             update(M.Submission).where(M.Submission.id == sub.id).values(status=SubmissionStatus.rework_requested)
         )
+    if body.action == "lift_rework":  # ADR-026: reverse a rework (e.g. the automatic plagiarism decision)
+        latest_version = db.scalar(
+            select(func.max(M.Submission.version)).where(M.Submission.allocation_id == sub.allocation_id)
+        )
+        if sub.version != latest_version or sub.status != SubmissionStatus.rework_requested:
+            raise invalid_state("Only a rework on the latest version can be lifted")
+        db.execute(update(M.Submission).where(M.Submission.id == sub.id).values(status=SubmissionStatus.submitted))
+        decision = (a.originality or {}).get("decision")
+        if decision and not decision.get("lifted_at"):
+            a.originality = {
+                **(a.originality or {}),
+                "decision": {**decision, "lifted_at": now_utc().isoformat(), "lifted_by_role": viewer.role.value},
+            }
     db.add(
         M.AnalysisReview(
             analysis_id=a.id,

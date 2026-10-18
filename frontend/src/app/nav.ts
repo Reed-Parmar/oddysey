@@ -1,4 +1,4 @@
-import { ChartBar, ClipboardText, FolderSimple, House, type Icon, SquaresFour, TrendUp, UploadSimple, UserPlus } from "@phosphor-icons/react";
+import { ChartBar, ClipboardText, FolderSimple, House, type Icon, SquaresFour, TrendUp, UploadSimple, UserCircle, UserPlus } from "@phosphor-icons/react";
 
 import type { UserRole } from "@/api/types";
 
@@ -6,11 +6,12 @@ export type NavItem = { label: string; to: string; end?: boolean; icon: Icon; se
 
 /** Role navigation, declared only here (frontend.md §2). `section` starts a labelled group. */
 export const NAV: Record<UserRole, NavItem[]> = {
-  // ADR-022 (amends ADR-017): profile/resume on the Dashboard, the project in My Project, reports in Submissions.
+  // ADR-022/024 (amend ADR-017): the project in My Project, reports in Submissions, resume and profile in Profile.
   student: [
     { label: "Dashboard", to: "/student", end: true, icon: House },
     { label: "My Project", to: "/student/project", icon: ClipboardText },
     { label: "Submissions", to: "/student/submissions", icon: UploadSimple },
+    { label: "Profile", to: "/student/profile", icon: UserCircle },
   ],
   supervisor: [
     { label: "Dashboard", to: "/supervisor", end: true, icon: House },

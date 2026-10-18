@@ -86,7 +86,7 @@ def test_assistant_rule_fallback_answers_from_own_project(client, scenario):
     r = ok(ask(client, student, "Why was this project allocated to me?"))
     assert r["sources"] == ["allocation"] and "Match score" in r["answer"]
     r = ok(ask(client, student, "What is the capital of France?"))
-    assert r["sources"] == [] and "only answer questions" in r["answer"]
+    assert r["sources"] == [] and "outside what I can help with" in r["answer"]
     # only a usage count is audited, never the question
     rows = owner_sql("SELECT metadata::text FROM app.audit_events WHERE action = 'assistant.asked'")
     assert len(rows) == 4 and all("France" not in m and "deadline" not in m for (m,) in rows)

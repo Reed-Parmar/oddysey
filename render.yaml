@@ -45,6 +45,10 @@ services:
         value: "true"
       - key: ALLOCATION_INTERVAL_MINUTES
         value: "15"
+      - key: ALLOCATION_ENGINE
+        value: ilp
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
       - key: ARCHIVE_GRACE_DAYS
         value: "7"
       - key: EMAIL_BACKEND

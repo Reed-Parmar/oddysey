@@ -30,6 +30,7 @@ import {
 import { Button, Card, cx } from "@/components/ui";
 import { formatBytes, formatInr, formatScore } from "@/lib/format";
 import { MatchReason } from "./MatchReason";
+import { PlagiarismReport } from "./PlagiarismReport";
 
 const Tag = ({ children }: { children: ReactNode }) => (
   <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs font-medium text-neutral">{children}</span>
@@ -545,42 +546,10 @@ export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis
         )}
       </Section>
 
-      <Section title="Plagiarism & Originality Analysis" note="Potential overlap that needs contextual review. Trainees may receive the same brief; shared brief and guide text is excluded.">
-        {o.status === "insufficient_text" || o.overlap_pct == null ? (
-          <p className="text-muted">Text overlap not computed: {o.overlap_reason ?? "not enough analysable text"}.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <p className="flex flex-wrap items-center gap-2">
-              <span className="font-heading text-lg font-semibold tabular-nums">{o.overlap_pct}%</span>
-              <span className="text-xs text-muted">text overlap with other people's work</span>
-              {o.attention_band && <span className="rounded bg-neutral-bg px-1.5 text-xs">Review band: {o.attention_band} ({o.bands_version}, not a probability)</span>}
-            </p>
-            {o.finding_reason && <p>{o.finding_reason}</p>}
-          </div>
-        )}
-        {o.tokens && (
-          <p className="mt-2 text-xs text-muted">
-            {o.tokens.eligible} eligible words; {o.tokens.excluded} excluded ({o.tokens.excluded_pct}%:{" "}
-            {Object.entries(o.tokens.excluded_by_reason).filter(([, n]) => n).map(([k, n]) => `${k.replace("_", " ")} ${n}`).join(", ") || "none"}). {o.formula}
-          </p>
-        )}
-        {!!o.sources?.length && (
-          <ul className="mt-3 space-y-3">
-            {o.sources.map((s, i) => (
-              <li key={i} className="rounded-lg border border-border p-3">
-                <p className="flex justify-between gap-2 text-xs"><span className="font-semibold">{s.label}</span><span className="tabular-nums">{s.matched_tokens} words · {s.coverage_pct}%</span></p>
-                {s.passages.slice(0, 5).map((p, j) => (
-                  <div key={j} className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-                    <blockquote className="rounded bg-warning-bg px-2 py-1">{p.target_excerpt}</blockquote>
-                    <blockquote className="rounded bg-surface-2 px-2 py-1 text-muted">{p.source_excerpt ?? "Source text withheld (outside your access)"}</blockquote>
-                  </div>
-                ))}
-              </li>
-            ))}
-          </ul>
-        )}
-        {o.self_reuse?.overlap_pct != null && <p className="mt-2 text-xs text-muted">Reuse of the trainee's own earlier versions: {o.self_reuse.overlap_pct}% (reported separately, not counted as overlap).</p>}
-        <p className="mt-2 text-xs text-muted">Corpus: {corpus.scope} ({corpus.items ?? 0} items).</p>
+      <Section title="Plagiarism & Originality Report" note="Potential overlap that needs contextual review. Shared brief and guide text, quotations and references are not counted.">
+        <PlagiarismReport submissionId={a.submission_id} />
+        {o.self_reuse?.overlap_pct != null && <p className="mt-3 text-xs text-muted">Reuse of the trainee's own earlier versions: {o.self_reuse.overlap_pct}% (reported separately, not counted as overlap).</p>}
+        <p className="mt-1 text-xs text-muted">Compared with: {corpus.scope} ({corpus.items ?? 0} items).</p>
       </Section>
 
       <Section title="Concept and code similarity">
@@ -622,7 +591,7 @@ export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis
 
 const REVIEW_ACTIONS = [
   ["confirm", "Confirm findings"], ["annotate", "Add note"], ["request_explanation", "Ask trainee to explain"],
-  ["request_rework", "Request rework"], ["amend", "Amend scores"],
+  ["request_rework", "Request rework"], ["amend", "Amend scores"], ["lift_rework", "Lift plagiarism rework"],
 ] as const;
 
 /** Supervisor/admin review: keeps the automated result and adds a history entry (amendments need a reason). */
@@ -644,17 +613,21 @@ export function ReviewActions({ analysis, submissionId }: { analysis: Analysis; 
       await Promise.all([
         qc.invalidateQueries({ queryKey: qk.submissions.all() }),
         qc.invalidateQueries({ queryKey: qk.progress.all() }),
+        qc.invalidateQueries({ queryKey: ["originality-report", submissionId] }),
       ]);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
   if (!analysis.viewer_can_review) return null;
-  const needsLong = action === "amend" || action === "request_rework";
+  const needsLong = action === "amend" || action === "request_rework" || action === "lift_rework";
+  // ADR-026: offered only while the automatic plagiarism rework is in force.
+  const decision = (analysis.originality as { decision?: { action?: string; lifted_at?: string } } | null)?.decision;
+  const canLift = decision?.action === "auto_rework" && !decision.lifted_at;
   return (
     <Card title="Review" description="Your review is recorded alongside the automated findings; nothing is overwritten.">
       <div className="flex flex-col gap-3 text-sm">
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Review action">
-          {REVIEW_ACTIONS.filter(([k]) => k !== "amend" || criteria.length > 0).map(([k, l]) => (
+          {REVIEW_ACTIONS.filter(([k]) => (k !== "amend" || criteria.length > 0) && (k !== "lift_rework" || canLift)).map(([k, l]) => (
             <button key={k} type="button" role="radio" aria-checked={action === k} onClick={() => setAction(k)}
               className={cx("min-h-8 rounded-full border px-3 text-sm font-medium", action === k ? "border-primary bg-primary-soft text-primary-ink" : "border-border-strong")}>{l}</button>
           ))}

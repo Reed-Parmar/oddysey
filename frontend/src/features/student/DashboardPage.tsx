@@ -13,7 +13,6 @@ import { Alert, Button, Card, cx } from "@/components/ui";
 import { WAITING_AFTER_REJECT_TEXT, WAITING_TEXT, lastRejected, nextStep } from "./forms";
 import { buildJourney } from "./journey";
 import { useMyAllocationHistory, useMyNotifications, useMySubmissionHistory, useProject, useStudentContext } from "./hooks";
-import { ProfileSection } from "./ProfileSection";
 import { Fact, LinkButton } from "./ui";
 import { AlertsPanel } from "@/features/shared/Autopilot";
 
@@ -88,7 +87,6 @@ export function DashboardPage() {
         <NotificationsCard />
       </div>
 
-      <ProfileSection me={me} />
     </div>
   );
 }
@@ -100,7 +98,7 @@ function MyProjectCard({ allocation: a, deadline, latest, loadingSubs, rejectedB
     return (
       <Card title="My project" icon={<Hourglass />}>
         <p className="text-sm text-text">{rejectedBefore ? WAITING_AFTER_REJECT_TEXT : WAITING_TEXT}</p>
-        <p className="mt-2 text-xs text-muted">You'll get a notification here as soon as your project is ready. Meanwhile, keep your profile up to date below.</p>
+        <p className="mt-2 text-xs text-muted">You'll get a notification here as soon as your project is ready. Meanwhile, keep your profile up to date on the Profile page.</p>
       </Card>
     );
   const sup = a.project.supervisor;

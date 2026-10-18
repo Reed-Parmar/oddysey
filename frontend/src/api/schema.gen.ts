@@ -379,6 +379,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Local */
+        get: operations["download_local_api_v1_files_local_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -534,6 +551,27 @@ export interface paths {
         get: operations["get_cycle_options_api_v1_onboarding_cycle_options_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding/resume-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Suggestions
+         * @description Same file checks and extraction as RES-01 (redacted text to the model, or the rule fallback), but the file and
+         *     the result are never persisted: the student reviews the pre-filled form and saves it with ONB-02/03 (ADR-024).
+         */
+        post: operations["resume_suggestions_api_v1_onboarding_resume_suggestions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -767,6 +805,46 @@ export interface paths {
          * @description Printable HTML of exactly the persisted findings and the current review state.
          */
         get: operations["export_analysis_api_v1_submissions__submission_id__analysis_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/submissions/{submission_id}/analysis/originality-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Originality Report
+         * @description SUB-09: the detailed report, redacted to the viewer's access.
+         */
+        get: operations["originality_report_api_v1_submissions__submission_id__analysis_originality_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/submissions/{submission_id}/analysis/originality-report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Originality Report Pdf
+         * @description SUB-10: the same report as a PDF.
+         */
+        get: operations["originality_report_pdf_api_v1_submissions__submission_id__analysis_originality_report_pdf_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1384,6 +1462,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post */
+        Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_resume_api_v1_trainees_me_resumes_post */
         Body_upload_resume_api_v1_trainees_me_resumes_post: {
             /** File */
@@ -1576,6 +1659,11 @@ export interface components {
             data: components["schemas"]["OnboardingOut"];
             meta?: components["schemas"]["Meta"] | null;
         };
+        /** Envelope[OriginalityReport] */
+        Envelope_OriginalityReport_: {
+            data: components["schemas"]["OriginalityReport"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
         /** Envelope[Overview] */
         Envelope_Overview_: {
             data: components["schemas"]["Overview"];
@@ -1594,6 +1682,11 @@ export interface components {
         /** Envelope[ResumeOut] */
         Envelope_ResumeOut_: {
             data: components["schemas"]["ResumeOut"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[ResumeSuggestions] */
+        Envelope_ResumeSuggestions_: {
+            data: components["schemas"]["ResumeSuggestions"];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[StaffImportResult] */
@@ -1882,6 +1975,17 @@ export interface components {
             /** Data */
             data: components["schemas"]["NotificationOut"][];
         };
+        /** MatchedPassage */
+        MatchedPassage: {
+            /** Source */
+            source: number;
+            /** Source Excerpt */
+            source_excerpt: string | null;
+            /** Tokens */
+            tokens: number;
+            /** Words */
+            words: string;
+        };
         /** MePatch */
         MePatch: {
             /** Department */
@@ -1979,6 +2083,66 @@ export interface components {
             missing: string[];
             /** Status */
             status: string;
+        };
+        /** OriginalityReport */
+        OriginalityReport: {
+            /** Analysed At */
+            analysed_at: string | null;
+            /** Attention Band */
+            attention_band: string | null;
+            /** Decision */
+            decision: string;
+            /** Decision Record */
+            decision_record: {
+                [key: string]: unknown;
+            } | null;
+            /** Decision Text */
+            decision_text: string;
+            /** Exclusions */
+            exclusions: {
+                [key: string]: unknown;
+            }[];
+            /** Formula */
+            formula: string | null;
+            /** Generated At */
+            generated_at: string;
+            /** Limitations */
+            limitations: string[];
+            /** Method */
+            method: string;
+            /** Next Steps */
+            next_steps: string[];
+            /** Overlap Pct */
+            overlap_pct: number | null;
+            /** Passages */
+            passages: components["schemas"]["MatchedPassage"][];
+            /** Project Code */
+            project_code: string;
+            /** Project Title */
+            project_title: string;
+            /** Rework Threshold */
+            rework_threshold: number;
+            /** Segments */
+            segments: components["schemas"]["Segment"][];
+            /** Sources */
+            sources: components["schemas"]["ReportSource"][];
+            /** Status */
+            status: string;
+            /**
+             * Submission Id
+             * Format: uuid
+             */
+            submission_id: string;
+            /** Text Truncated */
+            text_truncated: boolean;
+            /** Tokens */
+            tokens: {
+                [key: string]: unknown;
+            };
+            /** Trainee Name */
+            trainee_name: string;
+            /** Version */
+            version: number;
         };
         /** Overview */
         Overview: {
@@ -2280,6 +2444,19 @@ export interface components {
             /** Total */
             total: number | null;
         };
+        /** ReportSource */
+        ReportSource: {
+            /** Coverage Pct */
+            coverage_pct: number | null;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Matched Tokens */
+            matched_tokens: number;
+            /** Number */
+            number: number;
+        };
         /**
          * ReportedMark
          * @description A mark explicitly stated in the resume (resume_reported, unverified; never a verified gate).
@@ -2375,13 +2552,27 @@ export interface components {
          * @enum {string}
          */
         ResumeStatus: "extracted" | "failed";
+        /**
+         * ResumeSuggestions
+         * @description ONB-04: what a resume suggests for the onboarding form. Suggestions only; nothing is stored or applied.
+         */
+        ResumeSuggestions: {
+            /** Career Interest */
+            career_interest: string | null;
+            /** Skills */
+            skills: string[];
+            /** Source */
+            source: string | null;
+            /** Status */
+            status: string;
+        };
         /** ReviewIn */
         ReviewIn: {
             /**
              * Action
              * @enum {string}
              */
-            action: "confirm" | "annotate" | "amend" | "request_explanation" | "request_rework";
+            action: "confirm" | "annotate" | "amend" | "request_explanation" | "request_rework" | "lift_rework";
             /** Amended Criteria */
             amended_criteria?: components["schemas"]["AmendedCriterion"][] | null;
             /** Note */
@@ -2459,6 +2650,13 @@ export interface components {
             safety?: number | string | null;
             /** Theory */
             theory?: number | string | null;
+        };
+        /** Segment */
+        Segment: {
+            /** Source */
+            source?: number | null;
+            /** Text */
+            text: string;
         };
         /** SkillMatch */
         SkillMatch: {
@@ -3681,6 +3879,35 @@ export interface operations {
             };
         };
     };
+    download_local_api_v1_files_local_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -3930,6 +4157,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListEnvelope_CycleOption_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_suggestions_api_v1_onboarding_resume_suggestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ResumeSuggestions_"];
                 };
             };
             /** @description Validation Error */
@@ -4497,6 +4757,68 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    originality_report_api_v1_submissions__submission_id__analysis_originality_report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OriginalityReport_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    originality_report_pdf_api_v1_submissions__submission_id__analysis_originality_report_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
                 };
             };
             /** @description Validation Error */

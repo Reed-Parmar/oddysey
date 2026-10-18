@@ -52,10 +52,9 @@ export function AdminOverview() {
   const viewingPast = viewId != null && !active;
   return (
     <div className="space-y-6">
-      {actives.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {actives.length > 1 ? (
-            <div role="tablist" aria-label="Active cycles" className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
+      {actives.length > 1 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div role="tablist" aria-label="Active cycles" className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
               {actives.map((c) => {
                 const on = !viewingPast && active?.id === c.id;
                 return (
@@ -66,14 +65,10 @@ export function AdminOverview() {
                   </button>
                 );
               })}
-            </div>
-          ) : <span className="text-sm text-muted">1 active cycle</span>}
-          <Button variant={creating ? "secondary" : "primary"} icon={<CalendarPlus />} onClick={() => setCreating((v) => !v)}>
-            {creating ? "Cancel new cycle" : "New cycle"}
-          </Button>
+          </div>
         </div>
       )}
-      {(creating || actives.length === 0) && (
+      {(actives.length === 0 || (creating && viewingPast)) && (
         <>
           {actives.length === 0 && !viewingPast && (
             <PageHeader title="Overview" eyebrow="Programme team"
@@ -86,7 +81,7 @@ export function AdminOverview() {
       {viewingPast ? (
         <PastCycleView cycleId={viewId} onBack={() => setViewId(null)} />
       ) : active ? (
-        <ActiveCycleView key={active.id} cycle={active} />
+        <ActiveCycleView key={active.id} cycle={active} creating={creating} onToggleCreate={() => setCreating((v) => !v)} />
       ) : null}
       <CycleHistory activeIds={actives.map((c) => c.id)} viewingId={viewingPast ? viewId : active?.id ?? null} onView={(id) => setViewId(id)} />
     </div>
@@ -95,7 +90,7 @@ export function AdminOverview() {
 
 // ---------------------------------------------------------------- active cycle
 
-function ActiveCycleView({ cycle }: { cycle: Cycle }) {
+function ActiveCycleView({ cycle, creating, onToggleCreate }: { cycle: Cycle; creating: boolean; onToggleCreate: () => void }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const report = useOverview(cycle.id, true);
   return (
@@ -106,7 +101,13 @@ function ActiveCycleView({ cycle }: { cycle: Cycle }) {
           <span key="d">Submission deadline <IstDateTime value={cycle.submission_deadline} /></span>,
           <span key="a">Archive {cycle.archive_at ? <IstDateTime value={cycle.archive_at} /> : "date not set"} · scheduled archiving {cycle.auto_archive_enabled ? "on" : "off"}</span>,
         ]} />}
-        actions={<Button variant="secondary" icon={<Archive />} onClick={() => setArchiveOpen(true)}>Archive cycle</Button>} />
+        actions={<>
+          <Button variant="secondary" icon={<Archive />} onClick={() => setArchiveOpen(true)}>Archive cycle</Button>
+          <Button variant={creating ? "secondary" : "primary"} icon={<CalendarPlus />} aria-expanded={creating} onClick={onToggleCreate}>
+            {creating ? "Cancel new cycle" : "New cycle"}
+          </Button>
+        </>} />
+      {creating && <CreateCycleCard />}
       {report.isLoading ? <LoadingState /> : report.error ? <ErrorState error={report.error} onRetry={() => void report.refetch()} /> : report.data ? (
         <>
           <LifecycleSection o={report.data.data} live updatedAt={report.dataUpdatedAt} />
@@ -128,6 +129,14 @@ function useOverview(cycleId: string, live = false) {
     queryFn: () => call(api.GET("/api/v1/admin/reports/overview", { params: { query: { cycle_id: cycleId } } })),
     refetchInterval: live ? 30_000 : false,
   });
+}
+
+/** "in 12 min", "in 1 h 5 min" or "any moment" (an estimate; the exact time is in the title). */
+function relativeTime(iso: string | null | undefined) {
+  if (!iso) return "not scheduled";
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return "any moment";
+  return mins >= 60 ? `in ${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ""}` : `in ${mins} min`;
 }
 
 function useAutomation() {
@@ -170,8 +179,13 @@ function LifecycleSection({ o, live, updatedAt }: { o: Overview; live?: boolean;
             </span>
           )}
           {a && (
-            <span className="font-mono text-xs text-muted">
-              every {a.interval_minutes} min · next {a.next_allocation_estimate ? formatIst(a.next_allocation_estimate) : "—"}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-muted"
+              title={a.next_allocation_estimate ? `Next allocation run: ${formatIst(a.next_allocation_estimate)}` : undefined}>
+              <ClockCounterClockwise aria-hidden size={14} />
+              <span>
+                Next run <span className="font-semibold text-text">{relativeTime(a.next_allocation_estimate)}</span>
+                <span className="text-subtle"> · every {a.interval_minutes} min</span>
+              </span>
             </span>
           )}
           <Button size="sm" variant="secondary" icon={<Lightning />} loading={run.isPending} disabled={!a}

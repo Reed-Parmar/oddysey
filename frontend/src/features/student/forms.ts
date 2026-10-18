@@ -78,11 +78,10 @@ export const profileSchema = z.object({
 export type ProfileValues = z.infer<typeof profileSchema>;
 
 /** The exact self-editable TRN-02 body: these four keys only (code, centre and marks are programme-managed). */
+/** ADR-025: skills and career interest are not typed on the Profile page; they come from the resume (ResumePanel). */
 export function profileBody(v: ProfileValues) {
   return {
     trade_ids: [...new Set(v.trade_ids)],
-    skills: normaliseSkills(v.skills),
-    career_interest: v.career_interest.trim(),
     background: v.background.trim(),
   };
 }
@@ -158,7 +157,6 @@ export function onboardingMissing(v: OnboardingValues): OnboardingField[] {
   const out: OnboardingField[] = [];
   if (!v.full_name.trim()) out.push("full_name");
   if (!v.gender) out.push("gender");
-  if (!v.trainee_code.trim()) out.push("trainee_code");
   if (!v.trade_ids.length) out.push("trade_ids");
   if (!normaliseSkills(v.skills).length) out.push("skills");
   if (!v.career_interest.trim()) out.push("career_interest");
@@ -168,14 +166,13 @@ export function onboardingMissing(v: OnboardingValues): OnboardingField[] {
 export const ONBOARDING_REQUIRED_TEXT: Partial<Record<OnboardingField, string>> = {
   full_name: "Enter your full name",
   gender: "Choose an option (\"Prefer not to say\" is fine)",
-  trainee_code: "Enter your trainee ID",
   trade_ids: "Select at least one ITI trade",
   skills: "Add at least one skill",
   career_interest: "Tell us your career interest",
 };
 
 export const ONBOARDING_SECTIONS: { key: string; label: string; fields: OnboardingField[] }[] = [
-  { key: "identity", label: "About you", fields: ["full_name", "gender", "trainee_code"] },
+  { key: "identity", label: "About you", fields: ["full_name", "gender"] },
   { key: "training", label: "Training", fields: ["trade_ids"] },
   { key: "skills", label: "Skills and interests", fields: ["skills", "career_interest"] },
 ];

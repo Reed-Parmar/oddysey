@@ -4,6 +4,7 @@
 
 **Revision log**
 - rev 0 / 1 / 1.1 (2026-10-17): generic plan (teams, preferences, milestones). **Superseded.**
+- **rev 6** (2026-10-18): §0d ILP allocation optimiser (ADR-027).
 - **rev 5** (2026-10-18): §0c Autopilot alerts (ALR-01) and Project Assistant (AST-01), ADR-019/020.
 - **rev 2.1** (2026-10-17): §8 Clarifications C-1 to C-30 resolve the handbook gaps (binding).
 - **rev 2** (2026-10-17): re-scoped to the official brief and dataset ([decisions.md](decisions.md) ADR-003, ADR-011 to ADR-013). It keeps every convention from rev 1.1 (§1).
@@ -27,8 +28,10 @@ is no longer accepted or returned), manual `project_code` input.
 | ID | Method | Path | Roles | Notes |
 |---|---|---|---|---|
 | ONB-01 | GET | `/onboarding` | student | Draft profile, `status` draft/waiting_for_cycle/enrolled/identity_conflict, `missing[]` |
-| ONB-02 | PUT | `/onboarding` | student | Save progress (full_name, gender, trainee_code, centre_name, trade_ids[1..5], skills, career_interest, background) |
+| ONB-02 | PUT | `/onboarding` | student | Save progress (full_name, gender, centre_name, trade_ids[1..5], skills, career_interest, background; `trainee_code` optional and auto-generated at enrolment, ADR-024) |
 | ONB-03 | POST | `/onboarding/complete` | student | Validate + enrol in the active cycle, or wait for one. A typed code never claims an existing record (409 IDENTITY_CONFLICT) |
+| ONB-04 | POST | `/onboarding/resume-suggestions` | student | ADR-024: multipart `file` (PDF/DOCX ≤ 5 MB). Returns `{status, source, skills[], career_interest}` from the resume; stores nothing. `413` · `415` · `429 RATE_LIMITED` (5/hour) |
+| FILE-01 | GET | `/files/local?token=` | signed token | ADR-024, development only: downloads a locally stored file when Supabase Storage is not configured. `403` invalid/expired token · `404` |
 | NOT-01 | GET | `/me/notifications` | any | In-app view of the outbox; `delivery` = email status |
 | NOT-02 | POST | `/me/notifications/read` | any | Mark all read |
 | CYC-02 | POST | `/cycles` | admin | Created **active** (`published`); `archive_at` defaults to deadline + 7 days; `auto_archive_enabled`, `archive_timezone` |
@@ -48,9 +51,11 @@ is no longer accepted or returned), manual `project_code` input.
 | ALLOC-09 | GET | `/admin/trainees/{id}/allocation-history` | admin | Includes replacement ranking snapshot (mode, candidates, selected rank, explanation) |
 | SUB-01 | POST | `/submissions` | student | A report link or a PDF/DOCX report file is REQUIRED (`REPORT_REQUIRED`); other files only as supplements; analysis queued |
 | SUB-05 | GET | `/submissions/{id}/analysis` | as SUB-03 | `AnalysisOut`: status, originality (sources redacted to the viewer's access), semantic/ai_writing (not assessed/not available), evaluation, effective_criteria, reviews |
-| SUB-06 | POST | `/submissions/{id}/analysis/review` | supervisor of project, admin | `{action: confirm|annotate|amend|request_explanation|request_rework, note, amended_criteria?}`; history kept |
+| SUB-06 | POST | `/submissions/{id}/analysis/review` | supervisor of project, admin | `{action: confirm|annotate|amend|request_explanation|request_rework|lift_rework, note, amended_criteria?}`; history kept. `lift_rework` (ADR-026) returns an automatically reworked latest version to `submitted` |
 | SUB-07 | POST | `/submissions/{id}/analysis/retry` | supervisor of project, admin | Only for `failed` |
 | SUB-08 | GET | `/submissions/{id}/analysis/export` | as SUB-03 | Printable HTML of the persisted findings |
+| SUB-09 | GET | `/submissions/{id}/analysis/originality-report` | as SUB-03 | ADR-026 detailed plagiarism report: summary, decision, sources, every matched passage with matched words, highlighted text segments (redacted per viewer) |
+| SUB-10 | GET | `/submissions/{id}/analysis/originality-report.pdf` | as SUB-03 | The same report as a PDF (`application/pdf`) |
 | EVAL-01 | POST | `/submissions/{id}/evaluation` | supervisor | Now the **verified practical evaluation** (optional, latest version, once per version) |
 | PROG-01 | GET | `/progress` | any (scoped) | Envelope adds `summary` over the whole filtered set; rows add waiting_reason, analysis_status, evaluation.score_type, deadline, archived, rejections; filters analysis_status |
 | TRN-02 | PATCH | `/trainees/me` | student | adds trade_ids, reported_scores `{resume_id, theory?, practical?, safety?}` (unverified) |
@@ -100,6 +105,10 @@ No schema change: alerts are computed on read from existing tables, and the assi
 - **Read-only and stateless.** Nothing is stored except a usage audit row (no question text). The rate limit is 20 questions per user per 10 minutes, after which the server returns 429 `RATE_LIMITED`.
 
 **Deferred (not built yet):** the daily alert digest, the admin allocation override from ADR-019, and the admin (programme-wide) assistant from ADR-020.
+
+## 0d. ADR-027 (rev 6): ILP allocation optimiser
+
+No new endpoint and no field changes. `allocate_cycle` now chooses projects with an ILP that balances project and supervisor load (soft fair shares). Each allocation's `match_score`, `factors` and `match_mode` remain the rule score of the chosen pair. `explanation` says when the optimiser chose a trainee's 2nd-or-later project, and how many points that cost. The job result shown by ADM-01 adds `optimiser` {engine, objective, greedy_objective, total_score, greedy_total_score, moved_from_best, project_fair_share, supervisor_fair_share, fallback_reason}.
 
 ## 1. Conventions
 
@@ -403,7 +412,7 @@ Response (dry run or success): `200 {"data": {"applied": false, "rows": 8, "crea
 ### TRN — trainees (A)
 
 **TRN-01 `GET /trainees/me`** · student → `200 {"data": <Trainee + "allocation"> | null}`. This is the caller's trainee in the active cycle. `allocation` is an `Allocation` (with `override_reason: null` and `factors` per C-22) **only** when the cycle is `published`, else `null`.
-**TRN-02 `PATCH /trainees/me`** · student · `{"skills"?: ["name", …] (≤ 20), "career_interest"?: "≤300", "background"?: "≤2000"}`. Any other field (scores, trade, code, centre) → 422. → `200 {"data": <Trainee>}` · `409 NO_ACTIVE_CYCLE` · `409 NO_TRAINEE_RECORD` (C-8).
+**TRN-02 `PATCH /trainees/me`** · student · `{"skills"?: ["name", …] (≤ 20), "career_interest"?: "≤300", "background"?: "≤2000"}`. Any other field (scores, trade, code, centre) → 422. **ADR-025:** each skill must already be on the profile or come from the latest resume's extracted skills, and `career_interest` may only change to the latest resume's hint; otherwise `422` (`body.skills` / `body.career_interest`). → `200 {"data": <Trainee>}` · `409 NO_ACTIVE_CYCLE` · `409 NO_TRAINEE_RECORD` (C-8).
 **TRN-08 `POST /trainees/me`** · student · self-registered onboarding: `{"trade_id": "uuid", "centre_name"?: "…", "skills": ["…"], "career_interest"?: "…", "background"?: "…"}`. Creates a trainee in the active cycle with `trainee_code` = `SR-` + 6 random chars, scores null (assessment pending), linked to the caller. → `201 {"data": <Trainee>}` · `409 NO_ACTIVE_CYCLE` · `409 ACCOUNT_ALREADY_LINKED` · 422 (unknown trade field).
 **TRN-03 `GET /trainees`** · supervisor, admin · paginated. Query: `cycle_id` (default active), `trade_id`, `assessment_status`, `allocated` (`true|false`, admin), `linked` (`true|false`, admin), `q` (name/code/centre). Sort `full_name` (default), `trainee_code`, `-practical_score`.
 Scope: supervisor → trainees allocated to own projects in a `published|archived` cycle (`gender` and `account` null). Admin → all.

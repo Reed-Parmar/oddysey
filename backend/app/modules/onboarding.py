@@ -1,22 +1,25 @@
-"""ONB-01..03 (ADR-017, ADR-018): resumable self-service onboarding with a ranked cycle choice, plus the user's
-in-app notifications."""
+"""ONB-01..04 (ADR-017, ADR-018, ADR-024): resumable self-service onboarding with a ranked cycle choice, resume-based
+suggestions for the form (nothing stored), plus the user's in-app notifications."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app import audit
 from app.automation.onboarding import CycleOption, OnboardingData, cycle_options, enrol
+from app.core.config import get_settings
 from app.core.deps import DB, CurrentUser, Student
 from app.core.errors import AppError, conflict, field_error
 from app.core.responses import Envelope, ListEnvelope
 from app.db import models as M
 from app.domain import now_utc, student_trainee
+from app.modules import resumes as resumes_module
 from app.schemas import CycleRef
+from spa_ai.resume import extract
 
 router = APIRouter(tags=["onboarding"])
 
@@ -149,6 +152,62 @@ class NotificationOut(BaseModel):
     created_at: datetime
     read_at: datetime | None
     delivery: str  # queued | sent | failed | not_configured (email delivery status)
+
+
+class ResumeSuggestions(BaseModel):
+    """ONB-04: what a resume suggests for the onboarding form. Suggestions only; nothing is stored or applied."""
+
+    status: str  # extracted | failed
+    source: str | None  # ai | rule
+    skills: list[str]
+    career_interest: str | None
+
+
+@router.post("/onboarding/resume-suggestions")
+def resume_suggestions(user: Student, db: DB, file: Annotated[UploadFile, File()]) -> Envelope[ResumeSuggestions]:
+    """Same file checks and extraction as RES-01 (redacted text to the model, or the rule fallback), but the file and
+    the result are never persisted: the student reviews the pre-filled form and saves it with ONB-02/03 (ADR-024)."""
+    settings = get_settings()
+    since = datetime.now(UTC) - timedelta(hours=1)
+    recent = db.scalar(
+        select(func.count())
+        .select_from(M.AuditEvent)
+        .where(
+            M.AuditEvent.actor_id == user.id,
+            M.AuditEvent.action == "onboarding.resume_read",
+            M.AuditEvent.created_at > since,
+        )
+    )
+    if (recent or 0) >= settings.resume_uploads_per_hour:
+        raise AppError(429, "RATE_LIMITED", "Too many resume uploads. Try again in an hour.")
+    limit = settings.max_resume_bytes
+    data = file.file.read(limit + 1)
+    if len(data) > limit:
+        raise resumes_module._file_error(413, "FILE_TOO_LARGE", "Resume must be 5 MB or smaller")
+    name = file.filename or ""
+    ext = name.lower().rsplit(".", 1)[-1] if "." in name else ""
+    if ext not in resumes_module.MIME_BY_EXT or not data or not data.startswith(resumes_module.SIGNATURES[ext]):
+        raise resumes_module._file_error(415, "UNSUPPORTED_FILE_TYPE", "Upload a PDF or DOCX file")
+    draft = _profile(db, user).data or {}
+    known = list(db.scalars(select(M.Skill.name).order_by(M.Skill.name).limit(resumes_module.KNOWN_SKILLS_LIMIT)))
+    result = extract(
+        data,
+        resumes_module.MIME_BY_EXT[ext],
+        known,
+        redact_terms=[user.full_name, draft.get("full_name"), draft.get("trainee_code"), draft.get("centre_name")],
+        client=resumes_module.ai_client_factory(),
+    )
+    audit.record(db, user.id, "onboarding.resume_read", "user", user.id, {"status": result.status})
+    db.commit()
+    extracted = result.extracted or {}
+    return Envelope(
+        data=ResumeSuggestions(
+            status=result.status,
+            source=result.source,
+            skills=list(extracted.get("skills") or [])[:20],
+            career_interest=extracted.get("career_interest_hint"),
+        )
+    )
 
 
 @router.get("/me/notifications")

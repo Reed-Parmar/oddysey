@@ -32,6 +32,8 @@ Derived with the UI/UX Pro Max skill (`.claude/skills/ui-ux-pro-max`). Its sugge
 | Journey | `Steps` |
 | Donut / histogram | `Donut`, `Histogram` (`@/components/shared/Charts`): text summary + legend with numbers |
 | Animated number | `CountUp` (StatCard uses it for numeric values; screen readers get only the final value) |
+| Why a project was allocated | `MatchReason` (`@/features/shared/MatchReason`): gate chips, one bar per factor, the sum written out (Σ = score). `audience="trainee"` hides staff-only details |
+| Project assistant | `AssistantLauncher` (`@/features/shared/Autopilot`): floating robot button bottom-right that opens a non-modal chat panel (Esc closes) |
 | Automated lifecycle | `Pipeline` (`@/components/shared/Pipeline`): stages with `status` (`done` / `active` / `waiting` / `attention` / `error` / `idle`), metric, detail rows and a link. Status is always text + icon, never colour alone. Every status must be derived from API data. |
 | Person | `Avatar` + the visible name |
 | Buttons | `Button` variants `primary` / `secondary` / `ghost` / `danger` / `accent`, sizes `sm` / `md` / `lg`, `icon` prop for a leading icon |

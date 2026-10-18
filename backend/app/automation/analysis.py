@@ -288,8 +288,42 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         select(func.max(M.Submission.version)).where(M.Submission.allocation_id == sub.allocation_id)
     )
     applied = None
+    # ADR-026: very high overlap (after the exclusions) or a copied file sends the latest version back for rework.
+    # Never on a null overlap (insufficient text); only on the latest version while it is still submitted.
+    o = a.originality or {}
+    pct = o.get("overlap_pct")
+    dup = o.get("exact_duplicates") or {}
+    copied = bool(dup.get("binary_other_person") or dup.get("normalized_other_person"))
+    threshold = get_settings().originality_rework_at
     if (
-        ev.get("total") is not None
+        (copied or (pct is not None and pct >= threshold))
+        and sub.version == latest_version
+        and sub.status == SubmissionStatus.submitted
+    ):
+        sub.status = SubmissionStatus.rework_requested
+        a.review_state = "rework_requested"
+        a.originality = {
+            **o,
+            "decision": {
+                "action": "auto_rework",
+                "reason": "copied_file" if copied else "overlap_above_threshold",
+                "overlap_pct": pct,
+                "threshold": threshold,
+                "at": now_utc().isoformat(),
+            },
+        }
+        applied = "rework_originality"
+        audit.record(
+            db,
+            None,
+            "submission.auto_rework_originality",
+            "submission",
+            sub.id,
+            {"actor": "system", "overlap_pct": pct, "threshold": threshold, "copied_file": copied},
+        )
+    if (
+        applied is None
+        and ev.get("total") is not None
         and status == AnalysisStatus.completed
         and sub.version == latest_version
         and sub.status == SubmissionStatus.submitted
@@ -304,7 +338,22 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             sub.id,
             {"actor": "system", "outcome": applied, "total": ev["total"], "rubric": ev.get("rubric_version")},
         )
-    if applied == "evaluated":
+    if applied == "rework_originality":
+        why = (
+            "Your file is a copy of another person's submission."
+            if copied
+            else f"{pct:.1f}% of your report matches other submissions (the limit is {threshold:.0f}%)."
+        )
+        _notify(
+            db,
+            sub,
+            trainee,
+            project,
+            f"Version {sub.version}: plagiarism too high, redo required",
+            f"{why} Redo the allotted work and write your report again in your own words, then submit a new version. "
+            "Your detailed plagiarism report shows exactly which words matched.",
+        )
+    elif applied == "evaluated":
         _notify(
             db,
             sub,
@@ -330,6 +379,18 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             project,
             f"Version {sub.version} is awaiting review",
             "Your report was received and checked; a supervisor will review it.",
+        )
+    if a.originality and trainee.user is not None:
+        # ADR-026: the detailed report; with EMAIL_BACKEND=smtp it is emailed with the PDF attached (built when sent).
+        notify_user(
+            db,
+            trainee.user,
+            "originality.report",
+            f"Your plagiarism report: {project.project_code} version {sub.version}",
+            "Your Plagiarism & Originality Report is ready. It lists every matched passage and highlights the matched "
+            "words in your report. Open Submissions to read it or download the PDF.",
+            "/student/submissions",
+            f"originality.report:{a.id}",
         )
     if project.supervisor is not None:
         notify_user(

@@ -9,6 +9,12 @@
 > **ADR-018 (rev 4, binding).** Several cycles may be open. Onboarding shows the open cycles ranked by how many projects
 > match the student's trades, preselects the best and lets the student choose another (skipped when only one is open).
 > A student belongs to one open cycle at a time; their Dashboard, My Project and Submissions show that cycle.
+> **ADR-026:** each analysed report gets a detailed plagiarism report (matched words highlighted) on Submissions and as a
+> PDF emailed to the trainee (when email is configured). Overlap ≥ 50% means rework: redo the work in your own words.
+> **ADR-025:** on Profile, skills and career interest are read-only; they change only from the latest uploaded resume
+> ("Update resume" card), and TRN-02 enforces it.
+> **ADR-024:** nav adds **Profile** (`/student/profile`: profile form + resume upload, no longer on the Dashboard). Onboarding
+> does not ask for a trainee ID (generated at enrolment) and can pre-fill skills and career interest from a resume (ONB-04).
 > **ADR-022:** nav is Dashboard · My Project · **Submissions** (`/student/submissions`: submit form, rework feedback, latest
 > analysis, version history). The assistant opens from a floating robot button; the "Needs attention" panel appears only
 > when a critical or warning alert exists. My Project no longer shows the generated project guide.

@@ -39,6 +39,15 @@ export const STATUS_META: Record<PipelineStatus, { label: string; tile: string; 
   idle: { label: "Not started", tile: "bg-neutral-bg text-subtle", text: "text-subtle", border: "border-border border-dashed" },
 };
 
+const PROGRESS_SEGMENT: Record<PipelineStatus, string> = {
+  done: "bg-success",
+  active: "bg-accent",
+  waiting: "bg-warning",
+  attention: "bg-warning",
+  error: "bg-danger",
+  idle: "bg-neutral-bg",
+};
+
 export function StatusGlyph({ status, size = 14 }: { status: PipelineStatus; size?: number }) {
   switch (status) {
     case "done":
@@ -123,10 +132,23 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
   const current = stages.find((s) => s.key === selected) ?? null;
   const inspectorId = `${uid}-inspector`;
   const changed = useChangedStages(stages);
+  const doneCount = stages.filter((s) => s.status === "done").length;
+  const currentIdx = stages.findIndex((s) => s.status !== "done");
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
       {toolbar && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 sm:px-5">{toolbar}</div>}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5 sm:px-5">
+        <ol aria-hidden className="flex min-w-40 flex-1 gap-1">
+          {stages.map((s) => (
+            <li key={s.key} className={cx("h-1.5 flex-1 rounded-full", PROGRESS_SEGMENT[s.status])} />
+          ))}
+        </ol>
+        <p className="text-xs font-semibold text-muted tabular-nums">
+          {doneCount} of {stages.length} stages done
+          {currentIdx >= 0 && <span className="font-normal"> · now at <span className="font-semibold text-text">{stages[currentIdx].title}</span></span>}
+        </p>
+      </div>
       <div className="bg-dot-grid px-4 py-6 sm:px-6 sm:py-8">
         <ol aria-label={label} className="pl-grid" style={{ "--cols": columns } as CSSProperties}>
           {stages.map((s, i) => {
@@ -163,11 +185,18 @@ export function Pipeline({ stages, columns = 4, label, toolbar, footer }: {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="text-sm leading-snug font-semibold text-text">{s.title}</span>
-                        <span aria-hidden className="shrink-0 font-mono text-[0.68rem] text-subtle">{String(i + 1).padStart(2, "0")}</span>
+                        {i === currentIdx ? (
+                          <span className="shrink-0 rounded-full bg-primary px-1.5 py-px text-[0.62rem] font-semibold tracking-wide text-primary-fg uppercase">Current</span>
+                        ) : (
+                          <span aria-hidden className="shrink-0 font-mono text-[0.68rem] text-subtle">{String(i + 1).padStart(2, "0")}</span>
+                        )}
                       </span>
                       <span className="mt-0.5 flex"><PipelineStatusChip status={s.status} label={s.statusLabel} /></span>
                     </span>
                   </span>
+                  {s.metric == null && pct == null && (
+                    <span aria-hidden className="mt-auto block font-mono text-xl font-semibold text-border-strong">—</span>
+                  )}
                   {(s.metric != null || pct != null) && (
                     <span className="mt-auto block">
                       {s.metric != null && (

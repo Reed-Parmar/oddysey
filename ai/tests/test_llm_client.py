@@ -193,3 +193,38 @@ def test_fallback_raises_the_primary_error_when_both_fail():
     client = FallbackClient(FakeAIClient(AIError("http_400")), FakeAIClient(AIError("timeout")))
     with pytest.raises(AIError, match="http_400"):
         client.chat_json("s", "u")
+
+
+def test_interactive_options_are_opt_in_and_gpt_oss_only():
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=_completion('{"ok": 1}'))
+
+    t = httpx.MockTransport(handler)
+    GroqClient("k", "openai/gpt-oss-20b", transport=t).chat_json("s", "u")
+    GroqClient(
+        "k", "openai/gpt-oss-20b", transport=t, reasoning_effort="low", max_completion_tokens=900
+    ).chat_json("s", "u")
+    GroqClient("k", "llama-3.1-8b-instant", transport=t, reasoning_effort="low").chat_json("s", "u")
+    assert "reasoning_effort" not in bodies[0] and "max_completion_tokens" not in bodies[0]
+    assert bodies[1]["reasoning_effort"] == "low" and bodies[1]["max_completion_tokens"] == 900
+    assert "reasoning_effort" not in bodies[2]
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"), [("3", 3.0), ("30", 6.0), ("0.1", 0.5), ("soon", 2.0)]
+)
+def test_429_honours_retry_after_with_a_cap(header, expected):
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"retry-after": header})
+        return httpx.Response(200, json=_completion('{"ok": 1}'))
+
+    sleeps: list[float] = []
+    assert _client(handler, sleeps).chat_json("s", "u") == {"ok": 1}
+    assert sleeps == [expected]

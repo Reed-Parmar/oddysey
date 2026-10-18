@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app import jobs
-from app.ai import default_ai_client
+from app.ai import concepts_ai_client
 from app.db import models as M
 from app.domain import ACTIVE, active_cycles, concept_map, forget_concepts, interest_key
 from spa_ai.concepts import BATCH_SIZE, PROMPT_VERSION, phrase_key, tag_phrases
@@ -22,10 +22,11 @@ from spa_ai.llm.client import AIError
 from spa_ai.resume.redact import redact
 
 # Tests replace this factory with one returning a FakeAIClient.
-ai_client_factory: Callable[[], AIClient | None] = default_ai_client
+ai_client_factory: Callable[[], AIClient | None] = concepts_ai_client
 
 MAX_BATCHES_PER_RUN = 5
 RATE_LIMIT_DELAY_S = 60  # Groq limits tokens per minute; the next window opens within a minute
+UNAVAILABLE_DELAY_S = 600  # nothing got through (e.g. the daily quota is used up): back off longer
 
 
 def _tag(client: AIClient, batch: list[str], vocab: set[str]) -> dict[str, tuple[str, ...]]:
@@ -85,7 +86,7 @@ def tag_concepts(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             rows = _tag(client, batch, vocab)
         except AIError:
             if tagged == 0:
-                raise jobs.RetryLater("AI unavailable", delay_seconds=RATE_LIMIT_DELAY_S) from None
+                raise jobs.RetryLater("AI unavailable", delay_seconds=UNAVAILABLE_DELAY_S) from None
             break
         if rows:
             db.execute(

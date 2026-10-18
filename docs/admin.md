@@ -1,5 +1,8 @@
 # Admin Module Handbook (Teammate C)
 
+> **ADR-027 (rev 6, binding; api.md §0d).** Allocation balances load across projects and supervisors (ILP). Automation status
+> shows, per run, the optimiser's result against greedy (objective, trainees moved from their top match). `ALLOCATION_ENGINE=greedy` turns it off.
+
 > **ADR-019 (rev 5, binding; api.md §0c).** The Overview shows a **Needs attention** panel (ALR-01 `/me/alerts`): trainees
 > waiting (by reason), projects failed or needing attention, projects without a supervisor, failed background jobs in the
 > last 24 h, and trainees at deadline risk. Alerts are computed on read, never act on their own, and link to the fixing

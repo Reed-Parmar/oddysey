@@ -2,9 +2,12 @@
 
 from pathlib import Path
 
+import pytest
+
+from app.core.config import get_settings
 from scripts.synthetic.generate import Config, generate
 from scripts.synthetic.validate import validate
-from spa_ai.scoring import best_project
+from spa_ai.scoring import best_project, score_pair
 from tests.conftest import DATASET, owner_sql
 from tests.helpers import active_allocations, create_cycle, import_file, ok
 
@@ -15,7 +18,11 @@ def _post_staff(client, admin, path: Path, dry_run: bool):
     return ok(client.post("/api/v1/admin/imports/staff", headers=admin, files=files, data=data))["data"]
 
 
-def test_synthetic_ingest_files_import_and_allocate_like_the_generator(client, users, tmp_path: Path):
+@pytest.mark.parametrize("engine", ["greedy", "ilp"])
+def test_synthetic_ingest_files_import_and_allocate_like_the_generator(client, users, tmp_path: Path, monkeypatch, engine):
+    # The generator's labels are the greedy rule (each trainee's best project). The ILP optimiser (ADR-027)
+    # may move a trainee to a near-equal project to balance load; it must place exactly the same trainees.
+    monkeypatch.setattr(get_settings(), "allocation_engine", engine)
     out = tmp_path / "ds"
     generate(
         Config(
@@ -73,7 +80,23 @@ def test_synthetic_ingest_files_import_and_allocate_like_the_generator(client, u
         best = best_project(t.to_input(), projects)
         if best is not None:
             expected[t.trainee_id] = best.project_code
-    actual = {code: a["project"]["project_code"] for code, a in active_allocations(client, admin, cycle["id"]).items()}
+    allocs = active_allocations(client, admin, cycle["id"])
+    actual = {code: a["project"]["project_code"] for code, a in allocs.items()}
+    if engine == "ilp":
+        assert set(actual) == set(expected)  # balancing never leaves anyone waiting
+        by_code = {p.project_code: p for p in projects}
+        by_trainee = {t.trainee_id: t for t in trainees}
+        for code, a in allocs.items():
+            ps = score_pair(by_trainee[code].to_input(), by_code[actual[code]])
+            assert ps.eligible and a["match_score"] == pytest.approx(ps.score)  # the rule score, unchanged
+            assert sum(f["points"] for f in a["factors"]) == pytest.approx(a["match_score"])
+            if actual[code] != expected[code]:
+                assert "optimiser balanced the load" in a["explanation"]
+        runs = owner_sql(
+            "SELECT result->'optimiser' FROM app.jobs WHERE kind = 'allocate_cycle' AND result->'optimiser'->>'engine' = 'ilp'"
+        )
+        assert runs and all(r["objective"] >= r["greedy_objective"] for (r,) in runs)
+        return
     diff = {
         t: (actual.get(t), expected.get(t)) for t in set(actual) | set(expected) if actual.get(t) != expected.get(t)
     }

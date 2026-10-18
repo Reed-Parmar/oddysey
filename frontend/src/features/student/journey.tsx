@@ -50,7 +50,7 @@ export function buildJourney(me: TraineeMe, allocation: Allocation | null, lates
       status: profileDone ? "done" : "attention",
       statusLabel: !profileDone ? "Add skills and interest" : verified ? "Verified marks" : "Profile-based",
       summary: !profileDone
-        ? "Add your skills and a career interest in the profile section below. Matching uses them."
+        ? "Add your skills and a career interest on the Profile page (uploading your resume fills them in). Matching uses them."
         : verified
           ? "Your verified practical marks are on record, so you are matched using your full assessment."
           : "You are matched on your skills and career interest. When the programme team records your practical marks, matching also uses them.",
@@ -59,6 +59,7 @@ export function buildJourney(me: TraineeMe, allocation: Allocation | null, lates
         { label: "Career interest", value: me.career_interest ? "Added" : "Missing" },
         { label: "Assessment", value: label("assessment", me.assessment_status)[0] },
       ],
+      link: { to: "/student/profile", label: profileDone ? "Open profile" : "Complete profile" },
     },
     {
       key: "projects",

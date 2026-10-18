@@ -17,8 +17,10 @@ from app.modules import (
     assistant,
     core_routes,
     cycles,
+    files,
     imports,
     onboarding,
+    originality_report,
     progress,
     projects,
     resumes,
@@ -101,6 +103,8 @@ def create_app() -> FastAPI:
         admin,
         alerts,
         assistant,
+        files,
+        originality_report,
     ):
         api.include_router(module.router)
     app.include_router(api)

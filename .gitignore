@@ -25,3 +25,6 @@ dist/
 frontend/test-results/
 frontend/playwright-report/
 
+
+# ADR-024 local development file storage
+backend/.local-storage/

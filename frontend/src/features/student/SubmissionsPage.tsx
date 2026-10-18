@@ -1,10 +1,11 @@
 /** /student/submissions (ADR-022): submit the report, follow its evaluation and see every version. Own submissions only. */
 import { Archive, Hourglass } from "@phosphor-icons/react";
 
-import type { Allocation } from "@/api/types";
+import type { Allocation, Submission } from "@/api/types";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared";
 import { Alert } from "@/components/ui";
 import { AssistantLauncher } from "@/features/shared/Autopilot";
+import { usePlagiarismReport } from "@/features/shared/PlagiarismReport";
 import { SubmissionDetailView } from "@/features/shared/views";
 
 import { submitBlockedReason } from "./forms";
@@ -40,14 +41,21 @@ export function SubmissionsPage() {
 }
 
 function SubmissionsBody({ allocation: a }: { allocation: Allocation }) {
-  const { cycle, me } = useStudentContext();
-  const project = useProject(a.project.id);
   const subs = useMySubmissionHistory();
   if (subs.isLoading) return <LoadingState />;
   if (subs.error) return <ErrorState error={subs.error} onRetry={() => void subs.refetch()} />;
 
   const versions = (subs.data?.data ?? []).filter((s) => s.allocation_id === a.id);
   const latest = versions[0];
+  return <SubmissionsContent allocation={a} versions={versions} latest={latest} />;
+}
+
+function SubmissionsContent({ allocation: a, versions, latest }: { allocation: Allocation; versions: Submission[]; latest: Submission | undefined }) {
+  const { cycle, me } = useStudentContext();
+  const project = useProject(a.project.id);
+  const report = usePlagiarismReport(latest?.id ?? "", latest?.status === "rework_requested");
+  const decision = report.data?.data.decision_record as { action?: string; lifted_at?: string } | null | undefined;
+  const plagiarism = decision?.action === "auto_rework" && !decision.lifted_at ? report.data?.data : undefined;
   const deadline = project.data?.data.effective_deadline ?? cycle?.submission_deadline ?? null;
   const late = !!deadline && Date.now() > new Date(deadline).getTime();
   const blocked = submitBlockedReason(cycle, me, latest);
@@ -60,8 +68,8 @@ function SubmissionsBody({ allocation: a }: { allocation: Allocation }) {
         </p>
         {latest?.status === "rework_requested" && (
           <ReworkFeedback
-            title={`Rework requested on version ${latest.version}`}
-            feedback={latest.evaluation?.feedback ?? "The automated report evaluation or your supervisor asked for changes. Read the analysis below, then submit a new version."}
+            title={plagiarism ? `Plagiarism too high on version ${latest.version}: redo the work` : `Rework requested on version ${latest.version}`}
+            feedback={plagiarism?.decision_text ?? latest.evaluation?.feedback ?? "The automated report evaluation or your supervisor asked for changes. Read the analysis below, then submit a new version."}
           />
         )}
         {blocked ? <SubmitBlocked reason={blocked} pending={latest?.status === "submitted"} /> : <SubmitForm nextVersion={(latest?.version ?? 0) + 1} late={late} />}

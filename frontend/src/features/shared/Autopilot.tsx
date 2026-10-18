@@ -46,7 +46,7 @@ export function AlertsPanel() {
 
 // ---------------------------------------------------------------- assistant
 
-type Turn = { role: "user" | "assistant"; content: string; sources?: string[]; mode?: AssistantAnswer["mode"] };
+type Turn = { role: "user" | "assistant"; content: string; sources?: string[]; mode?: AssistantAnswer["mode"]; intent?: string | null };
 
 const SUGGESTIONS = ["Summarise my project", "When is the deadline?", "Why was this project allocated?", "What should I do next?"];
 const SOURCE_LABEL: Record<string, string> = {
@@ -58,6 +58,14 @@ const SOURCE_LABEL: Record<string, string> = {
   submission: "Submission status",
   feedback: "Evaluation feedback",
 };
+
+/** Where an answer came from, in plain words (ADR-023). */
+function answerNote(t: Turn) {
+  if (t.sources?.length) return `From: ${t.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ")}${t.mode === "rules" ? " · quick answer" : ""}`;
+  if (t.intent === "general") return "General guidance · confirm specifics with your supervisor";
+  if (t.intent === "greeting") return "Project assistant";
+  return t.mode === "rules" ? "Quick answer · the AI is busy right now" : "Project assistant";
+}
 
 /** Friendly robot mascot. `wave` animates the right arm (stops under reduced motion). */
 export function RobotMascot({ className = "size-14", wave = true }: { className?: string; wave?: boolean }) {
@@ -177,28 +185,35 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
   const endRef = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   const ask = useMutation({
-    mutationFn: (q: string) =>
+    // `history` is the conversation before this question (the question itself is sent once, as `question`).
+    mutationFn: ({ q, history }: { q: string; history: Turn[] }) =>
       call(
         api.POST("/api/v1/assistant/ask", {
           body: {
             question: q,
             allocation_id: allocationId ?? null,
-            history: turns.slice(-6).map(({ role, content }) => ({ role, content: content.slice(0, 1000) })),
+            history: history.slice(-6).map(({ role, content }) => ({ role, content: content.slice(0, 1000) })),
           },
         }),
       ),
-    onSuccess: (r) => setTurns((t) => [...t, { role: "assistant", content: r.answer, sources: r.sources, mode: r.mode }]),
+    onSuccess: (r) => setTurns((t) => [...t, { role: "assistant", content: r.answer, sources: r.sources, mode: r.mode, intent: r.intent }]),
   });
 
-  useEffect(() => inputRef.current?.focus(), []);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [turns.length, ask.isPending]);
+  // Effects must return nothing or a cleanup function, so these use block bodies.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: "end" });
+  }, [turns.length, ask.isPending]);
 
   function send(q: string) {
     const text = q.trim();
     if (text.length < 3 || ask.isPending) return;
+    const history = turns;
     setTurns((t) => [...t, { role: "user", content: text.slice(0, 500) }]);
     setQuestion("");
-    ask.mutate(text.slice(0, 500));
+    ask.mutate({ q: text.slice(0, 500), history });
   }
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -216,7 +231,7 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
         <RobotMascot className="size-10 shrink-0" wave={false} />
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-sm font-semibold text-text">{title}</h2>
-          <p className="text-xs text-muted">Answers come only from this project's details. Nothing you type is stored.</p>
+          <p className="text-xs text-muted">Project facts come from your project's records; general tips are labelled. Nothing you type is stored.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close assistant" className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-neutral-bg hover:text-text">
           <X aria-hidden size={18} />
@@ -245,12 +260,7 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
             }
           >
             <p className="whitespace-pre-line [overflow-wrap:anywhere]">{t.content}</p>
-            {t.role === "assistant" && (
-              <p className="mt-1 text-xs text-muted">
-                {t.sources?.length ? `From: ${t.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ")}` : "No matching project detail"}
-                {t.mode === "rules" && " · quick answer (AI unavailable)"}
-              </p>
-            )}
+            {t.role === "assistant" && <p className="mt-1 text-xs text-muted">{answerNote(t)}</p>}
           </div>
         ))}
         {ask.isPending && <Skeleton className="h-10 max-w-[70%] rounded-2xl" />}

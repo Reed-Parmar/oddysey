@@ -156,6 +156,33 @@ def _replace_skills(db: DB, t: M.Trainee, names: list[str]) -> bool:
     return True
 
 
+def _check_resume_sourced(db: DB, t: M.Trainee, changes: dict) -> None:
+    """ADR-025: a trainee's skills and career interest change only to values from their latest resume. Removing skills
+    is allowed; keeping current values is allowed; anything else is refused field by field."""
+    if "skills" not in changes and "career_interest" not in changes:
+        return
+    latest = db.scalar(
+        select(M.TraineeResume)
+        .where(M.TraineeResume.trainee_id == t.id)
+        .order_by(M.TraineeResume.created_at.desc(), M.TraineeResume.id)
+        .limit(1)
+    )
+    extracted = (latest.extracted or {}) if latest is not None else {}
+    errors = []
+    if "skills" in changes:
+        allowed = {s.name.strip().lower() for s in t.skills}
+        allowed |= {str(x).strip().lower() for x in extracted.get("skills") or []}
+        if any(str(x).strip().lower() not in allowed for x in changes["skills"] or []):
+            errors.append({"field": "body.skills", "message": "Update your skills from your resume"})
+    if "career_interest" in changes:
+        new = (changes["career_interest"] or "").strip()
+        hint = (extracted.get("career_interest_hint") or "").strip()[:300]
+        if new != (t.career_interest or "").strip() and (not hint or new != hint):
+            errors.append({"field": "body.career_interest", "message": "Update your career interest from your resume"})
+    if errors:
+        raise AppError(422, "VALIDATION_ERROR", "Skills and career interest come from your resume", errors)
+
+
 @router.patch("/trainees/me")
 def patch_my_trainee(body: TraineeSelfPatch, user: Student, db: DB) -> Envelope[TraineeOut]:
     cycle = student_trainee(db, user.id)[0]
@@ -175,6 +202,7 @@ def patch_my_trainee(body: TraineeSelfPatch, user: Student, db: DB) -> Envelope[
         changes.pop("reported_scores")
     if changes.get("trade_ids"):
         _set_trades(db, t, changes["trade_ids"])
+    _check_resume_sourced(db, t, changes)
     if "skills" in changes:
         _replace_skills(db, t, changes["skills"] or [])
     for field in ("career_interest", "background"):

@@ -59,13 +59,33 @@ def notify_user(
         notify(db, email=user.email, kind=kind, subject=subject, body=body, user_id=user.id, link=link, dedupe_key=key)
 
 
-def _send_smtp(n: M.Notification) -> None:
+def _attachments(db: Session, n: M.Notification) -> list[tuple[str, bytes]]:
+    """Attachments built at send time from stored records (never stored in the outbox, never logged).
+
+    `originality.report` (ADR-026): the trainee's own redacted Plagiarism & Originality Report PDF; the analysis id is
+    in the dedupe key `originality.report:<analysis_id>`.
+    """
+    if n.kind != "originality.report" or not (n.dedupe_key or "").startswith("originality.report:"):
+        return []
+    from app.modules.originality_report import build_report, render_pdf
+
+    a = db.get(M.ReportAnalysis, uuid.UUID(n.dedupe_key.split(":", 1)[1]))  # type: ignore[union-attr]
+    sub = db.get(M.Submission, a.submission_id) if a is not None else None
+    viewer = sub.allocation.trainee.user if sub is not None else None
+    if sub is None or viewer is None:
+        return []
+    return [(f"plagiarism-report-v{sub.version}.pdf", render_pdf(build_report(db, sub, viewer)))]
+
+
+def _send_smtp(db: Session, n: M.Notification) -> None:
     s = get_settings()
     msg = EmailMessage()
     msg["From"] = s.smtp_from
     msg["To"] = n.email
     msg["Subject"] = n.subject
     msg.set_content(n.body + (f"\n\n{n.link}" if n.link else ""))
+    for name, data in _attachments(db, n):
+        msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)
     with smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=15) as smtp:
         smtp.starttls()
         if s.smtp_username:
@@ -82,7 +102,7 @@ def send_notification(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     n.attempts += 1
     if backend == "smtp" and get_settings().smtp_host:
         try:
-            _send_smtp(n)
+            _send_smtp(db, n)
         except Exception as exc:  # noqa: BLE001
             n.last_error = type(exc).__name__
             if n.attempts >= 5:

@@ -1,4 +1,4 @@
-/** Resume panel in the Dashboard profile section (student.md §3.3a, RES-01/02/04). Suggestions only: nothing is applied until saved via TRN-02. */
+/** Resume panel on the Profile page (ADR-024; student.md §3.3a, RES-01/02/04). Suggestions only: nothing is applied until saved via TRN-02. */
 import { ArrowClockwise, Check, FileArrowUp, FileText, Plus, Sparkle, WarningCircle } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type DragEvent } from "react";
@@ -17,7 +17,7 @@ import { useMyResume } from "./hooks";
 
 type ResumeEnvelope = { data: Resume | null };
 
-function DropZone({ disabled, onFile }: { disabled: boolean; onFile: (f: File) => void }) {
+export function DropZone({ disabled, onFile }: { disabled: boolean; onFile: (f: File) => void }) {
   const inputId = useId();
   const [over, setOver] = useState(false);
   const pick = (f: File | undefined) => f && !disabled && onFile(f);
@@ -71,16 +71,31 @@ function UploadProgress({ fraction }: { fraction: number }) {
   );
 }
 
-/** Suggested skills as toggle chips; skills already on the profile are pre-selected and disabled. */
+function saveLabel(skills: number, interest: boolean) {
+  if (skills && interest) return `Save ${skills} skill${skills === 1 ? "" : "s"} and career interest`;
+  if (interest) return "Save career interest";
+  return `Save selected skills${skills ? ` (${skills})` : ""}`;
+}
+
+/**
+ * Suggested skills as toggle chips (ADR-024): new skills from the resume start selected and an empty career interest
+ * is filled from the resume, so one click saves them. Nothing changes until the student saves (TRN-02, ADR-015).
+ */
 function SkillSuggestions({ resume, me }: { resume: Resume; me: TraineeMe }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [chosen, setChosen] = useState<Set<string>>(new Set());
-  useEffect(() => setChosen(new Set()), [resume.id]);
+  useEffect(() => {
+    const fresh = resume.skill_matches.filter((m) => !m.already_on_profile).map((m) => m.name);
+    setChosen(new Set(fresh.slice(0, Math.max(0, SKILL_MAX - me.skills.length))));
+    // Pre-select once per resume; later profile edits don't reset the student's choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume.id]);
 
   const current = me.skills.map((s) => s.name);
   const merged = mergeSkills(current, [...chosen]);
   const hint = resume.extracted?.career_interest_hint ?? null;
+  const fillInterest = !!hint && !me.career_interest?.trim();
 
   /** TRN-02 with the server response written straight into the cache; suggestion chips update optimistically. */
   const save = useMutation({
@@ -97,7 +112,7 @@ function SkillSuggestions({ resume, me }: { resume: Resume; me: TraineeMe }) {
     },
     onSuccess: (_res, body) => {
       setChosen(new Set());
-      toast.success(body.skills ? "Skills added to your profile" : "Career interest updated");
+      toast.success(body.skills ? "Saved to your profile" : "Career interest updated");
     },
     onError: (e, _body, ctx) => {
       if (ctx?.previous) qc.setQueryData(qk.resumes.me(), ctx.previous);
@@ -142,17 +157,25 @@ function SkillSuggestions({ resume, me }: { resume: Resume; me: TraineeMe }) {
           );
         })}
       </ul>
+      {fillInterest && (
+        <p className="text-sm text-muted">
+          Career interest from your resume: <span className="font-medium text-text">{hint}</span>
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           icon={<Plus />}
-          loading={save.isPending && !!chosen.size}
-          disabled={!chosen.size || !merged || save.isPending}
-          onClick={() => merged && save.mutate({ skills: merged })}
+          loading={save.isPending && (!!chosen.size || fillInterest)}
+          disabled={(!chosen.size && !fillInterest) || !merged || save.isPending}
+          onClick={() => merged && save.mutate({
+            ...(chosen.size ? { skills: merged } : {}),
+            ...(fillInterest && hint ? { career_interest: hint.slice(0, 300) } : {}),
+          })}
         >
-          Add selected skills{chosen.size ? ` (${chosen.size})` : ""}
+          {saveLabel(chosen.size, fillInterest)}
         </Button>
-        {hint && (
+        {hint && !fillInterest && (
           <Button
             size="sm"
             variant="secondary"
@@ -218,7 +241,7 @@ export function ResumePanel({ me }: { me: TraineeMe }) {
   const r = resumeQ.data?.data ?? null;
   return (
     <Card
-      title="Resume"
+      title="Update resume"
       icon={<FileText />}
       description="Upload your resume and we will suggest skills (and read any ITI marks it lists). These are suggestions only: nothing changes on your profile until you choose to add it."
       actions={r ? <ResumeDownloadButton resume={r} /> : undefined}

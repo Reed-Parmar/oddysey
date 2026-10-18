@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     storage_bucket: str = "submissions"
     resume_bucket: str = "resumes"
     project_doc_bucket: str = "project-docs"
+    # ADR-024: local-disk storage without a valid Supabase key (never in production). Empty: backend/.local-storage
+    local_storage_dir: str = ""
+    api_public_url: str = "http://localhost:8000"  # absolute base for locally signed download links
     max_upload_bytes: int = 10 * 1024 * 1024
     max_import_bytes: int = 5 * 1024 * 1024
     max_resume_bytes: int = 5 * 1024 * 1024
@@ -31,6 +34,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-20b"
+    # Project Assistant (ADR-023): its own Groq models, so chat has a daily token budget separate from background jobs.
+    assistant_model: str = "openai/gpt-oss-120b"
+    assistant_fallback_model: str = "qwen/qwen3.8-27b"
     ai_timeout_seconds: float = 10.0
     # ADR-022: optional local Ollama, used when Groq is not configured or a Groq call fails. Empty = off.
     ollama_base_url: str = ""
@@ -40,6 +46,12 @@ class Settings(BaseSettings):
     run_inline: bool = False  # tests: jobs are drained synchronously after each request
     # ADR-017 automation
     allocation_interval_minutes: int = 15
+    # ADR-027 ILP optimiser: "ilp" balances project/supervisor load; "greedy" = each trainee's best project
+    allocation_engine: str = "ilp"
+    allocation_fair_share_slack: float = 1.25
+    allocation_project_penalty: float = 8.0  # max match points traded to move one trainee off an over-full project
+    allocation_supervisor_penalty: float = 5.0
+    allocation_solver_seconds: float = 20.0
     archive_grace_days: int = 7
     run_worker_in_api: bool = False  # single-instance demos: run the job worker inside the API process
     worker_poll_seconds: float = 2.0
@@ -54,6 +66,7 @@ class Settings(BaseSettings):
     max_report_fetch_bytes: int = 10 * 1024 * 1024
     originality_medium_at: float = 15.0
     originality_high_at: float = 40.0
+    originality_rework_at: float = 50.0  # ADR-026: overlap % (after exclusions) that sends the work back for rework
 
     @field_validator("database_url")
     @classmethod

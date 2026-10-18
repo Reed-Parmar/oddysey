@@ -67,9 +67,9 @@ describe("profile helpers", () => {
     expect(skillAddError(Array.from({ length: 20 }, (_, i) => `s${i}`), "new")).toMatch(/20/);
   });
 
-  it("sends only the four self-editable keys", () => {
-    const body = profileBody({ trade_ids: ["t1", "t1", "t2"], skills: ["A", "a"], career_interest: " x ", background: "" });
-    expect(body).toEqual({ trade_ids: ["t1", "t2"], skills: ["A"], career_interest: "x", background: "" });
+  it("sends only trades and background (skills and interest come from the resume, ADR-025)", () => {
+    const body = profileBody({ trade_ids: ["t1", "t1", "t2"], skills: ["A", "a"], career_interest: " x ", background: " y " });
+    expect(body).toEqual({ trade_ids: ["t1", "t2"], background: "y" });
   });
 
   it("requires 1 to 5 trades", () => {

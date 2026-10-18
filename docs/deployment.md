@@ -35,7 +35,8 @@
 | `LOG_LEVEL` | `INFO` | |
 | `GROQ_API_KEY` | `<groq key>` | Optional. Unset means rule-only recommendations. **Server only** |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` / `OLLAMA_TIMEOUT_SECONDS` | empty / `llama3.1:8b` / `120` | Optional local fallback (ADR-022), e.g. `http://localhost:11434`. Self-hosted machines only; leave empty on Render (no GPU). **Server only** |
-| `GROQ_MODEL` | `<a current Groq model id with JSON mode>` | Chosen at build time (D-6) |
+| `GROQ_MODEL` | `<a current Groq model id with JSON mode>` | Chosen at build time (D-6). Background jobs |
+| `ASSISTANT_MODEL` / `ASSISTANT_FALLBACK_MODEL` | `openai/gpt-oss-120b` / `qwen/qwen3.8-27b` | Project Assistant only (ADR-023): Groq limits are per model, so chat keeps its own daily budget |
 | `AI_TIMEOUT_SECONDS` | `10` | Per Groq call |
 | `AI_CONCURRENCY` | `4` | Parallel Groq calls per run |
 | `RUN_INLINE` | `0` | `1` only in tests: the recommendation worker runs synchronously |
@@ -129,6 +130,7 @@ Config validation: the API refuses to boot if a required variable is missing (py
 | `permission denied for schema app` | Bootstrap/grants not run, or migration run as `spa_api` | Run `supabase_setup.sql`. Migrate with `MIGRATION_DATABASE_URL` |
 | Sign-up works locally but redirects wrong in prod | Supabase Site URL / Redirect URLs not updated | §3.1 step 3 |
 | Uploads fail with 503 | Wrong `SUPABASE_SECRET_KEY` or bucket name | Check env, bucket exists and is private |
+| Local dev without a Supabase secret key | Files go to `LOCAL_STORAGE_DIR` (ADR-024) | Not used when `APP_ENV=production`; set the real key there |
 | Works locally, blank page in prod | Build-time env missing, so Vite inlines `undefined` | Build fails fast via the `vite.config.ts` check |
 | First request after idle takes 50 s | Render free tier sleep | Paid instance or a warm-up before the demo |
 | Recommendation run shows `ai_used_count = 0` | `GROQ_API_KEY` missing or invalid, model id wrong, or rate-limited | Check the env var and model. The run still completes rule-only. Render logs show `ai.call_failed` with the status code (no prompt content). |

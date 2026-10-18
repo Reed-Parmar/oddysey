@@ -1140,6 +1140,20 @@
         "title": "Body_replace_document_api_v1_projects__project_id__document_put",
         "type": "object"
       },
+      "Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post",
+        "type": "object"
+      },
       "Body_upload_resume_api_v1_trainees_me_resumes_post": {
         "properties": {
           "file": {
@@ -1720,6 +1734,28 @@
         "title": "Envelope[OnboardingOut]",
         "type": "object"
       },
+      "Envelope_OriginalityReport_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/OriginalityReport"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[OriginalityReport]",
+        "type": "object"
+      },
       "Envelope_Overview_": {
         "properties": {
           "data": {
@@ -1806,6 +1842,28 @@
           "data"
         ],
         "title": "Envelope[ResumeOut]",
+        "type": "object"
+      },
+      "Envelope_ResumeSuggestions_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResumeSuggestions"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[ResumeSuggestions]",
         "type": "object"
       },
       "Envelope_StaffImportResult_": {
@@ -2730,6 +2788,41 @@
         "title": "ListEnvelope[NotificationOut]",
         "type": "object"
       },
+      "MatchedPassage": {
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "integer"
+          },
+          "source_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Excerpt"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "words",
+          "tokens",
+          "source_excerpt"
+        ],
+        "title": "MatchedPassage",
+        "type": "object"
+      },
       "MePatch": {
         "additionalProperties": false,
         "properties": {
@@ -3046,6 +3139,191 @@
           "has_history"
         ],
         "title": "OnboardingOut",
+        "type": "object"
+      },
+      "OriginalityReport": {
+        "properties": {
+          "analysed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysed At"
+          },
+          "attention_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attention Band"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "decision_record": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Record"
+          },
+          "decision_text": {
+            "title": "Decision Text",
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "next_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "overlap_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlap Pct"
+          },
+          "passages": {
+            "items": {
+              "$ref": "#/components/schemas/MatchedPassage"
+            },
+            "title": "Passages",
+            "type": "array"
+          },
+          "project_code": {
+            "title": "Project Code",
+            "type": "string"
+          },
+          "project_title": {
+            "title": "Project Title",
+            "type": "string"
+          },
+          "rework_threshold": {
+            "title": "Rework Threshold",
+            "type": "number"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReportSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "title": "Submission Id",
+            "type": "string"
+          },
+          "text_truncated": {
+            "title": "Text Truncated",
+            "type": "boolean"
+          },
+          "tokens": {
+            "additionalProperties": true,
+            "title": "Tokens",
+            "type": "object"
+          },
+          "trainee_name": {
+            "title": "Trainee Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "submission_id",
+          "version",
+          "project_code",
+          "project_title",
+          "trainee_name",
+          "generated_at",
+          "analysed_at",
+          "status",
+          "overlap_pct",
+          "attention_band",
+          "rework_threshold",
+          "decision",
+          "decision_text",
+          "decision_record",
+          "method",
+          "formula",
+          "tokens",
+          "exclusions",
+          "sources",
+          "passages",
+          "segments",
+          "text_truncated",
+          "next_steps",
+          "limitations"
+        ],
+        "title": "OriginalityReport",
         "type": "object"
       },
       "Overview": {
@@ -4153,6 +4431,46 @@
         "title": "ReportEvaluationSummary",
         "type": "object"
       },
+      "ReportSource": {
+        "properties": {
+          "coverage_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Pct"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "matched_tokens": {
+            "title": "Matched Tokens",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number",
+          "label",
+          "kind",
+          "matched_tokens",
+          "coverage_pct"
+        ],
+        "title": "ReportSource",
+        "type": "object"
+      },
       "ReportedMark": {
         "description": "A mark explicitly stated in the resume (resume_reported, unverified; never a verified gate).",
         "properties": {
@@ -4459,6 +4777,52 @@
         "title": "ResumeStatus",
         "type": "string"
       },
+      "ResumeSuggestions": {
+        "description": "ONB-04: what a resume suggests for the onboarding form. Suggestions only; nothing is stored or applied.",
+        "properties": {
+          "career_interest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Career Interest"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "source",
+          "skills",
+          "career_interest"
+        ],
+        "title": "ResumeSuggestions",
+        "type": "object"
+      },
       "ReviewIn": {
         "additionalProperties": false,
         "properties": {
@@ -4468,7 +4832,8 @@
               "annotate",
               "amend",
               "request_explanation",
-              "request_rework"
+              "request_rework",
+              "lift_rework"
             ],
             "title": "Action",
             "type": "string"
@@ -4825,6 +5190,30 @@
           }
         },
         "title": "ScoresIn",
+        "type": "object"
+      },
+      "Segment": {
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "Segment",
         "type": "object"
       },
       "SkillMatch": {
@@ -7479,6 +7868,41 @@
         ]
       }
     },
+    "/api/v1/files/local": {
+      "get": {
+        "operationId": "download_local_api_v1_files_local_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Local",
+        "tags": [
+          "files"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",
@@ -7766,6 +8190,48 @@
           }
         },
         "summary": "Get Cycle Options",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/resume-suggestions": {
+      "post": {
+        "description": "Same file checks and extraction as RES-01 (redacted text to the model, or the rule fallback), but the file and\nthe result are never persisted: the student reviews the pre-filled form and saves it with ONB-02/03 (ADR-024).",
+        "operationId": "resume_suggestions_api_v1_onboarding_resume_suggestions_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_resume_suggestions_api_v1_onboarding_resume_suggestions_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ResumeSuggestions_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Suggestions",
         "tags": [
           "onboarding"
         ]
@@ -8899,6 +9365,90 @@
           }
         },
         "summary": "Export Analysis",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/analysis/originality-report": {
+      "get": {
+        "description": "SUB-09: the detailed report, redacted to the viewer's access.",
+        "operationId": "originality_report_api_v1_submissions__submission_id__analysis_originality_report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Submission Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_OriginalityReport_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Originality Report",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/analysis/originality-report.pdf": {
+      "get": {
+        "description": "SUB-10: the same report as a PDF.",
+        "operationId": "originality_report_pdf_api_v1_submissions__submission_id__analysis_originality_report_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Submission Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Originality Report Pdf",
         "tags": [
           "submissions"
         ]

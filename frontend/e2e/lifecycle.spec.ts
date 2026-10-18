@@ -35,11 +35,12 @@ test("automated allocation → student sees only own project → rejection → r
   await expect(page).toHaveURL(/\/admin\/tracking$/);
   await logout(page);
 
-  // ---------------- student: two nav items, own project, rejection
+  // ---------------- student: three nav items (ADR-022), own project, rejection
   await login(page, "priya@spa-demo.org");
   const nav = page.getByRole("navigation").first();
   await expect(nav.getByRole("link", { name: "Dashboard" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "My Project" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Submissions" })).toBeVisible();
   await page.goto("/student/projects");
   await expect(page).toHaveURL(/\/student\/project$/);
   await expect(page.getByText(/Why this project was allocated to me/)).toBeVisible();
@@ -54,6 +55,7 @@ test("automated allocation → student sees only own project → rejection → r
     await page.reload();
     await expect(page.getByText(/Why this project was allocated to me/)).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 120_000 });
+  await page.goto("/student/submissions");
   await page.getByLabel("Report link").fill("https://example.org/priya-report.pdf");
   await page.getByRole("button", { name: /Submit version 1/ }).click();
   await expect(page.getByText(/Version 1/).first()).toBeVisible();

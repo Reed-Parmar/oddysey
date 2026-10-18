@@ -9,6 +9,7 @@ ADR-018: several cycles may be open. `cycle_options` ranks them by how many of t
 student's trades; enrolment uses the student's choice while it is still open, else the top-ranked cycle.
 """
 
+import secrets
 import uuid
 from datetime import datetime
 from typing import Any
@@ -50,8 +51,6 @@ class OnboardingData(BaseModel):
             out.append("full_name")
         if not self.gender:
             out.append("gender")
-        if not self.trainee_code:
-            out.append("trainee_code")
         if not self.trade_ids:
             out.append("trade_ids")
         if not [s for s in self.skills if s.strip()]:
@@ -59,6 +58,19 @@ class OnboardingData(BaseModel):
         if not (self.career_interest or "").strip():
             out.append("career_interest")
         return out
+
+
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
+
+
+def generate_trainee_code(db: Session) -> str:
+    """ADR-024: a random `SR-XXXXXX` code, unique (case-insensitive) across every cycle, so rejection exclusions keyed
+    on the code stay per person. Never derived from the name."""
+    for _ in range(20):
+        code = "SR-" + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(6))
+        if db.scalar(select(M.Trainee.id).where(func.upper(M.Trainee.trainee_code) == code)) is None:
+            return code
+    raise RuntimeError("could not generate a unique trainee code")
 
 
 def code_conflict(db: Session, code: str, user_id: uuid.UUID, cycle_id: uuid.UUID) -> bool:
@@ -148,15 +160,18 @@ def enrol(db: Session, user: M.User, profile: M.OnboardingProfile) -> str:
     chosen = next((o for o in options if o.id == data.cycle_id), options[0])
     cycle = db.get(M.Cycle, chosen.id)
     assert cycle is not None
-    assert data.trainee_code is not None
-    if code_conflict(db, data.trainee_code, user.id, cycle.id):
-        profile.status = "identity_conflict"
-        return profile.status
+    if data.trainee_code:  # a code typed in an older draft is still checked; new trainees get a generated one
+        if code_conflict(db, data.trainee_code, user.id, cycle.id):
+            profile.status = "identity_conflict"
+            return profile.status
+        code = data.trainee_code
+    else:
+        code = generate_trainee_code(db)
     trades = [t for t in (db.get(M.Trade, tid) for tid in data.trade_ids) if t is not None]
     skills, _ = resolve_skill_names(db, clean_names(data.skills, 20, "body.skills"))
     t = M.Trainee(
         cycle_id=cycle.id,
-        trainee_code=data.trainee_code,
+        trainee_code=code,
         full_name=(data.full_name or user.full_name).strip(),
         gender=data.gender,
         centre_name=(data.centre_name or "").strip() or None,

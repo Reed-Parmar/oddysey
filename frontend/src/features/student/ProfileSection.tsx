@@ -1,4 +1,4 @@
-/** Dashboard profile section: programme-managed facts, the self-editable profile, resume and resume-reported marks. */
+/** Profile page sections (ADR-024): programme-managed facts, resume, the self-editable profile and resume-reported marks. */
 import { FloppyDisk, IdentificationCard, LockKey, NotePencil, Quotes, SealCheck, WarningCircle } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,13 +9,13 @@ import { api, call } from "@/api/client";
 import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Resume, TraineeMe } from "@/api/types";
-import { Avatar, DateTime, FormError, FormField, ScoreBar, Skeleton, StatusBadge, useToast } from "@/components/shared";
+import { Avatar, DateTime, FormError, FormField, ScoreBar, SkillChips, Skeleton, StatusBadge, useToast } from "@/components/shared";
 import { Alert, Button, Card, Input, Textarea } from "@/components/ui";
 import { formatScore } from "@/lib/format";
 
-import { SkillsInput, TradePicker } from "./fields";
+import { TradePicker } from "./fields";
 import {
-  BACKGROUND_MAX, CAREER_MAX, MARK_FIELDS, initialMarks, markError, profileBody, profileSchema, reportedScoresBody,
+  BACKGROUND_MAX, MARK_FIELDS, initialMarks, markError, profileBody, profileSchema, reportedScoresBody,
   reportedValue, type MarkField, type MarkValues, type ProfileValues,
 } from "./forms";
 import { useMyResume } from "./hooks";
@@ -92,7 +92,8 @@ function ProfileForm({ me }: { me: TraineeMe }) {
     },
   });
   const { register, handleSubmit, setValue, watch, setError, formState } = form;
-  const [tradeIds, skills, career, background] = watch(["trade_ids", "skills", "career_interest", "background"]);
+  const [tradeIds, background] = watch(["trade_ids", "background"]);
+  const hasResume = !!useMyResume().data?.data;
 
   const save = useMutation({
     mutationFn: (v: ProfileValues) => call(api.PATCH("/api/v1/trainees/me", { body: profileBody(v) })),
@@ -125,7 +126,7 @@ function ProfileForm({ me }: { me: TraineeMe }) {
   });
 
   return (
-    <Card title="About you" description="You can edit these. They are used the next time projects are matched." icon={<NotePencil />}>
+    <Card title="About you" description="Used the next time projects are matched." icon={<NotePencil />}>
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -140,21 +141,25 @@ function ProfileForm({ me }: { me: TraineeMe }) {
           onChange={(v) => setValue("trade_ids", v, { shouldDirty: true, shouldValidate: true })}
           error={formState.errors.trade_ids?.message}
         />
-        <FormField label="Skills" htmlFor="skills">
-          <SkillsInput
-            value={skills}
-            onChange={(v) => setValue("skills", v, { shouldDirty: true, shouldValidate: true })}
-            error={formState.errors.skills?.message ?? formState.errors.skills?.[0]?.message}
-          />
-        </FormField>
-        <FormField
-          label="Career interest"
-          htmlFor="career_interest"
-          error={formState.errors.career_interest?.message}
-          hint={`${career.length} / ${CAREER_MAX}`}
-        >
-          <Input id="career_interest" maxLength={CAREER_MAX} placeholder="e.g. Solar installation technician" {...register("career_interest")} />
-        </FormField>
+        <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface-2 p-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-text">
+              Skills <LockKey aria-hidden size={14} className="text-subtle" /><span className="sr-only">(read-only)</span>
+            </p>
+            <div className="mt-2"><SkillChips skills={me.skills} /></div>
+          </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-text">
+              Career interest <LockKey aria-hidden size={14} className="text-subtle" /><span className="sr-only">(read-only)</span>
+            </p>
+            <p className="mt-1 text-sm text-text [overflow-wrap:anywhere]">{me.career_interest || <span className="text-muted">Not set</span>}</p>
+          </div>
+          <p className="text-xs text-muted">
+            {hasResume
+              ? "These come from your resume. To change them, upload a new resume in Update resume above and save its suggestions."
+              : "These come from your resume. Upload your resume in Update resume above to add or change them."}
+          </p>
+        </div>
         <FormField
           label="Background"
           htmlFor="background"
@@ -318,20 +323,15 @@ function ReportedMarksCard({ me }: { me: TraineeMe }) {
   );
 }
 
+/** The Profile page body (ADR-024): resume first (it fills skills and interest), then the editable profile. */
 export function ProfileSection({ me }: { me: TraineeMe }) {
   return (
-    <section id="profile" aria-labelledby="profile-title" className="scroll-mt-6 space-y-4">
-      <div>
-        <h2 id="profile-title" className="font-heading text-xl font-semibold text-text">My profile</h2>
-        <p className="mt-0.5 text-sm text-muted">Keep your trades, skills and interests current so matching fits you.</p>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-start">
-        <ManagedRecord me={me} />
-        <div className="min-w-0 space-y-6">
-          <ProfileForm key={me.updated_at} me={me} />
-          <ResumePanel me={me} />
-          <ReportedMarksCard me={me} />
-        </div>
+    <section id="profile" aria-label="My profile" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-start">
+      <ManagedRecord me={me} />
+      <div className="min-w-0 space-y-6">
+        <ResumePanel me={me} />
+        <ProfileForm key={me.updated_at} me={me} />
+        <ReportedMarksCard me={me} />
       </div>
     </section>
   );

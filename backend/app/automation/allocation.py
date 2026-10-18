@@ -10,16 +10,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import audit, jobs
 from app.automation.notify import notify_user
+from app.core.config import get_settings
 from app.core.errors import AppError, conflict, not_found
 from app.db import models as M
 from app.db.enums import AllocationSource, AllocationStatus, CycleStatus, ProjectProcessing, ProjectStatus
 from app.domain import lock_cycle, now_utc, person_key, project_input, trainee_input
+from spa_ai.optimizer import Balance, optimise
 from spa_ai.scoring import (
     MODE_FULL,
     SCORING_VERSION,
@@ -183,29 +185,108 @@ def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     excluded = exclusions(db, {person_key(t) for t in trainees})
     trigger = payload.get("trigger", "schedule")
     waiting: dict[str, int] = {}
-    plan: list[tuple[M.Trainee, PairScore, int]] = []
+    options: dict[str, list[PairScore]] = {}
+    by_trainee: dict[str, M.Trainee] = {}
     for t in trainees:  # pure scoring: every pair is scored once
         ex = excluded.get(person_key(t), set())
         allowed = [pinputs[p.id] for p in projects if p.canonical_id not in ex]
         ti = trainee_input(t)
         scores = [score_pair(ti, p) for p in allowed]
-        best = best_of(scores)
-        if best is None:
+        if best_of(scores) is None:
             key = waiting_reason(ti, allowed, bool(ex), scores)
             waiting[key] = waiting.get(key, 0) + 1
             continue
-        plan.append((t, best, sum(1 for ps in scores if ps.eligible)))
+        options[str(t.id)] = [ps for ps in scores if ps.eligible]
+        by_trainee[str(t.id)] = t
+    plan, summary = _plan(db, cycle, projects, options, by_trainee)
     allocated = 0
     for i in range(0, len(plan), ALLOCATE_CHUNK):
         allocated += _allocate_batch(db, cycle, plan[i : i + ALLOCATE_CHUNK], by_id, trigger)
     db.commit()
-    return {"allocated": allocated, "replacements": replaced, "waiting": waiting, "ready_projects": len(projects)}
+    return {
+        "allocated": allocated,
+        "replacements": replaced,
+        "waiting": waiting,
+        "ready_projects": len(projects),
+        "optimiser": summary,
+    }
+
+
+def _plan(
+    db: Session,
+    cycle: M.Cycle,
+    projects: list[M.Project],
+    options: dict[str, list[PairScore]],
+    by_trainee: dict[str, M.Trainee],
+) -> tuple[list[tuple[M.Trainee, PairScore, str]], dict[str, Any]]:
+    """Choose a project for every trainee with an eligible option (ADR-027). The ILP optimiser balances load
+    across projects and supervisors; the greedy rule (each trainee's best project) is the fallback and the
+    baseline it is compared against. Scores are never changed, only the choice."""
+    s = get_settings()
+    if not options:
+        return [], {"engine": "none"}
+    if s.allocation_engine == "ilp":
+        project_load = {
+            str(pid): n
+            for pid, n in db.execute(
+                select(M.Allocation.project_id, func.count())
+                .where(M.Allocation.cycle_id == cycle.id, M.Allocation.status == AllocationStatus.active)
+                .group_by(M.Allocation.project_id)
+            )
+        }
+        supervisor_load = {
+            str(sid): n
+            for sid, n in db.execute(
+                select(M.Project.supervisor_id, func.count())
+                .join(M.Allocation, M.Allocation.project_id == M.Project.id)
+                .where(M.Allocation.status == AllocationStatus.active, M.Project.supervisor_id.is_not(None))
+                .group_by(M.Project.supervisor_id)
+            )
+        }
+        result = optimise(
+            options,
+            project_load=project_load,
+            supervisor_of={str(p.id): (str(p.supervisor_id) if p.supervisor_id else None) for p in projects},
+            supervisor_load=supervisor_load,
+            n_projects=len(projects),
+            balance=Balance(
+                project_slack=s.allocation_fair_share_slack,
+                supervisor_slack=s.allocation_fair_share_slack,
+                project_penalty=s.allocation_project_penalty,
+                supervisor_penalty=s.allocation_supervisor_penalty,
+                time_limit_s=s.allocation_solver_seconds,
+            ),
+        )
+        choice, moved, summary = result.choice, result.moved, result.summary()
+        if result.reason:
+            log.warning("allocation optimiser fell back to greedy: %s", result.reason)
+    else:
+        choice = {k: best_of(v) for k, v in options.items()}  # type: ignore[misc]
+        moved, summary = {}, {"engine": "greedy", "fallback_reason": "configured"}
+    plan: list[tuple[M.Trainee, PairScore, str]] = []
+    for k, ps in choice.items():
+        n = len(options[k])
+        best = moved.get(k)
+        text = explain(ps, n, "Allocated") if best is None else explain_balanced(ps, best, options[k])
+        plan.append((by_trainee[k], ps, text))
+    return plan, summary
+
+
+def explain_balanced(ps: PairScore, best: PairScore, options: list[PairScore]) -> str:
+    """Said when the optimiser chose someone's 2nd (or later) best project (Σ factor points = score still)."""
+    rank = 1 + sum(1 for o in options if (-o.score, o.project_code) < (-ps.score, ps.project_code))
+    return (
+        f"Allocated by the optimiser using {MODE_LABEL.get(ps.mode, ps.mode)}: match score {ps.score:g}/100, "
+        f"your #{rank} of {len(options)} eligible projects. Your top match (score {best.score:g}) already had "
+        f"more than its fair share of trainees (project or supervisor load), so the optimiser balanced the "
+        f"load at a cost of {best.score - ps.score:g} points."
+    )[:1000]
 
 
 def _allocate_batch(
     db: Session,
     cycle: M.Cycle,
-    plan: list[tuple[M.Trainee, PairScore, int]],
+    plan: list[tuple[M.Trainee, PairScore, str]],
     projects: dict[str, M.Project],
     trigger: str,
 ) -> int:
@@ -228,15 +309,15 @@ def _allocate_batch(
             )
         )
     )
-    todo = [(t, ps, n) for t, ps, n in plan if t.id in locked and t.id not in busy]
+    todo = [(t, ps, text) for t, ps, text in plan if t.id in locked and t.id not in busy]
     rows = [
         (
             t,
             projects[ps.project_id],
             ps,
-            _new_allocation(cycle, t, projects[ps.project_id], ps, trigger, explain(ps, n, "Allocated")),
+            _new_allocation(cycle, t, projects[ps.project_id], ps, trigger, text),
         )
-        for t, ps, n in todo
+        for t, ps, text in todo
     ]
     try:
         with db.begin_nested():
@@ -245,9 +326,8 @@ def _allocate_batch(
         done = rows
     except IntegrityError:
         done = []
-        for t, project, ps, _ in rows:
-            n = next(n for tt, _, n in todo if tt.id == t.id)
-            a = _insert_allocation(db, cycle, t, project, ps, trigger, explain(ps, n, "Allocated"))
+        for t, project, ps, row in rows:
+            a = _insert_allocation(db, cycle, t, project, ps, trigger, row.explanation or "")
             if a is not None:
                 done.append((t, project, ps, a))
     with db.no_autoflush:  # audit rows go out batched at commit

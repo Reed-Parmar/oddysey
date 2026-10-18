@@ -26,6 +26,18 @@ class AIClient(Protocol):
 
 
 _RETRY_BACKOFF_S = 2.0
+_MAX_RETRY_AFTER_S = 6.0
+
+
+def _retry_delay(response: httpx.Response | None) -> float:
+    """Groq's `retry-after` (seconds) on a 429, capped; the fixed backoff otherwise."""
+    if response is None or response.status_code != 429:
+        return _RETRY_BACKOFF_S
+    try:
+        hint = float(response.headers.get("retry-after", ""))
+    except ValueError:
+        return _RETRY_BACKOFF_S
+    return max(0.5, min(_MAX_RETRY_AFTER_S, hint))
 
 
 class GroqClient:
@@ -39,9 +51,15 @@ class GroqClient:
         base_url: str = "https://api.groq.com/openai/v1",
         sleep: Callable[[float], None] = time.sleep,
         transport: httpx.BaseTransport | None = None,
+        reasoning_effort: str | None = None,
+        max_completion_tokens: int | None = None,
     ) -> None:
+        """`reasoning_effort` (gpt-oss models only) and `max_completion_tokens` are opt-in, for short interactive
+        answers that must fit the account's tokens-per-minute budget (ADR-023)."""
         self.model = model
         self._api_key = api_key
+        self._reasoning_effort = reasoning_effort
+        self._max_completion_tokens = max_completion_tokens
         self._timeout = timeout
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._sleep = sleep
@@ -67,6 +85,10 @@ class GroqClient:
                 {"role": "user", "content": user},
             ],
         }
+        if self._reasoning_effort and self.model.startswith("openai/gpt-oss"):
+            payload["reasoning_effort"] = self._reasoning_effort
+        if self._max_completion_tokens:
+            payload["max_completion_tokens"] = self._max_completion_tokens
         response: httpx.Response | None = None
         with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
             for attempt in range(2):
@@ -92,7 +114,7 @@ class GroqClient:
                     else:
                         break
                 if retryable:
-                    self._sleep(_RETRY_BACKOFF_S)
+                    self._sleep(_retry_delay(response))
         assert response is not None
         return _parse_completion(response)
 

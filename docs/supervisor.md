@@ -1,5 +1,9 @@
 # Supervisor Module Handbook (Teammate B)
 
+> **ADR-027 (rev 6, binding; api.md §0d).** The allocation engine (B) chooses projects with an ILP (`spa_ai.optimizer`, scipy
+> HiGHS) that maximises total match score minus penalties for trainees above a project's or supervisor's fair share. Scores and
+> factors stay the rule score of the chosen pair. Greedy (best project per trainee) is the fallback and the comparison baseline.
+
 > **ADR-019 / ADR-020 (rev 5, binding; api.md §0c).** The supervisor dashboard shows a **Needs attention** panel (ALR-01
 > `/me/alerts`, own projects only): reviews pending (analysis needs a human), trainees at deadline risk, open rework. Each
 > alert links to the fixing screen. The submission review screen has an **Ask about this project** panel (AST-01 with the

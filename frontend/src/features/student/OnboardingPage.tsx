@@ -19,10 +19,11 @@ import { Alert, Button, Card, Input, Textarea, cx } from "@/components/ui";
 import { SkillsInput, TradePicker } from "./fields";
 import {
   BACKGROUND_MAX, CAREER_MAX, CENTRE_MAX, GENDER_OPTIONS, NAME_MAX, ONBOARDING_FIELDS, ONBOARDING_REQUIRED_TEXT,
-  ONBOARDING_SECTIONS, onboardingBody, onboardingMissing, onboardingSchema, onboardingValues,
+  ONBOARDING_SECTIONS, mergeSkills, normaliseSkills, onboardingBody, onboardingMissing, onboardingSchema, onboardingValues,
   type OnboardingValues,
 } from "./forms";
 import { useOnboarding } from "./hooks";
+import { ResumeFill } from "./ResumeFill";
 
 type OnbEnvelope = { data: Onboarding };
 
@@ -301,15 +302,10 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
                 )}
               </fieldset>
 
-              <FormField
-                label="Trainee ID"
-                htmlFor="trainee_code"
-                required
-                error={errors.trainee_code?.message}
-                hint="Your institutional trainee ID (letters, numbers and hyphens). It cannot be used to claim someone else's record."
-              >
-                <Input id="trainee_code" autoComplete="off" maxLength={40} spellCheck={false} {...register("trainee_code")} />
-              </FormField>
+              <p className="flex items-center gap-1.5 text-xs text-muted">
+                <IdentificationCard aria-hidden size={14} className="shrink-0" />
+                Your trainee ID is created automatically when you are enrolled.
+              </p>
             </div>
           </Card>
 
@@ -332,6 +328,19 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
 
           <Card title="Skills and interests" icon={<CheckCircle />}>
             <div className="flex flex-col gap-4">
+              <ResumeFill
+                onFill={(s) => {
+                  const merged = mergeSkills(values.skills, s.skills) ?? values.skills;
+                  const skillsAdded = merged.length - normaliseSkills(values.skills).length;
+                  if (skillsAdded) setList("skills", merged);
+                  const interestFilled = !!s.career_interest && !values.career_interest.trim();
+                  if (interestFilled) {
+                    setValue("career_interest", (s.career_interest ?? "").slice(0, CAREER_MAX), { shouldDirty: true });
+                    clearErrors("career_interest");
+                  }
+                  return { skillsAdded, interestFilled };
+                }}
+              />
               <FormField label="Skills" htmlFor="skills" required>
                 <SkillsInput
                   value={values.skills}
@@ -376,7 +385,7 @@ function OnboardingForm({ onboarding: ob }: { onboarding: Onboarding }) {
           <Card title="After you finish" icon={<Info />}>
             <ul className="list-disc space-y-2 pl-5 text-sm text-muted">
               <li>You are enrolled in the programme cycle that best matches your trades (or the one you choose), and a suitable project is allocated to you automatically.</li>
-              <li>Right after enrolment you can upload your resume on the Dashboard. Skills found there are suggestions only; nothing changes until you choose to add them.</li>
+              <li>Your trainee ID is generated for you. After enrolment, your resume and profile live on the Profile page.</li>
               <li>Your programme team adds verified assessment marks. You can't edit those.</li>
             </ul>
           </Card>
