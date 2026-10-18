@@ -1,14 +1,27 @@
 # Supervisor Module Handbook (Teammate B)
 
+> **ADR-029 (rev 10, binding; api.md §0g).** When the AI evaluator fails (rate/token limit, timeout, invalid output) the
+> report gets a deterministic **rule-based** evaluation (`evaluation.source: "rule"`, `fallback_reason`, confidence low):
+> at 50+ it is finalised as `evaluated`; below 50 it waits as `review_required` for you (never automatic rework). An analysis
+> that does not produce a usable evaluation never sends work back automatically, including for originality. Video links and
+> resumes submitted as the report are flagged `not_analyzable` / `insufficient_evidence` with a reason. A trainee's
+> rejection reason steers their next project (reason fit first, then score); allocations still show itemised factors that
+> sum to the score.
+
+> **ADR-028 (rev 7, binding; api.md §0e).** Completed automated evaluations finalise the submission (`evaluated`, or
+> `rework_requested` below 50) without a review step; supervisors can still amend, annotate, request rework or lift an
+> automatic originality rework (SUB-06). After `lift_rework`, a version with a completed `evaluated` outcome is finalised at
+> once. The Plagiarism & Originality report (SUB-05 originality, SUB-08, SUB-09/10) is now **staff-only**, and the
+> `originality.report` notification (PDF attached when email is on) goes to the project's supervisor instead of the trainee.
+
 > **ADR-027 (rev 6, binding; api.md §0d).** The allocation engine (B) chooses projects with an ILP (`spa_ai.optimizer`, scipy
 > HiGHS) that maximises total match score minus penalties for trainees above a project's or supervisor's fair share. Scores and
 > factors stay the rule score of the chosen pair. Greedy (best project per trainee) is the fallback and the comparison baseline.
 
 > **ADR-019 / ADR-020 (rev 5, binding; api.md §0c).** The supervisor dashboard shows a **Needs attention** panel (ALR-01
 > `/me/alerts`, own projects only): reviews pending (analysis needs a human), trainees at deadline risk, open rework. Each
-> alert links to the fixing screen. The submission review screen has an **Ask about this project** panel (AST-01 with the
-> `allocation_id` of an active allocation on one of the supervisor's own projects; otherwise 404). It is grounded,
-> read-only and stateless, and no PII reaches Groq.
+> alert links to the fixing screen. **ADR-030:** supervisors have no Project Assistant; AST-01 `/assistant/ask` returns
+> 403 to supervisors (it is for trainees only).
 
 > **ADR-018 (rev 4, binding).** Several cycles can be active. A supervisor's lists cover their projects in **all active
 > cycles** by default (each row shows its cycle); the cycle filter narrows it.
@@ -185,14 +198,14 @@ Nav (declared in F's `app/nav.ts`): Dashboard `/supervisor` · My projects `/sup
 | Aspect | Specification |
 |---|---|
 | Purpose | Submissions waiting for this supervisor, and past ones |
-| Components | `PageHeader` ("Evaluations"), filters (`project_id` select, `status` select), `DataTable<Submission>`, `Pagination`, states |
-| Data / API | `GET /api/v1/submissions?status=submitted&project_id=&sort=-submitted_at&page=&page_size=20` (SUB-02; `latest_only` left at its default `true`). Project options: `GET /api/v1/projects?mine=true&page_size=100` |
-| Filters | `status`: Awaiting evaluation (`submitted`, **default**), Rework requested (`rework_requested`), Evaluated (`evaluated`), All (param omitted). `project_id`: own projects or All. Sort: `-submitted_at` (default, "Newest first"), `submitted_at` ("Oldest first") |
+| Components | `PageHeader` ("Evaluations"), filters (`status` select, versions select, `project_id` select, sort), `DataTable<Submission>` (rows grouped per trainee), `Pagination`, states |
+| Data / API | `GET /api/v1/submissions?latest_only=false&status=&project_id=&sort=-submitted_at&page=&page_size=50` (SUB-02; every version by default; the "Latest version only" filter sends `latest_only=true`). Project options: `GET /api/v1/projects?mine=true&page_size=100` |
+| Filters | `status`: All (param omitted, **default**), Awaiting evaluation (`submitted`), Rework requested (`rework_requested`), Evaluated (`evaluated`). Versions: All versions (**default**, `latest_only=false`) or Latest version only (`latest_only=true`). `project_id`: own projects or All. Sort: `-submitted_at` (default, "Newest first"), `submitted_at` ("Oldest first") |
 | Columns | Trainee (name + code), Project (code + title), Version (`v{version}`), Submitted (`DateTime`), Late badge if `is_late`, Status badge, Grade badge when `evaluation?.grade` |
 | Actions | Row link → `/supervisor/submissions/{id}` |
-| Empty | Default filter: "Nothing is waiting for evaluation." Otherwise "No submissions match these filters." Cycle draft: "Allocations are not published yet" |
+| Empty | Default filter: "No submissions yet." Otherwise "No submissions match these filters." Cycle draft: "Allocations are not published yet" |
 | Error | `ErrorState` |
-| Acceptance | The default view equals the dashboard "Pending evaluations" count; only own projects' submissions appear. |
+| Acceptance | The default view lists every version (v1, v2, …) of each trainee's submission, each linking to its detail page; "Awaiting evaluation" + "Latest version only" equals the dashboard "Pending evaluations" count; only own projects' submissions appear. |
 
 ### 3.5 `/supervisor/submissions/:submissionId`: Submission detail and evaluation
 

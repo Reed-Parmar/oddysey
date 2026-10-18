@@ -1,7 +1,8 @@
-"""AST-01 Project Assistant (ADR-020, api.md §0c): grounded, read-only, stateless answers about one allocation.
+"""AST-01 Project Assistant (ADR-020, ADR-030, api.md §0c): read-only, stateless answers for a trainee.
 
-The context bundle holds only what the caller can already read, with no name, trainee code, centre, gender or
-email; free text (brief, document, report feedback) is redacted. The model answers only from the bundle.
+Students only (ADR-030): staff get 403. The context bundle is built from the trainee's own active allocation
+only, with no name, trainee code, centre, gender or email, and never the staff-only originality result
+(ADR-028); free text (brief, document, report feedback) is redacted. The model answers only from the bundle.
 Only a usage count is audited (never the question or the answer).
 """
 
@@ -39,7 +40,9 @@ class Turn(BaseModel):
 class AskIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question: str = Field(min_length=3, max_length=500)
-    allocation_id: uuid.UUID | None = None
+    allocation_id: uuid.UUID | None = Field(
+        default=None, description="Ignored (ADR-030): a student is always answered about their own active allocation."
+    )
     history: list[Turn] = Field(default_factory=list, max_length=6)
 
 
@@ -48,39 +51,40 @@ class AssistantAnswer(BaseModel):
     sources: list[str]
     mode: Literal["ai", "rules"]
     intent: str | None = None
+    suggestions: list[str] = Field(default_factory=list, max_length=3)  # follow-up questions, each ≤ 120 chars
 
 
-def _allocation_for(db: DB, user: M.User, allocation_id: uuid.UUID | None) -> M.Allocation:
-    if user.role == UserRole.student:
-        _, trainee = student_trainee(db, user.id)
-        a = (
-            db.scalar(
-                select(M.Allocation).where(
-                    M.Allocation.trainee_id == trainee.id, M.Allocation.status == AllocationStatus.active
-                )
+def _own_allocation(db: DB, user: M.User) -> M.Allocation:
+    """The student's own active allocation; any `allocation_id` in the request is ignored."""
+    _, trainee = student_trainee(db, user.id)
+    a = (
+        db.scalar(
+            select(M.Allocation).where(
+                M.Allocation.trainee_id == trainee.id, M.Allocation.status == AllocationStatus.active
             )
-            if trainee
-            else None
         )
-        if a is None:
-            raise AppError(409, "NO_ACTIVE_ALLOCATION", "You don't have an allocated project yet")
-        return a
-    if user.role == UserRole.supervisor and allocation_id is not None:
-        a = db.get(M.Allocation, allocation_id)
-        if a is not None and a.status == AllocationStatus.active and a.project.supervisor_id == user.id:
-            return a
-    raise AppError(404, "NOT_FOUND", "Allocation not found")
+        if trainee
+        else None
+    )
+    if a is None:
+        raise AppError(409, "NO_ACTIVE_ALLOCATION", "You don't have an allocated project yet")
+    return a
 
 
 def _lines(items: object, limit: int = 15) -> str:
     return "\n".join(f"- {x}" for x in (items or [])[:limit] if isinstance(x, str) and x.strip())  # type: ignore[index]
 
 
+def _pii(a: M.Allocation) -> list[str]:
+    t = a.trainee
+    return [x for x in (t.full_name, t.trainee_code, t.centre_name, t.user.email if t.user else None) if x]
+
+
 def build_sections(db: DB, a: M.Allocation) -> dict[str, str]:
     """The context bundle (api.md §0c). Keys are the `sources` the answer may cite."""
-    t, p = a.trainee, a.project
+    p = a.project
     cycle = db.get(M.Cycle, a.cycle_id)
-    pii = [t.full_name, t.trainee_code, t.centre_name, t.user.email if t.user else None]
+    pii = _pii(a)
     g = p.generated or {}
     sections: dict[str, str] = {}
     trades = ", ".join(tr.name for tr in p.trades) or (p.target_trade.name if p.target_trade else "")
@@ -143,9 +147,7 @@ def build_sections(db: DB, a: M.Allocation) -> dict[str, str]:
         for s in (ev.get("suggestions") or [])[:5]:
             if isinstance(s, dict):
                 fb.append(f"Improve: {s.get('issue')} — " + "; ".join(str(x) for x in (s.get("steps") or [])[:3]))
-    if an is not None and an.originality:
-        o = an.originality
-        fb.append(f"Originality: overlap {o.get('overlap_pct')}%, band {o.get('attention_band')}")
+    # ADR-028: the originality result is staff-only, so it never enters the (student-only) bundle
     if sub.evaluation is not None and sub.evaluation.total_score is not None:
         fb.append(f"Verified practical evaluation: {sub.evaluation.total_score} (grade {sub.evaluation.grade})")
         if sub.evaluation.feedback:
@@ -157,7 +159,7 @@ def build_sections(db: DB, a: M.Allocation) -> dict[str, str]:
 
 @router.post("/assistant/ask")
 def ask(body: AskIn, user: CurrentUser, db: DB) -> AssistantAnswer:
-    if user.role not in (UserRole.student, UserRole.supervisor):
+    if user.role != UserRole.student:  # ADR-030: the assistant is for trainees only
         raise AppError(403, "FORBIDDEN", "You do not have access to this action")
     recent = db.scalar(
         select(func.count())
@@ -170,9 +172,12 @@ def ask(body: AskIn, user: CurrentUser, db: DB) -> AssistantAnswer:
     )
     if (recent or 0) >= ASK_LIMIT:
         raise AppError(429, "RATE_LIMITED", "Too many questions. Try again in a few minutes.")
-    a = _allocation_for(db, user, body.allocation_id)
+    a = _own_allocation(db, user)
     sections = build_sections(db, a)
     result = assistant.ask(ai_client_factory(), sections, body.question, [t.model_dump() for t in body.history])
+    # defence in depth: the model never sees PII, but drop any follow-up that names the trainee anyway
+    pii = [x.lower() for x in _pii(a)]
+    result["suggestions"] = [q for q in result.get("suggestions", []) if not any(x in q.lower() for x in pii)]
     audit.record(db, user.id, "assistant.asked", "allocation", a.id, {"mode": result["mode"]})
     db.commit()
     return AssistantAnswer(**result)

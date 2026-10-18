@@ -184,7 +184,7 @@ export function ProjectNewPage() {
       form.append("cycle_id", targetId);
       form.append("title", title.trim());
       form.append("description", description.trim());
-      form.append("file", file as File);
+      if (file) form.append("file", file);
       setProgress(0);
       return uploadMultipart<{ data: Project }>("/projects", form, { onProgress: setProgress }).finally(() => setProgress(null));
     },
@@ -213,7 +213,6 @@ export function ProjectNewPage() {
     const d = description.trim();
     if (t.length < 5 || t.length > 200) next.title = "Use 5 to 200 characters";
     if (d.length < 10 || d.length > 5000) next.description = "Use 10 to 5000 characters";
-    if (!file) next.file = "Attach the project document (PDF or DOCX, up to 10 MB)";
     setErrors(next);
     if (!Object.keys(next).length) m.mutate();
   };
@@ -230,7 +229,7 @@ export function ProjectNewPage() {
       ) : archived ? <ReadOnlyBanner /> : (
         <Card>
           <Alert variant="info" icon={<Sparkle />} title="Generated automatically">
-            The project code, target trades, prerequisite skills, difficulty, execution guide and supervisor are generated from the document after upload.
+            The project code, target trades, prerequisite skills, difficulty, execution guide and supervisor are generated from the document, or from the description when there is no document.
             You can correct any of them afterwards on the project page.
           </Alert>
           <form noValidate className="mt-5 flex flex-col gap-4" onSubmit={submit}>
@@ -242,7 +241,7 @@ export function ProjectNewPage() {
             <FormField label="Description" htmlFor="np-desc" required error={errors.description} hint="10 to 5000 characters: the problem, context and expected outcome.">
               <Textarea id="np-desc" rows={6} value={description} maxLength={5000} aria-invalid={!!errors.description} onChange={(e) => setDescription(e.target.value)} />
             </FormField>
-            <FormField label="Project document" htmlFor="np-file" required hint="PDF or DOCX, up to 10 MB. It must contain readable text.">
+            <FormField label="Project document (optional)" htmlFor="np-file" hint="PDF or DOCX, up to 10 MB, with readable text. Without a document, the project is processed from the description.">
               <FileField id="np-file" accept={DOC_ACCEPT} maxBytes={DOC_MAX} error={errors.file}
                 onChange={(f) => { setFile(f); setErrors((x) => ({ ...x, file: undefined })); }} />
             </FormField>

@@ -98,6 +98,8 @@ export const LABELS = {
     expired: ["Expired", "warning"],
   },
   role: { student: ["Student", "neutral"], supervisor: ["Supervisor", "info"], admin: ["Admin", "success"] },
+  // ADR-031: trainee login status on the admin Trainees page.
+  login: { linked: ["Login active", "success"], default_password: ["Default password", "warning"], none: ["No login", "neutral"] },
   difficulty: {
     beginner: ["Beginner", "neutral"],
     intermediate: ["Intermediate", "info"],

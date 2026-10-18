@@ -30,7 +30,7 @@ export function DashboardPage() {
   const deadline = project.data?.data.effective_deadline ?? cycle.submission_deadline;
   const step = nextStep(cycle, me, latest, { deadline, rejectedBefore });
 
-  const journey = buildJourney(me, allocation, latest, { rejectedBefore });
+  const journey = buildJourney(me, allocation, latest);
 
   return (
     <div className="space-y-6">
@@ -66,7 +66,7 @@ export function DashboardPage() {
         <Pipeline
           label="Your project journey"
           stages={journey}
-          columns={4}
+          columns={3}
           toolbar={
             <div className="min-w-0">
               <h2 id="journey-title" className="text-base font-semibold text-text">Your journey</h2>

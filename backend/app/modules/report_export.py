@@ -14,7 +14,8 @@ if TYPE_CHECKING:
     from app.modules.submissions import AnalysisOut
 
 
-def render_report_html(sub: M.Submission, v: "AnalysisOut") -> str:
+def render_report_html(sub: M.Submission, v: "AnalysisOut", staff: bool = True) -> str:
+    """`staff=False` (a student, ADR-028): the originality, corpus, semantic and AI-writing sections are omitted."""
     e = html.escape
     o = v.originality or {}
     ev = v.evaluation or {}
@@ -48,18 +49,8 @@ def render_report_html(sub: M.Submission, v: "AnalysisOut") -> str:
     )
     lims = "".join(f"<li>{e(x)}</li>" for x in (o.get("limitations") or []) + (ev.get("limitations") or []))
     overlap = "Not computed" if o.get("overlap_pct") is None else f"{o['overlap_pct']}%"
-    total = ev.get("total")
-    grade = ev.get("grade")
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Plagiarism &amp; Originality Analysis</title>
-<style>body{{font:14px/1.5 system-ui,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#111}}
-table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}}
-blockquote{{margin:4px 0;padding:4px 8px;background:#fff7d6}}.src{{color:#555;font-size:12px}}.muted{{color:#555}}
-@media print{{a{{color:#000}}}}</style></head><body>
-<h1>Plagiarism &amp; Originality Analysis</h1>
-<p class=muted>Project {e(sub.allocation.project.project_code)} · version {sub.version} · analysis revision {v.revision} ·
-status <b>{e(v.status.value)}</b>{(" — " + e(v.status_reason)) if v.status_reason else ""} · review: {e(v.review_state)}</p>
-<p class=muted>Pipeline {e(v.pipeline_version)} · input hash {e((v.input_hash or "")[:16])} · finished {e(v.finished_at or "—")}</p>
-<h2>Text overlap (potential overlap requiring contextual review)</h2>
+    originality_html = (
+        f"""<h2>Text overlap (potential overlap requiring contextual review)</h2>
 <p>Overlap: <b>{e(overlap)}</b> {("(" + e(o.get("overlap_reason") or "") + ")") if o.get("overlap_pct") is None else ""}
 · attention band: {e(str(o.get("attention_band")))} (review heuristic {e(str(o.get("bands_version")))}, not a probability)</p>
 <p>Method: {e(str(o.get("method", "")))}<br>Formula: {e(str(o.get("formula", "")))}<br>
@@ -71,7 +62,23 @@ Eligible words: {tok.get("eligible")} · excluded: {tok.get("excluded")} ({tok.g
 <h2>Concept / paraphrase similarity</h2><p>{e(str((v.semantic or {}).get("reason", "Not assessed")))}</p>
 <h2>Code similarity</h2><p>{e(str((o.get("code") or {}).get("reason", "Code similarity not assessed")))}</p>
 <h2>AI-writing assessment</h2><p>{e(str((v.ai_writing or {}).get("reason", "Not available")))}</p>
-<h2>Automated report evaluation (documented evidence only)</h2>
+"""
+        if staff
+        else ""
+    )
+    total = ev.get("total")
+    grade = ev.get("grade")
+    title = "Plagiarism &amp; Originality Analysis" if staff else "Automated Report Evaluation"
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>
+<style>body{{font:14px/1.5 system-ui,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#111}}
+table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}}
+blockquote{{margin:4px 0;padding:4px 8px;background:#fff7d6}}.src{{color:#555;font-size:12px}}.muted{{color:#555}}
+@media print{{a{{color:#000}}}}</style></head><body>
+<h1>{title}</h1>
+<p class=muted>Project {e(sub.allocation.project.project_code)} · version {sub.version} · analysis revision {v.revision} ·
+status <b>{e(v.status.value)}</b>{(" — " + e(v.status_reason)) if v.status_reason else ""} · review: {e(v.review_state)}</p>
+<p class=muted>Pipeline {e(v.pipeline_version)} · input hash {e((v.input_hash or "")[:16])} · finished {e(v.finished_at or "—")}</p>
+{originality_html}<h2>Automated report evaluation (documented evidence only)</h2>
 <p>Status: {e(str(ev.get("status")))} · total: {total if total is not None else "—"} / {ev.get("max_total", 100)} ·
 automated report grade: {e(GRADE_LABELS.get(grade or "", grade or "—"))}{" · supervisor-amended" if v.amended else ""}</p>
 <table><tr><th>Criterion</th><th>Points</th><th>Explanation</th></tr>{crit}</table>

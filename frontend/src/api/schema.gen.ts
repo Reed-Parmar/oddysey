@@ -80,6 +80,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports/trainee-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Trainee Accounts */
+        post: operations["import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports/trainees": {
         parameters: {
             query?: never;
@@ -499,6 +516,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/password-changed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Password Changed
+         * @description ME-03 (ADR-031): the client changed its password with Supabase `updateUser`; clear the change-password notice.
+         */
+        post: operations["password_changed_api_v1_me_password_changed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding": {
         parameters: {
             query?: never;
@@ -605,7 +642,10 @@ export interface paths {
         /** List Projects */
         get: operations["list_projects_api_v1_projects_get"];
         put?: never;
-        /** Create Project */
+        /**
+         * Create Project
+         * @description The document is optional (ADR-028): without one, metadata and the guide come from title + description.
+         */
         post: operations["create_project_api_v1_projects_post"];
         delete?: never;
         options?: never;
@@ -1080,11 +1120,34 @@ export interface components {
         AccountRef: {
             /** Email */
             email: string;
+            /** Must Change Password */
+            must_change_password: boolean;
             /**
              * User Id
              * Format: uuid
              */
             user_id: string;
+        };
+        /** AccountRowResult */
+        AccountRowResult: {
+            /**
+             * Account
+             * @enum {string}
+             */
+            account: "created" | "linked" | "existing";
+            /** Full Name */
+            full_name: string;
+            /** Phone */
+            phone: string;
+            /** Row */
+            row: number;
+            /**
+             * Trainee
+             * @enum {string}
+             */
+            trainee: "created" | "updated" | "unchanged";
+            /** Trainee Code */
+            trainee_code: string | null;
         };
         /** AdminUser */
         AdminUser: {
@@ -1104,6 +1167,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Must Change Password */
+            must_change_password: boolean;
             role: components["schemas"]["UserRole"];
             status: components["schemas"]["UserStatus"];
             trainee: components["schemas"]["TraineeRef"] | null;
@@ -1291,6 +1356,8 @@ export interface components {
             reviews: components["schemas"]["ReviewOut"][];
             /** Revision */
             revision: number;
+            /** Rework Reason */
+            rework_reason?: string | null;
             /** Semantic */
             semantic: {
                 [key: string]: unknown;
@@ -1347,7 +1414,10 @@ export interface components {
         };
         /** AskIn */
         AskIn: {
-            /** Allocation Id */
+            /**
+             * Allocation Id
+             * @description Ignored (ADR-030): a student is always answered about their own active allocation.
+             */
             allocation_id?: string | null;
             /** History */
             history?: components["schemas"]["Turn"][];
@@ -1372,6 +1442,8 @@ export interface components {
             mode: "ai" | "rules";
             /** Sources */
             sources: string[];
+            /** Suggestions */
+            suggestions?: string[];
         };
         /** AutomationStats */
         AutomationStats: {
@@ -1404,7 +1476,7 @@ export interface components {
             /** Description */
             description: string;
             /** File */
-            file: string;
+            file?: string | null;
             /** Title */
             title: string;
         };
@@ -1445,6 +1517,18 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post */
+        Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post: {
+            /** Cycle Id */
+            cycle_id: string;
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** File */
+            file: string;
+        };
         /** Body_import_trainees_api_v1_admin_imports_trainees_post */
         Body_import_trainees_api_v1_admin_imports_trainees_post: {
             /** Cycle Id */
@@ -1471,6 +1555,18 @@ export interface components {
         Body_upload_resume_api_v1_trainees_me_resumes_post: {
             /** File */
             file: string;
+        };
+        /**
+         * CurrentProject
+         * @description ADR-031: the trainee's active allocation, for the admin Trainees list (TRN-03 admin only).
+         */
+        CurrentProject: {
+            /**
+             * Allocation Id
+             * Format: uuid
+             */
+            allocation_id: string;
+            project: components["schemas"]["ProjectRef"];
         };
         /** CycleBrief */
         CycleBrief: {
@@ -1697,6 +1793,11 @@ export interface components {
         /** Envelope[SubmissionOut] */
         Envelope_SubmissionOut_: {
             data: components["schemas"]["SubmissionOut"];
+            meta?: components["schemas"]["Meta"] | null;
+        };
+        /** Envelope[TraineeAccountImportResult] */
+        Envelope_TraineeAccountImportResult_: {
+            data: components["schemas"]["TraineeAccountImportResult"];
             meta?: components["schemas"]["Meta"] | null;
         };
         /** Envelope[TraineeOut] */
@@ -2086,10 +2187,14 @@ export interface components {
         };
         /** OriginalityReport */
         OriginalityReport: {
+            /** Ai Writing */
+            ai_writing: string;
             /** Analysed At */
             analysed_at: string | null;
             /** Attention Band */
             attention_band: string | null;
+            /** Cycle Name */
+            cycle_name: string;
             /** Decision */
             decision: string;
             /** Decision Record */
@@ -2120,10 +2225,14 @@ export interface components {
             project_code: string;
             /** Project Title */
             project_title: string;
+            /** Review State */
+            review_state: string;
             /** Rework Threshold */
             rework_threshold: number;
             /** Segments */
             segments: components["schemas"]["Segment"][];
+            /** Semantic */
+            semantic: string;
             /** Sources */
             sources: components["schemas"]["ReportSource"][];
             /** Status */
@@ -2133,6 +2242,8 @@ export interface components {
              * Format: uuid
              */
             submission_id: string;
+            /** Submitted At */
+            submitted_at: string | null;
             /** Text Truncated */
             text_truncated: boolean;
             /** Tokens */
@@ -2834,6 +2945,35 @@ export interface components {
              */
             trade_id: string;
         };
+        /** TraineeAccountImportResult */
+        TraineeAccountImportResult: {
+            /** Accounts Created */
+            accounts_created: number;
+            /** Accounts Existing */
+            accounts_existing: number;
+            /** Accounts Linked */
+            accounts_linked: number;
+            /** Applied */
+            applied: boolean;
+            /** Created */
+            created: number;
+            /** Created Skills */
+            created_skills: string[];
+            /** Created Trades */
+            created_trades: string[];
+            /** Errors */
+            errors: components["schemas"]["RowError"][];
+            /** Results */
+            results: components["schemas"]["AccountRowResult"][];
+            /** Rows */
+            rows: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Updated */
+            updated: number;
+            /** Warnings */
+            warnings: string[];
+        };
         /** TraineeAdminPatch */
         TraineeAdminPatch: {
             /** Background */
@@ -2870,6 +3010,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            current_project: components["schemas"]["CurrentProject"] | null;
             /**
              * Cycle Id
              * Format: uuid
@@ -2888,6 +3029,8 @@ export interface components {
             match_mode: string;
             /** Onboarded Via */
             onboarded_via: string;
+            /** Phone */
+            phone: string | null;
             /** Reported Scores */
             reported_scores: {
                 [key: string]: unknown;
@@ -2921,6 +3064,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            current_project: components["schemas"]["CurrentProject"] | null;
             /**
              * Cycle Id
              * Format: uuid
@@ -2939,6 +3083,8 @@ export interface components {
             match_mode: string;
             /** Onboarded Via */
             onboarded_via: string;
+            /** Phone */
+            phone: string | null;
             /** Reported Scores */
             reported_scores: {
                 [key: string]: unknown;
@@ -3044,6 +3190,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Must Change Password */
+            must_change_password: boolean;
             role: components["schemas"]["UserRole"];
             status: components["schemas"]["UserStatus"];
         };
@@ -3211,6 +3359,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_StaffImportResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TraineeAccountImportResult_"];
                 };
             };
             /** @description Validation Error */
@@ -4063,6 +4244,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    password_changed_api_v1_me_password_changed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_UserOut_"];
+                };
             };
         };
     };

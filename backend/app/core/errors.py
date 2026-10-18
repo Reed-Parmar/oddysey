@@ -60,6 +60,7 @@ CONSTRAINT_CODES: dict[str, tuple[int, str, str]] = {
     "invitations_one_open_per_email": (409, "INVITATION_EXISTS", "An open invitation already exists"),
     "invitations_one_open_per_trainee": (409, "INVITATION_EXISTS", "An open invitation already exists"),
     "users_email_key": (409, "EMAIL_IN_USE", "Email already in use"),
+    "trainees_cycle_phone_key": (409, "DUPLICATE_PHONE", "A trainee with this phone number already exists"),
 }
 
 

@@ -1,5 +1,28 @@
 # Admin Module Handbook (Teammate C)
 
+> **ADR-029 (rev 10, binding; api.md §0g).** Allocation runs every minute (`ALLOCATION_INTERVAL_MINUTES=1`; Overview
+> "Runs every 1 min"). A scheduled run with nobody waiting, or with nothing changed since the last run, is skipped cheaply
+> (the job result says `skipped` and repeats the waiting counts); events and "Run now" always run in full, and a full run
+> happens at least every 15 minutes. ALLOC-09 shows `replacement.reason_fit` for a rejection: the wanted/unwanted words taken
+> from the trainee's reason, each candidate's fit and score, and the chosen project. Report evaluations may be rule-based
+> (`source: "rule"`) when the AI evaluator fails.
+
+> **ADR-031 (rev 9, binding; api.md §0f).** Admin navigation adds **Trainees** (`/admin/trainees`) between Allocation &
+> Progress and Staff & Invitations. It lists trainees in the active cycles (or a chosen cycle) with TRN-03: name, code,
+> phone, trades, centre, account status (login linked / password not changed yet / no login), current project; search
+> (name, code, centre, phone), cycle filter and pagination. **Upload trainees** (IMP-04 `POST /admin/imports/trainee-accounts`,
+> dry run → apply) creates or updates trainee records and their login accounts in one step: the phone number is the
+> login id and every new account starts with the default password set on the server (`TRAINEE_DEFAULT_PASSWORD`, never
+> shown in the UI or returned by the API). The page offers a CSV template (no password in it) and shows per-row results
+> (trainee created/updated/unchanged, account created/linked/existing). Re-uploading a phone updates it, never duplicates.
+> Without a valid `SUPABASE_SECRET_KEY` the apply step returns 503 (dry runs still work).
+
+> **ADR-028 (rev 7, binding; api.md §0e).** Automated evaluations finalise submissions without a human step (review
+> actions stay available). Plagiarism reports are visible to admins and the project's supervisor only; trainees get a
+> generic "revise for originality" notice. Projects can be created without a document (PRJ-03 `file` optional) or
+> imported without `problem_doc_url`: the title and description are then used to generate metadata and the guide. Only
+> a project with neither document nor description waits in `awaiting_document`.
+
 > **ADR-027 (rev 6, binding; api.md §0d).** Allocation balances load across projects and supervisors (ILP). Automation status
 > shows, per run, the optimiser's result against greedy (objective, trainees moved from their top match). `ALLOCATION_ENGINE=greedy` turns it off.
 

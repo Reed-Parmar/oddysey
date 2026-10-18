@@ -578,8 +578,8 @@ async def import_projects(
                 project_code=p["code"] or next_project_code(db, cycle.id),
                 created_by=admin.id,
                 generation_source="import",
-                processing_status=ProjectProcessing.queued
-                if p["problem_doc_url"]
+                processing_status=ProjectProcessing.queued  # ADR-028: a description is enough to process
+                if p["problem_doc_url"] or (values.get("description") or "").strip()
                 else ProjectProcessing.awaiting_document,
                 **values,
             )
@@ -605,7 +605,9 @@ async def import_projects(
             setattr(proj, k, v)
         set_project_trades(proj, row_trades)
         proj.skills = skill_rows
-        if proj.processing_status == ProjectProcessing.awaiting_document and p["problem_doc_url"]:
+        if proj.processing_status == ProjectProcessing.awaiting_document and (
+            p["problem_doc_url"] or (proj.description or "").strip()
+        ):
             proj.processing_status = ProjectProcessing.queued
         touched.append(proj)
         result.updated += 1

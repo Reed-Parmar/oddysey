@@ -125,7 +125,7 @@ function buildFlow(projects: Project[], c: FlowCounts): PipelineStage[] {
       metric: c.awaiting, metricLabel: "in your queue",
       summary: "Each report arrives with an automated evaluation and an originality analysis. Review them, then finalise or request rework.",
       details: [{ label: "Awaiting evaluation", value: c.awaiting }, { label: "Rework requested", value: c.rework }],
-      link: { to: "/supervisor/submissions", label: "Open evaluation queue" },
+      link: { to: "/supervisor/submissions?status=submitted&versions=latest", label: "Open evaluation queue" },
     },
     {
       key: "completion", title: "Completion", icon: <FlagCheckered />,
@@ -171,7 +171,7 @@ function EvaluationQueue({ enabled, total }: { enabled: boolean; total?: number 
       icon={<ListChecks />}
       title="Evaluation queue"
       description="Oldest first, so nobody waits too long."
-      actions={<Link to="/supervisor/submissions" className={buttonStyles("secondary", "sm")}>Open queue{total ? ` (${total})` : ""}</Link>}
+      actions={<Link to="/supervisor/submissions?status=submitted&versions=latest" className={buttonStyles("secondary", "sm")}>Open queue{total ? ` (${total})` : ""}</Link>}
     >
       {q.isLoading ? (
         <div className="space-y-3 px-5 pb-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -247,8 +247,8 @@ export function DashboardPage() {
             rework: rework.data ?? 0, evaluated: evaluatedTotal, late: late.data ?? 0,
           }} />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <CountTile label="Pending evaluations" query={pending} to="/supervisor/submissions" icon={<Hourglass />} tone="primary" hint="Open evaluation queue" />
-          <CountTile label="Rework requested" query={rework} to="/supervisor/submissions?status=rework_requested" icon={<ArrowCounterClockwise />} tone="warning" hint="View rework" />
+          <CountTile label="Pending evaluations" query={pending} to="/supervisor/submissions?status=submitted&versions=latest" icon={<Hourglass />} tone="primary" hint="Open evaluation queue" />
+          <CountTile label="Rework requested" query={rework} to="/supervisor/submissions?status=rework_requested&versions=latest" icon={<ArrowCounterClockwise />} tone="warning" hint="View rework" />
           <CountTile label="Allocated trainees" query={allocated} to="/supervisor/progress" icon={<UsersThree />} tone="success" hint="View progress" />
           <CountTile label="Late submissions" query={late} to="/supervisor/progress?late_only=true" icon={<Clock />} tone="danger" hint="View late" />
         </div>
@@ -303,7 +303,7 @@ export function DashboardPage() {
         title="Dashboard"
         description={cycle ? <span className="inline-flex flex-wrap items-center gap-2">{cycle.name} <StatusBadge kind="cycle" value={cycle.status} /></span> : undefined}
         actions={visible ? (
-          <Link to="/supervisor/submissions" className={buttonStyles("primary")}>
+          <Link to="/supervisor/submissions?status=submitted&versions=latest" className={buttonStyles("primary")}>
             <ListChecks aria-hidden size={16} /> Evaluation queue
           </Link>
         ) : undefined}

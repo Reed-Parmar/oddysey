@@ -58,6 +58,7 @@ class UserOut(BaseModel):
     role: UserRole
     status: UserStatus
     department: str | None
+    must_change_password: bool  # ADR-031: account created by the programme team with the shared initial password
     created_at: datetime
 
 
@@ -88,6 +89,19 @@ class Scores(BaseModel):
 class AccountRef(BaseModel):
     user_id: uuid.UUID
     email: str
+    must_change_password: bool
+
+
+class ProjectRef(Ref):
+    project_code: str
+    title: str
+
+
+class CurrentProject(BaseModel):
+    """ADR-031: the trainee's active allocation, for the admin Trainees list (TRN-03 admin only)."""
+
+    allocation_id: uuid.UUID
+    project: ProjectRef
 
 
 class TraineeOut(BaseModel):
@@ -99,6 +113,8 @@ class TraineeOut(BaseModel):
     trade: NamedRef
     trades: list[NamedRef]
     centre_name: str | None
+    phone: str | None  # ADR-031: admin and the trainee only
+    current_project: CurrentProject | None  # ADR-031: TRN-03 for admins only, null elsewhere
     scores: Scores
     reported_scores: dict[str, Any] | None  # resume-reported, unverified (ADR-017); never a gate
     assessment_status: AssessmentStatus
@@ -165,11 +181,6 @@ class ProjectOut(BaseModel):
     stats: ProjectStats | None
     created_at: datetime
     updated_at: datetime
-
-
-class ProjectRef(Ref):
-    project_code: str
-    title: str
 
 
 class FactorOut(BaseModel):
@@ -338,6 +349,7 @@ def user_out(u: M.User) -> UserOut:
         role=u.role,
         status=u.status,
         department=u.department,
+        must_change_password=bool(u.must_change_password),
         created_at=u.created_at,
     )
 
@@ -371,11 +383,14 @@ def assessment_status(t: M.Trainee) -> AssessmentStatus:
     return AssessmentStatus.complete if complete else AssessmentStatus.pending
 
 
-def trainee_out(t: M.Trainee, viewer: M.User) -> TraineeOut:
+def trainee_out(t: M.Trainee, viewer: M.User, current: M.Allocation | None = None) -> TraineeOut:
+    """`current` (the active allocation) is passed only by TRN-03 for admins (ADR-031)."""
     is_admin = viewer.role == UserRole.admin
     is_self = t.user_id is not None and t.user_id == viewer.id
     account = (
-        AccountRef(user_id=t.user.id, email=t.user.email) if t.user is not None and (is_admin or is_self) else None
+        AccountRef(user_id=t.user.id, email=t.user.email, must_change_password=bool(t.user.must_change_password))
+        if t.user is not None and (is_admin or is_self)
+        else None
     )
     return TraineeOut(
         id=t.id,
@@ -386,6 +401,15 @@ def trainee_out(t: M.Trainee, viewer: M.User) -> TraineeOut:
         trade=named(t.trade),
         trades=[named(x) for x in t.all_trades],
         centre_name=t.centre_name,
+        phone=t.phone if (is_admin or is_self) else None,
+        current_project=CurrentProject(
+            allocation_id=current.id,
+            project=ProjectRef(
+                id=current.project.id, project_code=current.project.project_code, title=current.project.title
+            ),
+        )
+        if current is not None and is_admin
+        else None,
         scores=Scores(theory=_f(t.theory_score), practical=_f(t.practical_score), safety=_f(t.safety_score)),
         reported_scores=t.reported_scores if (is_admin or is_self) else None,
         assessment_status=assessment_status(t),

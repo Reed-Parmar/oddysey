@@ -7,6 +7,10 @@
             "title": "Email",
             "type": "string"
           },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
           "user_id": {
             "format": "uuid",
             "title": "User Id",
@@ -15,9 +19,65 @@
         },
         "required": [
           "user_id",
-          "email"
+          "email",
+          "must_change_password"
         ],
         "title": "AccountRef",
+        "type": "object"
+      },
+      "AccountRowResult": {
+        "properties": {
+          "account": {
+            "enum": [
+              "created",
+              "linked",
+              "existing"
+            ],
+            "title": "Account",
+            "type": "string"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "trainee": {
+            "enum": [
+              "created",
+              "updated",
+              "unchanged"
+            ],
+            "title": "Trainee",
+            "type": "string"
+          },
+          "trainee_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainee Code"
+          }
+        },
+        "required": [
+          "row",
+          "phone",
+          "full_name",
+          "trainee_code",
+          "trainee",
+          "account"
+        ],
+        "title": "AccountRowResult",
         "type": "object"
       },
       "AdminUser": {
@@ -51,6 +111,10 @@
             "title": "Id",
             "type": "string"
           },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole"
           },
@@ -75,6 +139,7 @@
           "role",
           "status",
           "department",
+          "must_change_password",
           "created_at",
           "trainee"
         ],
@@ -611,6 +676,17 @@
             "title": "Revision",
             "type": "integer"
           },
+          "rework_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rework Reason"
+          },
           "semantic": {
             "anyOf": [
               {
@@ -809,6 +885,7 @@
                 "type": "null"
               }
             ],
+            "description": "Ignored (ADR-030): a student is always answered about their own active allocation.",
             "title": "Allocation Id"
           },
           "history": {
@@ -870,6 +947,14 @@
               "type": "string"
             },
             "title": "Sources",
+            "type": "array"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Suggestions",
             "type": "array"
           }
         },
@@ -965,9 +1050,16 @@
             "type": "string"
           },
           "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
           },
           "title": {
             "maxLength": 200,
@@ -979,8 +1071,7 @@
         "required": [
           "cycle_id",
           "title",
-          "description",
-          "file"
+          "description"
         ],
         "title": "Body_create_project_api_v1_projects_post",
         "type": "object"
@@ -1102,6 +1193,30 @@
         "title": "Body_import_staff_api_v1_admin_imports_staff_post",
         "type": "object"
       },
+      "Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post": {
+        "properties": {
+          "cycle_id": {
+            "title": "Cycle Id",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "cycle_id"
+        ],
+        "title": "Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post",
+        "type": "object"
+      },
       "Body_import_trainees_api_v1_admin_imports_trainees_post": {
         "properties": {
           "cycle_id": {
@@ -1166,6 +1281,25 @@
           "file"
         ],
         "title": "Body_upload_resume_api_v1_trainees_me_resumes_post",
+        "type": "object"
+      },
+      "CurrentProject": {
+        "description": "ADR-031: the trainee's active allocation, for the admin Trainees list (TRN-03 admin only).",
+        "properties": {
+          "allocation_id": {
+            "format": "uuid",
+            "title": "Allocation Id",
+            "type": "string"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          }
+        },
+        "required": [
+          "allocation_id",
+          "project"
+        ],
+        "title": "CurrentProject",
         "type": "object"
       },
       "CycleBrief": {
@@ -1908,6 +2042,28 @@
           "data"
         ],
         "title": "Envelope[SubmissionOut]",
+        "type": "object"
+      },
+      "Envelope_TraineeAccountImportResult_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TraineeAccountImportResult"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[TraineeAccountImportResult]",
         "type": "object"
       },
       "Envelope_TraineeOut_": {
@@ -3143,6 +3299,10 @@
       },
       "OriginalityReport": {
         "properties": {
+          "ai_writing": {
+            "title": "Ai Writing",
+            "type": "string"
+          },
           "analysed_at": {
             "anyOf": [
               {
@@ -3164,6 +3324,10 @@
               }
             ],
             "title": "Attention Band"
+          },
+          "cycle_name": {
+            "title": "Cycle Name",
+            "type": "string"
           },
           "decision": {
             "title": "Decision",
@@ -3252,6 +3416,10 @@
             "title": "Project Title",
             "type": "string"
           },
+          "review_state": {
+            "title": "Review State",
+            "type": "string"
+          },
           "rework_threshold": {
             "title": "Rework Threshold",
             "type": "number"
@@ -3262,6 +3430,10 @@
             },
             "title": "Segments",
             "type": "array"
+          },
+          "semantic": {
+            "title": "Semantic",
+            "type": "string"
           },
           "sources": {
             "items": {
@@ -3278,6 +3450,17 @@
             "format": "uuid",
             "title": "Submission Id",
             "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
           },
           "text_truncated": {
             "title": "Text Truncated",
@@ -3303,8 +3486,13 @@
           "project_code",
           "project_title",
           "trainee_name",
+          "cycle_name",
+          "submitted_at",
           "generated_at",
           "analysed_at",
+          "review_state",
+          "semantic",
+          "ai_writing",
           "status",
           "overlap_pct",
           "attention_band",
@@ -5697,6 +5885,94 @@
         "title": "TradeCount",
         "type": "object"
       },
+      "TraineeAccountImportResult": {
+        "properties": {
+          "accounts_created": {
+            "title": "Accounts Created",
+            "type": "integer"
+          },
+          "accounts_existing": {
+            "title": "Accounts Existing",
+            "type": "integer"
+          },
+          "accounts_linked": {
+            "title": "Accounts Linked",
+            "type": "integer"
+          },
+          "applied": {
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "created_skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created Skills",
+            "type": "array"
+          },
+          "created_trades": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created Trades",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/RowError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AccountRowResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "applied",
+          "rows",
+          "created",
+          "updated",
+          "unchanged",
+          "created_trades",
+          "created_skills",
+          "warnings",
+          "errors",
+          "accounts_created",
+          "accounts_linked",
+          "accounts_existing",
+          "results"
+        ],
+        "title": "TraineeAccountImportResult",
+        "type": "object"
+      },
       "TraineeAdminPatch": {
         "additionalProperties": false,
         "properties": {
@@ -5887,6 +6163,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "current_project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrentProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cycle_id": {
             "format": "uuid",
             "title": "Cycle Id",
@@ -5919,6 +6205,17 @@
           "onboarded_via": {
             "title": "Onboarded Via",
             "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "reported_scores": {
             "anyOf": [
@@ -5971,6 +6268,8 @@
           "trade",
           "trades",
           "centre_name",
+          "phone",
+          "current_project",
           "scores",
           "reported_scores",
           "assessment_status",
@@ -6040,6 +6339,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "current_project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrentProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cycle_id": {
             "format": "uuid",
             "title": "Cycle Id",
@@ -6072,6 +6381,17 @@
           "onboarded_via": {
             "title": "Onboarded Via",
             "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "reported_scores": {
             "anyOf": [
@@ -6124,6 +6444,8 @@
           "trade",
           "trades",
           "centre_name",
+          "phone",
+          "current_project",
           "scores",
           "reported_scores",
           "assessment_status",
@@ -6380,6 +6702,10 @@
             "title": "Id",
             "type": "string"
           },
+          "must_change_password": {
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole"
           },
@@ -6394,6 +6720,7 @@
           "role",
           "status",
           "department",
+          "must_change_password",
           "created_at"
         ],
         "title": "UserOut",
@@ -6695,6 +7022,47 @@
         "summary": "Import Staff",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/imports/trainee-accounts": {
+      "post": {
+        "operationId": "import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_trainee_accounts_api_v1_admin_imports_trainee_accounts_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_TraineeAccountImportResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Trainee Accounts",
+        "tags": [
+          "imports"
         ]
       }
     },
@@ -8064,6 +8432,28 @@
         ]
       }
     },
+    "/api/v1/me/password-changed": {
+      "post": {
+        "description": "ME-03 (ADR-031): the client changed its password with Supabase `updateUser`; clear the change-password notice.",
+        "operationId": "password_changed_api_v1_me_password_changed_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_UserOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Password Changed",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/v1/onboarding": {
       "get": {
         "operationId": "get_onboarding_api_v1_onboarding_get",
@@ -8589,6 +8979,7 @@
         ]
       },
       "post": {
+        "description": "The document is optional (ADR-028): without one, metadata and the guide come from title + description.",
         "operationId": "create_project_api_v1_projects_post",
         "requestBody": {
           "content": {

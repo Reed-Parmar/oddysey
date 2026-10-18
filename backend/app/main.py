@@ -25,6 +25,7 @@ from app.modules import (
     projects,
     resumes,
     submissions,
+    trainee_accounts,
     trainees,
 )
 from app.modules.allocations import router as allocations
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
         trainees,
         onboarding,
         imports,
+        trainee_accounts,
         allocations,
         submissions,
         resumes,

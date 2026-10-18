@@ -12,7 +12,6 @@ import { qk } from "@/api/queryKeys";
 import type { Allocation, HistoryEntry, Submission } from "@/api/types";
 import { Avatar, DateTime, EmptyState, ErrorState, FormField, LoadingState, PageHeader, StatusBadge, useToast } from "@/components/shared";
 import { Alert, Button, Card, Dialog, Textarea } from "@/components/ui";
-import { AssistantLauncher } from "@/features/shared/Autopilot";
 import { MatchReason } from "@/features/shared/MatchReason";
 import { ProjectDetailView, ProjectDocumentButton } from "@/features/shared/views";
 
@@ -102,7 +101,6 @@ function AllocatedProject({ allocation: a, rejected }: { allocation: Allocation;
           )}
         </div>
       </div>
-      <AssistantLauncher allocationId={a.id} />
     </div>
   );
 }

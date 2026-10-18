@@ -28,6 +28,7 @@ import {
   StatusBadge, useToast, type Column,
 } from "@/components/shared";
 import { Button, Card, cx } from "@/components/ui";
+import { useAuth } from "@/auth/AuthProvider";
 import { formatBytes, formatInr, formatScore } from "@/lib/format";
 import { MatchReason } from "./MatchReason";
 import { PlagiarismReport } from "./PlagiarismReport";
@@ -285,31 +286,6 @@ export function ResumeExtractionView({ resume, skills }: { resume: Resume; skill
   );
 }
 
-/** RES-03 card for staff views. Supervisors get the extraction only (the API never returns the file to them). */
-export function TraineeResumeCard({ traineeId, canDownload }: { traineeId: string; canDownload?: boolean }) {
-  const q = useQuery({
-    queryKey: qk.resumes.trainee(traineeId),
-    queryFn: () => call(api.GET("/api/v1/trainees/{trainee_id}/resume", { params: { path: { trainee_id: traineeId } } })),
-  });
-  const r = q.data?.data;
-  return (
-    <Card
-      title="From resume"
-      icon={<FileText />}
-      description={r ? <>Uploaded <DateTime value={r.created_at} />{r.source && ` · ${RESUME_SOURCE_LABEL[r.source]}`}. Suggestions only; the trainee decides which skills to add.</> : undefined}
-      actions={r && canDownload ? <ResumeDownloadButton resume={r} /> : undefined}
-    >
-      {q.isLoading ? <LoadingState /> : q.error ? (
-        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : !r ? (
-        <p className="text-sm text-muted">No resume uploaded.</p>
-      ) : (
-        <ResumeExtractionView resume={r} />
-      )}
-    </Card>
-  );
-}
-
 // ---------------------------------------------------------------- submissions
 
 function DownloadButton({ submission }: { submission: Submission }) {
@@ -499,8 +475,14 @@ export function ExportReportButton({ submissionId }: { submissionId: string }) {
   return <Button size="sm" variant="secondary" icon={<DownloadSimple />} loading={m.isPending} onClick={() => m.mutate()}>Printable report</Button>;
 }
 
-/** Plagiarism & Originality Analysis + automated report evaluation + improvements (same persisted data as the export). */
+/**
+ * Automated report evaluation + improvements, plus (staff only) the Plagiarism & Originality Analysis, similarity
+ * and AI-writing sections, review history and the printable export. Students never see originality findings: the
+ * role is checked here (deny by default), not only whether the API sent the data.
+ */
 export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis; showExport?: boolean }) {
+  const role = useAuth().user?.role;
+  const staff = role === "supervisor" || role === "admin";
   const o = (a.originality ?? {}) as {
     status?: string; overlap_pct?: number | null; overlap_reason?: string | null; method?: string; formula?: string;
     tokens?: { eligible: number; excluded: number; excluded_pct: number; excluded_by_reason: Record<string, number> };
@@ -513,13 +495,14 @@ export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis
   };
   const criteria = a.effective_criteria as Criterion[];
   const corpus = (a.corpus ?? {}) as { scope?: string; items?: number };
+  const limitations = [...(staff ? o.limitations ?? [] : []), ...(ev.limitations ?? [])];
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <StatusBadge kind="analysis" value={a.status} />
         <span className="text-xs text-muted">Version {a.submission_version} · revision {a.revision} · {a.pipeline_version}</span>
         {a.finished_at && <span className="text-xs text-muted">· <DateTime value={a.finished_at} /></span>}
-        {showExport && <ExportReportButton submissionId={a.submission_id} />}
+        {staff && showExport && <ExportReportButton submissionId={a.submission_id} />}
       </div>
       {a.status_reason && <p className="rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning">{a.status_reason}</p>}
 
@@ -546,19 +529,23 @@ export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis
         )}
       </Section>
 
-      <Section title="Plagiarism & Originality Report" note="Potential overlap that needs contextual review. Shared brief and guide text, quotations and references are not counted.">
-        <PlagiarismReport submissionId={a.submission_id} />
-        {o.self_reuse?.overlap_pct != null && <p className="mt-3 text-xs text-muted">Reuse of the trainee's own earlier versions: {o.self_reuse.overlap_pct}% (reported separately, not counted as overlap).</p>}
-        <p className="mt-1 text-xs text-muted">Compared with: {corpus.scope} ({corpus.items ?? 0} items).</p>
-      </Section>
+      {staff && (
+        <>
+          <Section title="Plagiarism & Originality Report" note="Potential overlap that needs contextual review. Shared brief and guide text, quotations and references are not counted.">
+            <PlagiarismReport submissionId={a.submission_id} />
+            {o.self_reuse?.overlap_pct != null && <p className="mt-3 text-xs text-muted">Reuse of the trainee's own earlier versions: {o.self_reuse.overlap_pct}% (reported separately, not counted as overlap).</p>}
+            <p className="mt-1 text-xs text-muted">Compared with: {corpus.scope} ({corpus.items ?? 0} items).</p>
+          </Section>
 
-      <Section title="Concept and code similarity">
-        <p className="text-muted">{(a.semantic as { reason?: string } | null)?.reason ?? "Not assessed."}</p>
-        <p className="mt-1 text-muted">{o.code?.reason ?? "Code similarity not assessed."}</p>
-      </Section>
-      <Section title="AI-writing assessment">
-        <p className="text-muted">{(a.ai_writing as { reason?: string } | null)?.reason ?? "Not available."}</p>
-      </Section>
+          <Section title="Concept and code similarity">
+            <p className="text-muted">{(a.semantic as { reason?: string } | null)?.reason ?? "Not assessed."}</p>
+            <p className="mt-1 text-muted">{o.code?.reason ?? "Code similarity not assessed."}</p>
+          </Section>
+          <Section title="AI-writing assessment">
+            <p className="text-muted">{(a.ai_writing as { reason?: string } | null)?.reason ?? "Not available."}</p>
+          </Section>
+        </>
+      )}
 
       <Section title="How to improve" note="Specific to this project. Improvement guidance is not a misconduct finding.">
         {ev.suggestions?.length ? (
@@ -577,14 +564,16 @@ export function AnalysisReport({ analysis: a, showExport }: { analysis: Analysis
         {!!ev.checklist?.length && <ul className="mt-3 space-y-1">{ev.checklist.map((c) => <li key={c}>☐ {c}</li>)}</ul>}
       </Section>
 
-      {a.reviews.length > 0 && (
+      {staff && a.reviews.length > 0 && (
         <Section title="Review history">
           <ul className="space-y-1.5">{a.reviews.map((r) => <li key={r.id}><DateTime value={r.created_at} /> · {r.reviewer}: <span className="font-medium">{r.action.replace("_", " ")}</span> — {r.note}</li>)}</ul>
         </Section>
       )}
-      <Section title="Limitations">
-        <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted">{[...(o.limitations ?? []), ...(ev.limitations ?? [])].map((l) => <li key={l}>{l}</li>)}</ul>
-      </Section>
+      {limitations.length > 0 && (
+        <Section title="Limitations">
+          <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted">{limitations.map((l) => <li key={l}>{l}</li>)}</ul>
+        </Section>
+      )}
     </div>
   );
 }

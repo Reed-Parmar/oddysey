@@ -64,6 +64,7 @@ class User(Base):
     role: Mapped[E.UserRole] = mapped_column(_enum(E.UserRole, "user_role"))
     status: Mapped[E.UserStatus] = mapped_column(_enum(E.UserStatus, "user_status"), server_default="active")
     department: Mapped[str | None] = mapped_column(Text)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, server_default="false")  # ADR-031
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 
@@ -115,6 +116,7 @@ class Trainee(Base):
     gender: Mapped[str | None] = mapped_column(Text)
     trade_id: Mapped[uuid.UUID] = _fk("app.trades.id")
     centre_name: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)  # ADR-031: +91XXXXXXXXXX, unique per cycle, the login id
     theory_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     practical_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     safety_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))

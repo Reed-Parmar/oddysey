@@ -20,7 +20,7 @@ import { Alert, Button, Card, Input, Textarea, cx } from "@/components/ui";
 import { AnalysisReport, ReportScore, SubmissionDetailView, useAnalysis } from "@/features/shared/views";
 
 import {
-  FILE_ACCEPT, MAX_FILE_BYTES, REPORT_REQUIRED, buildSubmissionFormData, emptySubmission, submissionSchema,
+  FILE_ACCEPT, MAX_FILE_BYTES, REPORT_REQUIRED, buildSubmissionFormData, emptySubmission, reworkMessage, submissionSchema,
   type SubmissionValues,
 } from "./forms";
 
@@ -122,7 +122,7 @@ export function SubmitForm({ nextVersion, late }: { nextVersion: number; late: b
   return (
     <Card
       title={nextVersion === 1 ? "Submit your work" : `Submit version ${nextVersion}`}
-      description="Your report is analysed automatically (originality and a report score). Your supervisor may also record a verified practical evaluation."
+      description="Your report gets an automated report score with feedback. Your supervisor may also record a verified practical evaluation."
       icon={<PaperPlaneTilt />}
     >
       <form
@@ -271,6 +271,13 @@ export function ReworkFeedback({ title, feedback }: { title: string; feedback: s
   );
 }
 
+/** Rework banner: the student-safe reason from SUB-05 (`rework_reason`, ADR-028), else the feedback / generic text. */
+export function ReworkNotice({ submission: s, title }: { submission: Submission; title: string }) {
+  const q = useAnalysis(s.id, false);
+  const reason = q.data?.data.rework_reason;
+  return <ReworkFeedback title={title} feedback={reason ?? reworkMessage(s.evaluation?.feedback)} />;
+}
+
 /** Own analysis for one version; polls while the pipeline is running. 404 means it has not been created yet. */
 export function AnalysisCard({ submissionId }: { submissionId: string }) {
   const q = useAnalysis(submissionId, true);
@@ -279,7 +286,7 @@ export function AnalysisCard({ submissionId }: { submissionId: string }) {
     <Card
       title="Automated report evaluation"
       icon={<MagnifyingGlass />}
-      description="Plagiarism & originality analysis and an automated report score. It checks only what your report documents."
+      description="An automated report score with feedback and steps to improve. It checks only what your report documents."
     >
       {q.isLoading ? (
         <LoadingState label="Loading analysis…" />
@@ -288,7 +295,7 @@ export function AnalysisCard({ submissionId }: { submissionId: string }) {
       ) : q.error || !q.data ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : (
-        <AnalysisReport analysis={q.data.data} showExport />
+        <AnalysisReport analysis={q.data.data} />
       )}
     </Card>
   );
@@ -320,9 +327,7 @@ export function SubmissionDetailPage() {
         title={`Submission · version ${s.version}`}
         description={`${s.project.project_code} · ${s.project.title}`}
       />
-      {s.status === "rework_requested" && s.evaluation?.feedback && (
-        <ReworkFeedback title="Rework requested" feedback={s.evaluation.feedback} />
-      )}
+      {s.status === "rework_requested" && <ReworkNotice submission={s} title="Rework requested" />}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
         <div className="flex min-w-0 flex-col gap-6">
           <SubmissionDetailView submission={s} />

@@ -478,6 +478,15 @@ Implemented in `backend/migrations/versions/0005_phrase_concepts.py` (reversible
 |---|---|
 | `phrase_concepts` | `phrase_key` text PK (lower-cased, whitespace-collapsed phrase, ≤ 300), `concepts` text[] (0–3, most specific first; `{}` = the AI gave none, not asked again), `source` ('ai'), `model`, `prompt_version`, `created_at`. Written only by the `tag_concepts` job; read additively by the scorer |
 
+### 4.5 Migration 0007 (ADR-031: trainee accounts by phone)
+
+Implemented in `backend/migrations/versions/0007_trainee_phone_accounts.py` (reversible).
+
+| Object | Change |
+|---|---|
+| `trainees.phone` | `text NULL`, `CHECK (phone ~ '^\+91[6-9][0-9]{9}$')`; unique per cycle (`trainees_cycle_phone_key ON (cycle_id, phone) WHERE phone IS NOT NULL`). Written only by IMP-04 (admin); readable by admins and the trainee |
+| `users.must_change_password` | `boolean NOT NULL DEFAULT false`; set true for accounts IMP-04 creates, cleared by ME-03 |
+
 ## 5. Ownership and access
 
 | Table | Written by | Read scope |

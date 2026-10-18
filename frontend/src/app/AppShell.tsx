@@ -217,6 +217,13 @@ export function AppShell() {
           </div>
         </header>
         <main id="main" ref={mainRef} tabIndex={-1} className="mx-auto w-full max-w-7xl min-w-0 px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8">
+          {user.must_change_password && location.pathname !== "/account" && (
+            // ADR-031: accounts created by the programme team start with a shared default password.
+            <p role="status" className="mb-5 rounded-lg border border-warning/40 bg-warning-bg px-4 py-3 text-sm">
+              You are using the default password set by the programme team.{" "}
+              <Link to="/account" className="font-semibold text-primary hover:underline">Change your password</Link>
+            </p>
+          )}
           <Outlet />
         </main>
       </div>

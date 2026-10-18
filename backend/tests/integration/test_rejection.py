@@ -142,3 +142,34 @@ def test_rejection_is_blocked_after_archive(client, scenario):
     )
     r = reject(client, scenario["student"], scenario["alloc"]["id"])
     assert r.status_code == 409 and r.json()["error"]["code"] == "CYCLE_CLOSED"
+
+
+def test_rejection_reason_steers_the_next_project(client, scenario):
+    """ADR-029: "solar, not welding" → the replacement is a solar project when one is eligible; the stored score
+    is still the rule score (Σ factor points = score) and the explanation says how the reason was used."""
+    student, admin, s = scenario["student"], scenario["admin"], scenario["s"]
+    # Make the Solar Technician project also open to Electricians, so Priya has two solar options and a non-solar one.
+    sl = s["projects"]["PRJ-SL-601"]
+    owner_sql(
+        "INSERT INTO app.project_trades (project_id, trade_id) SELECT %s, id FROM app.trades WHERE name = 'Electrician'"
+        " ON CONFLICT DO NOTHING",
+        (sl["id"],),
+    )
+    rejected = scenario["alloc"]["project"]
+    reason = "I want to work on solar panels, not welding"
+    ok(reject(client, student, scenario["alloc"]["id"], reason=reason))
+    drain()
+    me = ok(client.get("/api/v1/trainees/me", headers=student))["data"]["allocation"]
+    assert me is not None and me["project"]["id"] != rejected["id"]
+    assert "solar" in me["project"]["title"].lower()
+    assert round(sum(f["points"] for f in me["factors"]), 2) == me["match_score"]
+    assert me["explanation"].startswith(f"You said: '{reason}'.") and "prioritised projects about" in me["explanation"]
+    assert "solar" in me["explanation"]
+    # the admin's ranking snapshot (ALLOC-09) records the reason fit; students never see it
+    hist = ok(client.get(f"/api/v1/admin/trainees/{scenario['priya']['id']}/allocation-history", headers=admin))["data"]
+    fit = next(h for h in hist if h["allocation"]["status"] == "rejected")["replacement"]["reason_fit"]
+    assert fit["used"] and "solar" in fit["wanted"] and fit["unwanted"] == ["welding"]
+    assert fit["selected_project_id"] == me["project"]["id"]
+    assert rejected["id"] not in [c["project_id"] for c in fit["candidates"]]  # the exclusion still applies
+    mine = ok(client.get("/api/v1/trainees/me/allocation-history", headers=student))["data"]
+    assert all(h["replacement"] is None for h in mine)

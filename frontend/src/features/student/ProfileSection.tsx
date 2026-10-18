@@ -1,23 +1,19 @@
-/** Profile page sections (ADR-024): programme-managed facts, resume, the self-editable profile and resume-reported marks. */
-import { FloppyDisk, IdentificationCard, LockKey, NotePencil, Quotes, SealCheck, WarningCircle } from "@phosphor-icons/react";
+/** Profile page sections (ADR-024): programme-managed facts, resume, and the self-editable profile. */
+import { FloppyDisk, IdentificationCard, LockKey, NotePencil, SealCheck } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { api, call } from "@/api/client";
-import { ApiError, errorMessage } from "@/api/errors";
+import { ApiError } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
-import type { Resume, TraineeMe } from "@/api/types";
-import { Avatar, DateTime, FormError, FormField, ScoreBar, SkillChips, Skeleton, StatusBadge, useToast } from "@/components/shared";
-import { Alert, Button, Card, Input, Textarea } from "@/components/ui";
-import { formatScore } from "@/lib/format";
+import type { TraineeMe } from "@/api/types";
+import { Avatar, FormError, FormField, ScoreBar, SkillChips, StatusBadge, useToast } from "@/components/shared";
+import { Button, Card, Textarea } from "@/components/ui";
 
 import { TradePicker } from "./fields";
-import {
-  BACKGROUND_MAX, MARK_FIELDS, initialMarks, markError, profileBody, profileSchema, reportedScoresBody,
-  reportedValue, type MarkField, type MarkValues, type ProfileValues,
-} from "./forms";
+import { BACKGROUND_MAX, profileBody, profileSchema, type ProfileValues } from "./forms";
 import { useMyResume } from "./hooks";
 import { ResumePanel } from "./ResumePanel";
 import { Fact } from "./ui";
@@ -185,144 +181,6 @@ function ProfileForm({ me }: { me: TraineeMe }) {
   );
 }
 
-const MARK_STATUS: Record<string, string> = {
-  found: "Found in your resume",
-  not_found: "Not found in your resume",
-  ambiguous: "Unclear in your resume: please check",
-};
-
-const UNVERIFIED_NOTE =
-  "Resume-reported, unverified — not used for allocation gates; your programme team's verified marks are authoritative.";
-
-function SavedReportedMarks({ me }: { me: TraineeMe }) {
-  const saved = me.reported_scores;
-  if (!saved) return null;
-  const confirmedAt = typeof saved.confirmed_at === "string" ? saved.confirmed_at : null;
-  return (
-    <div className="rounded-lg border border-border bg-surface-2 p-3">
-      <p className="text-xs font-semibold tracking-wide text-muted uppercase">Saved resume-reported marks</p>
-      <dl className="mt-2 grid grid-cols-3 gap-3">
-        {MARK_FIELDS.map(([f, label]) => {
-          const v = reportedValue(saved, f);
-          return <Fact key={f} label={label}><span className="tabular-nums">{v == null ? "—" : formatScore(v)}</span></Fact>;
-        })}
-      </dl>
-      <p className="mt-2 text-xs text-muted">
-        {UNVERIFIED_NOTE}
-        {confirmedAt && <> Saved <DateTime value={confirmedAt} />.</>}
-      </p>
-    </div>
-  );
-}
-
-function ReportedMarksForm({ me, resume }: { me: TraineeMe; resume: Resume }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [values, setValues] = useState<MarkValues>(() => initialMarks(resume, me.reported_scores));
-  const [problem, setProblem] = useState<unknown>(null);
-  const marks = new Map((resume.extracted?.assessment_marks ?? []).map((m) => [m.field, m]));
-  const errors = Object.fromEntries(MARK_FIELDS.map(([f]) => [f, markError(values[f])])) as Record<MarkField, string | null>;
-  const hasError = Object.values(errors).some(Boolean);
-  const empty = MARK_FIELDS.every(([f]) => !values[f].trim());
-
-  const save = useMutation({
-    mutationFn: () => call(api.PATCH("/api/v1/trainees/me", { body: reportedScoresBody(resume.id, values) })),
-    onSuccess: async () => {
-      setProblem(null);
-      toast.success("Resume-reported marks saved (unverified)");
-      await qc.invalidateQueries({ queryKey: qk.trainees.me() });
-    },
-    onError: setProblem,
-  });
-
-  return (
-    <form
-      noValidate
-      className="flex flex-col gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!hasError && !empty) save.mutate();
-      }}
-    >
-      <ul className="flex flex-col gap-4">
-        {MARK_FIELDS.map(([f, label]) => {
-          const m = marks.get(f);
-          const id = `reported-${f}`;
-          return (
-            <li key={f} className="rounded-lg border border-border p-3">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <label htmlFor={id} className="text-sm font-semibold text-text">{label}</label>
-                  <p className="text-xs text-muted">{m ? MARK_STATUS[m.status] ?? m.status : MARK_STATUS.not_found}</p>
-                </div>
-                <div className="w-28">
-                  <Input
-                    id={id}
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={100}
-                    step="0.1"
-                    value={values[f]}
-                    aria-invalid={!!errors[f] || undefined}
-                    aria-describedby={errors[f] ? `${id}-error` : undefined}
-                    onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
-                  />
-                </div>
-              </div>
-              {m?.excerpt && (
-                <blockquote className="mt-2 flex gap-2 border-l-2 border-border-strong pl-3 text-xs leading-relaxed text-muted [overflow-wrap:anywhere]">
-                  <Quotes aria-hidden size={12} className="mt-0.5 shrink-0" />
-                  <span><span className="sr-only">Excerpt from your resume: </span>{m.excerpt}</span>
-                </blockquote>
-              )}
-              {errors[f] && (
-                <p id={`${id}-error`} className="mt-1 flex items-center gap-1 text-xs font-medium text-danger" role="alert">
-                  <WarningCircle aria-hidden size={14} className="shrink-0" />
-                  {errors[f]}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <FormError error={problem} />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted">Marks out of 100. Leave a field empty if your resume doesn't list it.</p>
-        <Button type="submit" size="sm" icon={<FloppyDisk />} loading={save.isPending} disabled={hasError || empty}>
-          Confirm marks
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/** Marks read from the latest resume: the trainee confirms or corrects them; they stay unverified (ADR-017). */
-function ReportedMarksCard({ me }: { me: TraineeMe }) {
-  const resumeQ = useMyResume();
-  const r = resumeQ.data?.data ?? null;
-  const hasMarks = !!r && r.status === "extracted" && (r.extracted?.assessment_marks.length ?? 0) > 0;
-  return (
-    <Card title="Resume-reported marks" icon={<Quotes />} description="ITI marks your resume lists, confirmed by you.">
-      <div className="flex flex-col gap-4">
-        <Alert variant="info" icon={<WarningCircle />}>{UNVERIFIED_NOTE}</Alert>
-        <SavedReportedMarks me={me} />
-        {resumeQ.isLoading ? (
-          <Skeleton className="h-24 w-full" />
-        ) : resumeQ.error ? (
-          <p className="text-sm text-danger" role="alert">{errorMessage(resumeQ.error)}</p>
-        ) : !r ? (
-          <p className="text-sm text-muted">Upload your resume above. If it lists your theory, practical or safety marks, you can confirm them here.</p>
-        ) : !hasMarks ? (
-          <p className="text-sm text-muted">No assessment marks were found in your latest resume.</p>
-        ) : (
-          <ReportedMarksForm key={`${r.id}:${me.updated_at}`} me={me} resume={r} />
-        )}
-      </div>
-    </Card>
-  );
-}
-
 /** The Profile page body (ADR-024): resume first (it fills skills and interest), then the editable profile. */
 export function ProfileSection({ me }: { me: TraineeMe }) {
   return (
@@ -331,7 +189,6 @@ export function ProfileSection({ me }: { me: TraineeMe }) {
       <div className="min-w-0 space-y-6">
         <ResumePanel me={me} />
         <ProfileForm key={me.updated_at} me={me} />
-        <ReportedMarksCard me={me} />
       </div>
     </section>
   );

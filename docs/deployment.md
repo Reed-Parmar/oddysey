@@ -90,7 +90,7 @@ Config validation: the API refuses to boot if a required variable is missing (py
 
 ### 3.5 Background automation (ADR-017)
 
-- The worker processes projects, allocates every `ALLOCATION_INTERVAL_MINUTES` (15) and on events, analyses
+- The worker processes projects, allocates every `ALLOCATION_INTERVAL_MINUTES` (1, ADR-029; an unchanged cycle is skipped after one cheap query) and on events, analyses
   reports, sends notifications and archives cycles at `archive_at`. Run it **either** inside the API
   (`RUN_WORKER_IN_API=true`, the Render default in `render.yaml`) **or** as `uv run python -m app.worker`
   (a Render Background Worker; then set `RUN_WORKER_IN_API=false`). Several workers are safe (SKIP LOCKED + leases).

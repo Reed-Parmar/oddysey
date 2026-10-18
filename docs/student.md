@@ -1,22 +1,47 @@
 # Student Module Handbook (Teammate A)
 
+> **ADR-029 (rev 10, binding; api.md §0g).** Allocation runs **about every minute** (copy that says "about every 15
+> minutes" must change). When you reject a project (ALLOC-07), your reason is used to choose the next one: eligible projects
+> about what you asked for come first and projects like the one you rejected come later; the new project's explanation
+> starts "You said: '…'." and says what was prioritised and avoided (your score is still the normal rule score). If the AI
+> evaluator is unavailable, your report gets a **rule-based** evaluation (`evaluation.source: "rule"`, low confidence,
+> marked as such); a low rule score goes to your supervisor instead of sending the work back. A video link or a resume
+> uploaded as the report gets a clear message asking for the project report (PDF/DOCX).
+
+> **ADR-031 (rev 9, binding; api.md §0f).** The programme team can create a trainee's login directly (IMP-04). Such a
+> trainee logs in with their **phone number** (the Login field is "Email or phone number"; the SPA converts a phone to the
+> derived login email `91XXXXXXXXXX@trainee.spa.local`) and the default password the programme team gives them. Their
+> account has `must_change_password: true` (ME-01) until they change the password on `/account` (Supabase `updateUser`,
+> then ME-03 `POST /me/password-changed`); a banner asks them to do so. TRN-01 returns their own `phone`. Everything else
+> in the student journey is unchanged (onboarding is skipped because the trainee record already exists).
+
+> **ADR-028 (rev 7, binding; api.md §0e).** A report whose automated analysis completes with a mark is finalised
+> automatically (status `evaluated`, or `rework_requested` below 50); no supervisor step is needed. The **plagiarism /
+> originality report is staff-only**: in SUB-05 a student gets `originality`, `corpus`, `semantic` and `ai_writing` as
+> `null`, SUB-08 shows only the evaluation, and SUB-09/10 return 403. The marks, feedback and suggestions stay visible.
+> When a version is sent back automatically for originality, SUB-05 `rework_reason` carries a generic "rewrite it in your
+> own words and resubmit" message (no percentages, no sources); the Submissions banner must read it from there.
+
 > **ADR-019 / ADR-020 (rev 5, binding; api.md §0c).** The Dashboard shows a **Needs attention** panel (ALR-01 `/me/alerts`:
 > no project yet with the reason, deadline near, overdue, rework requested, analysis ready). Each alert links to My Project.
-> My Project has an **Ask about my project** panel (AST-01 `/assistant/ask`). It answers only from the student's own
-> allocated project (brief, guide, deadline, why it was allocated, submission status and feedback), names its sources, and
-> declines anything else. It is read-only: it never changes anything, and nothing typed into it is stored.
+> Every student page has an **Ask about my project** assistant (AST-01 `/assistant/ask`, ADR-030: student only) once a
+> project is allocated. It answers only from the student's own allocated project (brief, guide, deadline, why it was
+> allocated, submission status and feedback), names its sources, and declines anything else, including general trade or
+> coding questions, other projects and other trainees. It is read-only: it never changes anything, and nothing typed into it is stored.
+> Each answer ends with 2–3 suggested follow-up questions (`suggestions`) shown as clickable chips; clicking one asks it.
 
 > **ADR-018 (rev 4, binding).** Several cycles may be open. Onboarding shows the open cycles ranked by how many projects
 > match the student's trades, preselects the best and lets the student choose another (skipped when only one is open).
 > A student belongs to one open cycle at a time; their Dashboard, My Project and Submissions show that cycle.
-> **ADR-026:** each analysed report gets a detailed plagiarism report (matched words highlighted) on Submissions and as a
-> PDF emailed to the trainee (when email is configured). Overlap ≥ 50% means rework: redo the work in your own words.
+> **ADR-026 (amended by ADR-028):** each analysed report gets a detailed plagiarism report (matched words highlighted), but
+> it is **staff-only**: the supervisor and admins see it and the PDF is emailed to the supervisor, not the trainee. Overlap
+> ≥ 50% still means rework; the trainee sees only the generic `rework_reason` and must redo the work in their own words.
 > **ADR-025:** on Profile, skills and career interest are read-only; they change only from the latest uploaded resume
 > ("Update resume" card), and TRN-02 enforces it.
 > **ADR-024:** nav adds **Profile** (`/student/profile`: profile form + resume upload, no longer on the Dashboard). Onboarding
 > does not ask for a trainee ID (generated at enrolment) and can pre-fill skills and career interest from a resume (ONB-04).
-> **ADR-022:** nav is Dashboard · My Project · **Submissions** (`/student/submissions`: submit form, rework feedback, latest
-> analysis, version history). The assistant opens from a floating robot button; the "Needs attention" panel appears only
+> **ADR-022:** nav is Dashboard · My Project · **Submissions** (`/student/submissions`: submit form, rework feedback, an
+> "All versions" list (every version with status, analysis status, report score and a link to its page), latest analysis). The assistant opens from a floating robot button (ADR-030: on every student page); the "Needs attention" panel appears only
 > when a critical or warning alert exists. My Project no longer shows the generated project guide.
 
 > **ADR-017 (rev 3, binding — supersedes conflicting sections below).** Navigation is exactly **Dashboard** (`/student`) and
@@ -24,7 +49,7 @@
 > self-register at `/student/onboarding` (ONB-01..03: name, gender incl. "prefer not to say" (private, never a matching input),
 > canonical trainee ID, centre, one or more ITI trades, skills, career interest; resumable; waits for a cycle if none is open;
 > a typed ID never claims an existing record). The Dashboard holds the profile form (trades, skills, interest), the resume
-> panel and resume-reported marks (unverified; never a gate). My Project shows the own allocated project only: brief,
+> panel (the Profile page no longer shows a resume-reported marks card). My Project shows the own allocated project only: brief,
 > supervisor, deadline, document, generated guide, "Why this project was allocated to me" (persisted factors + mode), a
 > **Reject this project** action before the first submission (ALLOC-07; permanent exclusion; a different eligible project is
 > found automatically), the submission form (a report link or PDF/DOCX report is required; video optional), version history,

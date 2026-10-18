@@ -4,6 +4,10 @@
 
 **Revision log**
 - rev 0 / 1 / 1.1 (2026-10-17): generic plan (teams, preferences, milestones). **Superseded.**
+- **rev 10** (2026-10-18): §0g 1-minute allocation with cheap skip, rule-based evaluation fallback, rejection reason steers the next project (ADR-029).
+- **rev 9** (2026-10-18): §0f IMP-04 trainee account upload keyed by phone, ME-03, phone/current_project on Trainee (ADR-031).
+- **rev 8** (2026-10-18): AST-01 is student-only and answers only from the trainee's own project (ADR-030, §0c).
+- **rev 7** (2026-10-18): §0e auto-finalised evaluation, staff-only plagiarism report, description-only project processing (ADR-028).
 - **rev 6** (2026-10-18): §0d ILP allocation optimiser (ADR-027).
 - **rev 5** (2026-10-18): §0c Autopilot alerts (ALR-01) and Project Assistant (AST-01), ADR-019/020.
 - **rev 2.1** (2026-10-17): §8 Clarifications C-1 to C-30 resolve the handbook gaps (binding).
@@ -39,7 +43,7 @@ is no longer accepted or returned), manual `project_code` input.
 | CYC-07 | GET | `/cycles/{id}/archive-preview` | admin | Counts of incomplete work at the boundary |
 | CYC-08 | POST | `/cycles/{id}/archive` | admin | `{reason, confirm: true}`; freezes, never deletes |
 | PRJ-01/02 | GET | `/projects`, `/projects/{id}` | admin all · supervisor own · student only projects of their ACTIVE allocation | `ProjectOut`: target_trades[], processing_status, processing_error, generation_source, generated (guide), document, min_match_score, deadline, effective_deadline, stats {working_individually, rejected_total} (staff only) |
-| PRJ-03 | POST | `/projects` | admin | multipart: cycle_id, title, description, file (PDF/DOCX ≤ 10 MB, text layer required); code generated `PRJ-0001`…; processing queued |
+| PRJ-03 | POST | `/projects` | admin | multipart: cycle_id, title, description, file (optional since ADR-028; PDF/DOCX ≤ 10 MB, text layer required); without a file the title + description are processed; code generated `PRJ-0001`…; processing queued |
 | PRJ-04 | PATCH | `/projects/{id}` | admin | title, description, trade_ids[1..5], difficulty, skills, min_practical_score, min_match_score, category, supervisor_id, deadline. Trades/difficulty/minimums set here are authoritative (never overwritten by generation) |
 | PRJ-07 | PUT | `/projects/{id}/document` | admin | Replace the document; re-processing queued |
 | PRJ-08 | POST | `/projects/{id}/reprocess` | admin | Regenerate metadata/guide |
@@ -50,12 +54,12 @@ is no longer accepted or returned), manual `project_code` input.
 | ALLOC-08 | GET | `/trainees/me/allocation-history` | student | Own allocations incl. rejected; no ranking data |
 | ALLOC-09 | GET | `/admin/trainees/{id}/allocation-history` | admin | Includes replacement ranking snapshot (mode, candidates, selected rank, explanation) |
 | SUB-01 | POST | `/submissions` | student | A report link or a PDF/DOCX report file is REQUIRED (`REPORT_REQUIRED`); other files only as supplements; analysis queued |
-| SUB-05 | GET | `/submissions/{id}/analysis` | as SUB-03 | `AnalysisOut`: status, originality (sources redacted to the viewer's access), semantic/ai_writing (not assessed/not available), evaluation, effective_criteria, reviews |
+| SUB-05 | GET | `/submissions/{id}/analysis` | as SUB-03 | ADR-028: for students `originality`/`corpus`/`semantic`/`ai_writing` are null and `rework_reason` is set on an automatic originality rework. `AnalysisOut`: status, originality (sources redacted to the viewer's access), semantic/ai_writing (not assessed/not available), evaluation, effective_criteria, reviews |
 | SUB-06 | POST | `/submissions/{id}/analysis/review` | supervisor of project, admin | `{action: confirm|annotate|amend|request_explanation|request_rework|lift_rework, note, amended_criteria?}`; history kept. `lift_rework` (ADR-026) returns an automatically reworked latest version to `submitted` |
 | SUB-07 | POST | `/submissions/{id}/analysis/retry` | supervisor of project, admin | Only for `failed` |
-| SUB-08 | GET | `/submissions/{id}/analysis/export` | as SUB-03 | Printable HTML of the persisted findings |
-| SUB-09 | GET | `/submissions/{id}/analysis/originality-report` | as SUB-03 | ADR-026 detailed plagiarism report: summary, decision, sources, every matched passage with matched words, highlighted text segments (redacted per viewer) |
-| SUB-10 | GET | `/submissions/{id}/analysis/originality-report.pdf` | as SUB-03 | The same report as a PDF (`application/pdf`) |
+| SUB-08 | GET | `/submissions/{id}/analysis/export` | as SUB-03 | Printable HTML of the persisted findings (students: evaluation only, ADR-028) |
+| SUB-09 | GET | `/submissions/{id}/analysis/originality-report` | supervisor of project, admin (students 403, ADR-028) | ADR-026 detailed plagiarism report: summary, decision, sources, every matched passage with matched words, highlighted text segments (redacted per viewer) |
+| SUB-10 | GET | `/submissions/{id}/analysis/originality-report.pdf` | supervisor of project, admin (students 403, ADR-028) | The same report as a PDF (`application/pdf`) |
 | EVAL-01 | POST | `/submissions/{id}/evaluation` | supervisor | Now the **verified practical evaluation** (optional, latest version, once per version) |
 | PROG-01 | GET | `/progress` | any (scoped) | Envelope adds `summary` over the whole filtered set; rows add waiting_reason, analysis_status, evaluation.score_type, deadline, archived, rejections; filters analysis_status |
 | TRN-02 | PATCH | `/trainees/me` | student | adds trade_ids, reported_scores `{resume_id, theory?, practical?, safety?}` (unverified) |
@@ -87,7 +91,7 @@ No schema change: alerts are computed on read from existing tables, and the assi
 | ID | Method | Path | Roles | Notes |
 |---|---|---|---|---|
 | ALR-01 | GET | `/me/alerts` | any (scoped) | `{data: Alert[]}`, most severe first. Each check runs only over active cycles and records the caller can already read; an empty list means nothing needs attention |
-| AST-01 | POST | `/assistant/ask` | student, supervisor | `{question (3–500), allocation_id?, history? (≤ 6 turns of {role: user\|assistant, content ≤ 1000})}` → `AssistantAnswer` |
+| AST-01 | POST | `/assistant/ask` | student (ADR-030; others 403) | `{question (3–500), allocation_id? (ignored), history? (≤ 6 turns of {role: user\|assistant, content ≤ 1000})}` → `AssistantAnswer` (incl. 0–3 follow-up `suggestions`) |
 
 `Alert` = `{code, severity: critical|warning|info, title, detail, count, link}`. `link` is a frontend route to the screen that fixes it. Codes:
 
@@ -97,18 +101,65 @@ No schema change: alerts are computed on read from existing tables, and the assi
 | supervisor (own projects) | `reviews_pending` (analysis `review_required` / `insufficient_evidence` / `failed`, not yet reviewed) · `deadline_risk` · `rework_open` |
 | student (self) | `no_project` (waiting, with reason) · `deadline_near` (≤ 7 days, nothing submitted) · `overdue` · `rework_requested` · `analysis_ready` |
 
-`AssistantAnswer` = `{answer, sources: string[], mode: "ai"|"rules", intent?}`.
-- **Scope.** A student is answered only about their own ACTIVE allocation (`allocation_id` is ignored), or 409 `NO_ACTIVE_ALLOCATION`. A supervisor must pass `allocation_id` of an active allocation on one of their projects (else 404 `NOT_FOUND`).
-- **Grounded.** The server builds a context bundle from the project brief, generated guide, deadline, allocation factors and explanation, and the latest submission's status, analysis and evaluation. The model answers only from that bundle. `sources` names the bundle sections it used. Anything outside the bundle is declined.
+`AssistantAnswer` = `{answer, sources: string[], mode: "ai"|"rules", intent?, suggestions: string[]}`.
+- **Suggestions.** Every answer carries 0–3 short follow-up questions (each ≤ 120 chars, trimmed, deduplicated, never the question just asked, no PII). With AI the model returns them in its JSON and the server validates them; on rule, greeting, busy and decline paths they come from a fixed intent → related-questions map, excluding the current intent and any intent whose bundle sections are empty (e.g. no feedback question before a submission). The UI shows them as chips under the latest answer; clicking one asks it.
+- **Scope (ADR-030).** Students only: supervisors and admins get 403 `FORBIDDEN`. A student is answered only about their own ACTIVE allocation (`allocation_id` is ignored), or 409 `NO_ACTIVE_ALLOCATION`.
+- **Grounded.** The server builds a context bundle from the project brief, generated guide, deadline, allocation factors and explanation, and the latest submission's status, analysis and evaluation. The model answers only from that bundle. `sources` names the bundle sections it used. Anything outside the bundle is declined, including general knowledge or trade/coding help, other projects and other trainees (ADR-030 supersedes ADR-023's general answers; a model answer of kind `general` is returned as the decline). Greetings get a fixed greeting. The bundle never contains the originality result (ADR-028).
 - **No PII.** The bundle carries no name, trainee code, centre, gender or email. Document and report text is redacted and delimited as untrusted data.
 - **Fallback.** With no Groq key, or when Groq fails, the server gives rule-based answers for summary, deadline, why matched, status, next step, and steps/deliverables (`mode: "rules"`).
 - **Read-only and stateless.** Nothing is stored except a usage audit row (no question text). The rate limit is 20 questions per user per 10 minutes, after which the server returns 429 `RATE_LIMITED`.
 
-**Deferred (not built yet):** the daily alert digest, the admin allocation override from ADR-019, and the admin (programme-wide) assistant from ADR-020.
+**Deferred (not built yet):** the daily alert digest, and the admin allocation override from ADR-019. The staff assistant from ADR-020 is dropped (ADR-030).
 
 ## 0d. ADR-027 (rev 6): ILP allocation optimiser
 
 No new endpoint and no field changes. `allocate_cycle` now chooses projects with an ILP that balances project and supervisor load (soft fair shares). Each allocation's `match_score`, `factors` and `match_mode` remain the rule score of the chosen pair. `explanation` says when the optimiser chose a trainee's 2nd-or-later project, and how many points that cost. The job result shown by ADM-01 adds `optimiser` {engine, objective, greedy_objective, total_score, greedy_total_score, moved_from_best, project_fair_share, supervisor_fair_share, fallback_reason}.
+
+## 0e. ADR-028 (rev 7, binding): auto-finalised evaluation, staff-only plagiarism report, description-only projects
+
+Where this section and §0 / ADR-026 disagree, **this section wins**.
+
+- **Auto-finalise.** When the analysis of the latest, still-`submitted` version ends `completed` with an evaluation `total`, the submission's `status` becomes the evaluation `outcome` (`evaluated`, or `rework_requested` below 50) with no human step; audit `submission.auto_evaluated` (actor null). Not applied for `review_required`, `insufficient_evidence`, `failed` or `not_analyzable`. ADR-026 automatic originality rework takes precedence. SUB-06 actions are unchanged (`request_rework` also works on an evaluated latest version). After SUB-06 `lift_rework`, a version whose analysis is `completed` with an `evaluated` outcome is finalised as `evaluated` immediately; otherwise it stays `submitted`.
+- **SUB-05 for students.** `originality`, `corpus`, `semantic` and `ai_writing` are `null`. New field on `AnalysisOut` for every viewer: `rework_reason: string | null`. It is set while the version is in an automatic originality rework that has not been lifted, with fixed generic text: "Your report overlaps too much with other sources. Please rewrite it in your own words and resubmit." It never contains a percentage or source. `evaluation`, `effective_criteria`, `reviews` are unchanged.
+- **SUB-08 for students:** the HTML contains the evaluation, improvements and review history only, with no originality, corpus, semantic or AI-writing sections.
+- **SUB-09 / SUB-10:** `403 FORBIDDEN` for students; supervisor of the project and admins as before.
+- **Notifications.** `originality.report` (PDF attached with SMTP) goes to the project's supervisor (link `/supervisor/submissions/{id}`), never to the trainee. The trainee's automatic-rework notice (`submission.analysis`) says only that the report must be revised for originality.
+- **PRJ-03** `file` is optional. A project with no document but a non-empty description is processed from title + description (`processing_status` goes `queued` → `processing` → `ready`/`needs_attention`/`awaiting_supervisor`); `generated.issues` includes `no_document_text`. Project imports without `problem_doc_url` are processed the same way. With an empty description the project remains `awaiting_document`.
+
+## 0g. ADR-029 (rev 10, binding): 1-minute allocation, rule-based evaluation fallback, reason-steered replacement
+
+No new endpoint and no schema change; the shapes below are additions inside existing free-form objects.
+- **Schedule.** `allocate_cycle` runs every minute (`ALLOCATION_INTERVAL_MINUTES=1`); ADM-01 `automation.interval_minutes` reports 1. A job result may be a cheap skip: `{"allocated": 0, "replacements": 0, "waiting": {...}, "ready_projects": n, "skipped": "no unassigned trainees" | "unchanged since the last run", "fingerprint": {...}}`. Full results add `reason_guided` (count), `fingerprint` and `full_run_at`.
+- **SUB-05 `evaluation`.** New keys: `source` (`"ai"` | `"rule"` | null when there is no score) and, for `rule`, `fallback_reason` (e.g. `"AI evaluation failed (AIError)"`). A rule evaluation has `confidence: "low"`, an extra entry in `limitations`, and is `completed`/`evaluated` at 50 or more, else `review_required` with `outcome: null` (never automatic rework). `status: "failed"` is no longer produced for model errors; the analysis does not pass through `retrying` for the evaluation stage. ReportEvaluationSummary (SUB-02/03) is unchanged.
+- **Outcome consistency.** Automatic rework (score below 50 or ADR-026 originality) is applied only when the evaluation stage produced a usable result; an analysis that ends `failed` or `insufficient_evidence` never changes the submission status.
+- **Non-reports.** `report_url` on a video/social host → analysis `not_analyzable` with a reason naming the video link; a resume/CV as the report → `insufficient_evidence` with a reason asking for the project report.
+- **ALLOC-07 reason.** Used to rank the rejecting trainee's next project (reason fit, then score; gates and exclusions unchanged; the score and factors stay the rule result). The new allocation's `explanation` starts with "You said: '…'." ALLOC-09 `replacement` gains `reason_fit` {used, wanted, unwanted, rule, selected_project_id, selected_project_code, selected_score, explanation, candidates[]}. ALLOC-08 is unchanged (`replacement: null` for students).
+
+## 0f. ADR-031 (rev 9, binding): trainee accounts by phone, admin Trainees page
+
+| ID | Method | Path | Roles | Notes |
+|---|---|---|---|---|
+| IMP-04 | POST | `/admin/imports/trainee-accounts` | admin | multipart `file` (.xlsx/.csv ≤ 5 MB, ≤ 2000 rows), `cycle_id`, `dry_run` (default `true`) → `TraineeAccountImportResult` |
+| ME-03 | POST | `/me/password-changed` | user | no body; clears `must_change_password` after the client changed its password with Supabase `updateUser` → `200 {"data": <User>}`. Audit `user.password_changed` only when the flag was set |
+| TRN-01/03/04 | GET | `/trainees…` | as before | `Trainee` gains `phone` (`"+919000000001"` or null; admin and the trainee only, null for supervisors) and `current_project` (`{allocation_id, project: {id, project_code, title}}` or null; TRN-03 for admins only, null elsewhere). `account` gains `must_change_password`. TRN-03 `q` also matches the phone digits |
+| ME-01 | GET | `/me` | user | `User` gains `must_change_password` (bool) |
+
+**IMP-04 columns** (sheet `Trainee Accounts`, else the first sheet; header row contains `Phone Number`): `Phone Number` (required; spaces, dashes, brackets and a `+91`/`91`/`0` prefix are accepted; must be a 10-digit Indian mobile starting 6–9; stored as `+91XXXXXXXXXX`; unique in the file), `Full Name` (required, ≤ 120), `ITI Trade` (required, 1–5 comma-separated; unknown trades are created as in IMP-01), optional `ITI Name` (→ `centre_name`), `Trade Theory Score (%)`, `Workshop Practical Score (%)`, `Safety Compliance Score (%)` (0–100), `Primary Career Interest` (≤ 300). An optional column that is absent leaves existing values unchanged; present and blank sets null. Skills are not imported (ADR-025: they come from the resume).
+
+**Per row** (validated in one transaction; any error → nothing is applied, as IMP-01):
+- Match the trainee in this cycle by `phone`; update it, or create one with a generated `SR-` code (a phone seen in an earlier cycle reuses that person's code).
+- Account: login email = `{91 + 10 digits}@{TRAINEE_LOGIN_EMAIL_DOMAIN}`. An existing `app.users` row for that email is reused (`account: "existing"` when already linked to this trainee, `"linked"` when newly linked); otherwise a confirmed Supabase user is created with password `TRAINEE_DEFAULT_PASSWORD` and `app.users` (`role student`, `must_change_password true`) is inserted (`account: "created"`). An existing account's password, status and role are never changed.
+- Row errors: invalid or duplicate phone; the derived email belongs to a non-student account; the account already belongs to a trainee in another open (non-archived) cycle (ADR-018); the matched trainee is linked to a different account.
+
+```json
+{"data": {"applied": false, "rows": 2, "created": 1, "updated": 0, "unchanged": 1, "created_trades": [], "created_skills": [],
+  "warnings": [], "errors": [], "accounts_created": 1, "accounts_linked": 0, "accounts_existing": 1,
+  "results": [{"row": 2, "phone": "+919000000001", "full_name": "Asha Demo", "trainee_code": null, "trainee": "created", "account": "created"},
+              {"row": 3, "phone": "+919000000002", "full_name": "Ravi Demo", "trainee_code": "SR-7KQ2MX", "trainee": "unchanged", "account": "existing"}]}}
+```
+In a dry run `trainee_code` is null for rows that would be created, and `account` says what would happen. The response **never contains a password**. Errors: `403`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_FILE_TYPE`, `409 INVALID_STATE` (archived cycle), `422 IMPORT_INVALID` (apply with errors), `503 SERVICE_UNAVAILABLE` (apply when the Supabase Admin API is not configured or fails; nothing is committed). Audit `import.trainee_accounts` (counts) and `user.created_directly` per new account (no phone or name). After an apply, `allocate_cycle` is queued.
+
+**Login (frontend):** the Login field "Email or phone number" accepts either. Input without `@` that normalises to a valid Indian mobile is converted to the derived email (`VITE_TRAINEE_LOGIN_DOMAIN`, same default) before `signInWithPassword`. Errors stay generic.
 
 ## 1. Conventions
 
@@ -300,6 +351,7 @@ Owner: **F** foundation (lead) · **A** Student module (trainee data + submissio
 | AUTH-01 | POST | `/auth/provision` | token | F |
 | ME-01 | GET | `/me` | user | F |
 | ME-02 | PATCH | `/me` | user | F |
+| ME-03 | POST | `/me/password-changed` | user | F (ADR-031) |
 | REF-01 | GET | `/trades` | user | F |
 | REF-02 | POST | `/trades` | admin | C |
 | SKL-01 | GET | `/skills` | user | F |
@@ -316,6 +368,7 @@ Owner: **F** foundation (lead) · **A** Student module (trainee data + submissio
 | PRJ-05 | DELETE | `/projects/{project_id}` | admin | C |
 | PRJ-06 | POST | `/projects/{project_id}/transition` | admin | C |
 | IMP-02 | POST | `/admin/imports/projects` | admin | C |
+| IMP-04 | POST | `/admin/imports/trainee-accounts` | admin | C (ADR-031) |
 | TRN-01 | GET | `/trainees/me` | student | A |
 | TRN-02 | PATCH | `/trainees/me` | student | A |
 | TRN-08 | POST | `/trainees/me` | student | A |

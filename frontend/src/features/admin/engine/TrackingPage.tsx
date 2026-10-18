@@ -2,7 +2,7 @@
 import { ChartBar, ClockCountdown, GraduationCap, Target, UsersThree, Warning } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
@@ -108,8 +108,15 @@ export function TrackingPage() {
     ) },
     { key: "version", header: "Latest submission", cell: (r) => r.latest_submission ? (
       <span className="flex flex-col items-start gap-1 whitespace-nowrap">
-        <span className="tabular-nums">Version {r.latest_submission.version}</span>
-        {r.analysis_status && <StatusBadge kind="analysis" value={r.analysis_status} />}
+        <Link to={`/admin/submissions/${r.latest_submission.id}`} onClick={(e) => e.stopPropagation()}
+          className="font-semibold text-primary tabular-nums hover:underline">
+          Version {r.latest_submission.version}<span className="sr-only"> of {r.trainee.full_name}'s submission (open)</span>
+        </Link>
+        <span className="text-xs text-muted">{formatIst(r.latest_submission.submitted_at)}</span>
+        <span className="flex flex-wrap gap-1">
+          <StatusBadge kind="submission" value={r.latest_submission.status} />
+          {r.analysis_status && <StatusBadge kind="analysis" value={r.analysis_status} />}
+        </span>
       </span>
     ) : dash },
     { key: "score", header: "Latest evaluation", sort: "-total_score", cell: (r) => r.evaluation && r.evaluation.total_score != null ? (
@@ -136,7 +143,7 @@ export function TrackingPage() {
           {list.data ? <SummaryPanel s={list.data.summary} filtered={filtered} /> : list.isLoading ? <LoadingState /> : null}
           <TableCard
             title="Trainees" icon={<UsersThree />}
-            description="One row per trainee. Each trainee works on their project individually."
+            description="One row per trainee. Each trainee works on their project individually. Open a submission version to review it."
             toolbar={<div className="flex flex-col gap-3">
               <FilterBar>
                 <CycleSelect id="trk-cycle" value={scope.id} cycles={scope.cycles} actives={scope.actives}

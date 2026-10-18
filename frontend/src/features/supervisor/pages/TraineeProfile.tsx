@@ -9,7 +9,7 @@ import {
 } from "@/components/shared";
 import { Card } from "@/components/ui";
 import { MatchReason } from "@/features/shared/MatchReason";
-import { TraineeProfileView, TraineeResumeCard } from "@/features/shared/views";
+import { TraineeProfileView } from "@/features/shared/views";
 
 export function TraineeProfilePage() {
   const { traineeId = "" } = useParams();
@@ -46,7 +46,31 @@ export function TraineeProfilePage() {
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <div className="min-w-0 space-y-6">
           <TraineeProfileView trainee={t} showSensitive={false} />
-          <TraineeResumeCard traineeId={t.id} />
+          <Card icon={<ClipboardText />} title="Submissions" flush>
+            {subs.isLoading ? <div className="px-5 pb-5"><LoadingState /></div> : subs.error ? (
+              <div className="px-5 pb-5"><ErrorState error={subs.error} onRetry={() => void subs.refetch()} /></div>
+            ) : !subs.data?.data.length ? (
+              <div className="px-5 pb-5"><EmptyState icon={<ClipboardText />} title="No submissions yet" /></div>
+            ) : (
+              <ul className="divide-y divide-border border-t border-border text-sm">
+                {subs.data.data.map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Link className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" to={`/supervisor/submissions/${s.id}`}>
+                        Version {s.version} <ArrowRight aria-hidden size={14} />
+                      </Link>
+                      <span className="text-muted"><DateTime value={s.submitted_at} /></span>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {s.is_late && <StatusBadge kind="late" value="late" />}
+                      <StatusBadge kind="submission" value={s.status} />
+                      {s.evaluation?.grade && <StatusBadge kind="grade" value={s.evaluation.grade} />}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
 
         <div className="min-w-0 space-y-6">
@@ -73,32 +97,6 @@ export function TraineeProfilePage() {
                 </div>
                 <MatchReason allocation={a} audience="trainee" />
               </div>
-            )}
-          </Card>
-
-          <Card icon={<ClipboardText />} title="Submissions" flush>
-            {subs.isLoading ? <div className="px-5 pb-5"><LoadingState /></div> : subs.error ? (
-              <div className="px-5 pb-5"><ErrorState error={subs.error} onRetry={() => void subs.refetch()} /></div>
-            ) : !subs.data?.data.length ? (
-              <div className="px-5 pb-5"><EmptyState icon={<ClipboardText />} title="No submissions yet" /></div>
-            ) : (
-              <ul className="divide-y divide-border border-t border-border text-sm">
-                {subs.data.data.map((s) => (
-                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <Link className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" to={`/supervisor/submissions/${s.id}`}>
-                        Version {s.version} <ArrowRight aria-hidden size={14} />
-                      </Link>
-                      <span className="text-muted"><DateTime value={s.submitted_at} /></span>
-                    </span>
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {s.is_late && <StatusBadge kind="late" value="late" />}
-                      <StatusBadge kind="submission" value={s.status} />
-                      {s.evaluation?.grade && <StatusBadge kind="grade" value={s.evaluation.grade} />}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             )}
           </Card>
         </div>

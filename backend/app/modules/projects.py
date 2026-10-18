@@ -240,9 +240,10 @@ async def create_project(
     cycle_id: Annotated[uuid.UUID, Form()],
     title: Annotated[str, Form(min_length=5, max_length=200)],
     description: Annotated[str, Form(min_length=10, max_length=5000)],
-    file: Annotated[UploadFile, File()],
+    file: Annotated[UploadFile | None, File()] = None,
 ) -> Envelope[ProjectOut]:
-    data, ext, name = await _read_document(file)
+    """The document is optional (ADR-028): without one, metadata and the guide come from title + description."""
+    doc = await _read_document(file) if file is not None and file.filename else None
     if db.get(M.Cycle, cycle_id) is None:
         raise field_error("body.cycle_id", "unknown cycle")
     cycle = lock_cycle(db, cycle_id)
@@ -256,13 +257,17 @@ async def create_project(
         created_by=admin.id,
         generation_source=None,
     )
-    _attach_document(db, p, data, ext, name)
+    if doc is not None:
+        _attach_document(db, p, *doc)
+    else:
+        p.processing_status = ProjectProcessing.queued
     db.add(p)
     try:
         db.flush()
     except Exception:
         db.rollback()
-        get_project_doc_storage().delete(p.document_path or "")
+        if p.document_path:
+            get_project_doc_storage().delete(p.document_path)
         raise
     audit.record(db, admin.id, "project.created", "project", p.id, {"project_code": p.project_code})
     _queue_processing(db, p, "created")
@@ -397,7 +402,7 @@ def reprocess_project(project_id: uuid.UUID, admin: Admin, db: DB) -> Envelope[P
     p = _lock_project(db, project_id)
     require_not_archived(db.get(M.Cycle, p.cycle_id))  # type: ignore[arg-type]
     if p.processing_status == ProjectProcessing.awaiting_document:
-        raise invalid_state("Upload the project document first")
+        raise invalid_state("Upload the project document or add a description first")
     p.generated = {**(p.generated or {}), "document_hash": "__regenerate__"}
     if p.processing_status != ProjectProcessing.ready:
         p.processing_status = ProjectProcessing.queued

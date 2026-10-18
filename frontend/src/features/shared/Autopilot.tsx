@@ -1,16 +1,18 @@
 /**
- * ADR-019 "Needs attention" panel (ALR-01) and ADR-020 Project Assistant (AST-01). Shared by every role.
- * ADR-022: the panel renders only when an urgent (critical/warning) alert exists; the assistant is a floating launcher.
+ * ADR-019 "Needs attention" panel (ALR-01, every role) and ADR-020 Project Assistant (AST-01, students only: ADR-030).
+ * ADR-022: the panel renders only when an urgent (critical/warning) alert exists; the assistant is a floating launcher,
+ * mounted once in the student area layout (`StudentAssistant`) so it shows on every trainee page.
  */
 import { PaperPlaneRight, Siren, X } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 import { api, call } from "@/api/client";
 import { errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { AssistantAnswer, AutopilotAlert } from "@/api/types";
+import { useAuth } from "@/auth/AuthProvider";
 import { Skeleton } from "@/components/shared";
 import { Alert, Button, Card, Input, cx } from "@/components/ui";
 
@@ -46,7 +48,15 @@ export function AlertsPanel() {
 
 // ---------------------------------------------------------------- assistant
 
-type Turn = { role: "user" | "assistant"; content: string; sources?: string[]; mode?: AssistantAnswer["mode"]; intent?: string | null };
+type Turn = {
+  role: "user" | "assistant";
+  content: string;
+  sources?: string[];
+  mode?: AssistantAnswer["mode"];
+  intent?: string | null;
+  /** Follow-up questions for this answer (AST-01 `suggestions`); shown only under the latest answer. */
+  suggestions?: string[];
+};
 
 const SUGGESTIONS = ["Summarise my project", "When is the deadline?", "Why was this project allocated?", "What should I do next?"];
 const SOURCE_LABEL: Record<string, string> = {
@@ -59,10 +69,9 @@ const SOURCE_LABEL: Record<string, string> = {
   feedback: "Evaluation feedback",
 };
 
-/** Where an answer came from, in plain words (ADR-023). */
+/** Where an answer came from, in plain words. */
 function answerNote(t: Turn) {
   if (t.sources?.length) return `From: ${t.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ")}${t.mode === "rules" ? " · quick answer" : ""}`;
-  if (t.intent === "general") return "General guidance · confirm specifics with your supervisor";
   if (t.intent === "greeting") return "Project assistant";
   return t.mode === "rules" ? "Quick answer · the AI is busy right now" : "Project assistant";
 }
@@ -100,12 +109,33 @@ export function RobotMascot({ className = "size-14", wave = true }: { className?
 }
 
 const GREETED = "spa-assistant-greeted";
+const TITLE = "Ask about my project";
 
 /**
- * Floating assistant: a waving robot button at the bottom-right that opens the chat panel.
+ * ADR-030: the student area layout. Renders the page, plus the floating assistant on every trainee page once the
+ * trainee has an allocated project. UX only: AST-01 is student-only on the server too.
+ */
+export function StudentAssistant({ hasProject }: { hasProject: boolean }) {
+  return (
+    <>
+      <Outlet />
+      {hasProject && <AssistantLauncher />}
+    </>
+  );
+}
+
+/**
+ * Floating assistant: a waving robot button at the bottom-right that opens the chat panel. Students only (ADR-030):
+ * it renders nothing for any other role. It always asks about the student's own active allocation.
  * The panel is non-modal (the page stays usable); Escape or the close button dismisses it and focus returns to the button.
  */
-export function AssistantLauncher({ allocationId, title = "Ask about my project" }: { allocationId?: string; title?: string }) {
+export function AssistantLauncher() {
+  const { user } = useAuth();
+  if (user?.role !== "student") return null;
+  return <Launcher title={TITLE} />;
+}
+
+function Launcher({ title }: { title: string }) {
   const [open, setOpen] = useState(false);
   const [greet, setGreet] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -144,7 +174,6 @@ export function AssistantLauncher({ allocationId, title = "Ask about my project"
         <AssistantChat
           id={panelId}
           title={title}
-          allocationId={allocationId}
           onClose={() => {
             setOpen(false);
             buttonRef.current?.focus();
@@ -178,12 +207,14 @@ export function AssistantLauncher({ allocationId, title = "Ask about my project"
   );
 }
 
-function AssistantChat({ id, title, allocationId, onClose }: { id: string; title: string; allocationId?: string; onClose: () => void }) {
+function AssistantChat({ id, title, onClose }: { id: string; title: string; onClose: () => void }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
+  const followupsId = `${id}-followups`;
+  const latest = turns.at(-1);
   const ask = useMutation({
     // `history` is the conversation before this question (the question itself is sent once, as `question`).
     mutationFn: ({ q, history }: { q: string; history: Turn[] }) =>
@@ -191,12 +222,15 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
         api.POST("/api/v1/assistant/ask", {
           body: {
             question: q,
-            allocation_id: allocationId ?? null,
             history: history.slice(-6).map(({ role, content }) => ({ role, content: content.slice(0, 1000) })),
           },
         }),
       ),
-    onSuccess: (r) => setTurns((t) => [...t, { role: "assistant", content: r.answer, sources: r.sources, mode: r.mode, intent: r.intent }]),
+    onSuccess: (r) =>
+      setTurns((t) => [
+        ...t,
+        { role: "assistant", content: r.answer, sources: r.sources, mode: r.mode, intent: r.intent, suggestions: r.suggestions ?? [] },
+      ]),
   });
 
   // Effects must return nothing or a cleanup function, so these use block bodies.
@@ -231,7 +265,7 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
         <RobotMascot className="size-10 shrink-0" wave={false} />
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-sm font-semibold text-text">{title}</h2>
-          <p className="text-xs text-muted">Project facts come from your project's records; general tips are labelled. Nothing you type is stored.</p>
+          <p className="text-xs text-muted">Answers come only from your own project's records. Nothing you type is stored.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close assistant" className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-neutral-bg hover:text-text">
           <X aria-hidden size={18} />
@@ -263,6 +297,20 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
             {t.role === "assistant" && <p className="mt-1 text-xs text-muted">{answerNote(t)}</p>}
           </div>
         ))}
+        {latest?.role === "assistant" && !ask.isPending && !!latest.suggestions?.length && (
+          <div role="group" aria-labelledby={followupsId} className="space-y-1.5">
+            <p id={followupsId} className="text-xs text-muted">
+              Related questions
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {latest.suggestions.map((s) => (
+                <Button key={s} type="button" size="sm" variant="secondary" onClick={() => send(s)} className="py-1.5 text-left whitespace-normal">
+                  {s}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
         {ask.isPending && <Skeleton className="h-10 max-w-[70%] rounded-2xl" />}
         {ask.error && <p className="text-sm text-danger">{errorMessage(ask.error)}</p>}
         <div ref={endRef} />
@@ -271,7 +319,7 @@ function AssistantChat({ id, title, allocationId, onClose }: { id: string; title
         <Input
           ref={inputRef}
           aria-label="Your question"
-          placeholder="Ask anything about this project…"
+          placeholder="Ask about your project…"
           value={question}
           maxLength={500}
           onChange={(e) => setQuestion(e.target.value)}

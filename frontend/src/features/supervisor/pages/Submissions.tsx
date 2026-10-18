@@ -14,8 +14,21 @@ import { compact, FilterBar, NotPublishedState, PersonCell, ProjectFilter, useCy
 
 type Status = Submission["status"];
 const STATUS_OPTIONS: [string, string][] = [
-  ["submitted", "Awaiting evaluation"], ["rework_requested", "Rework requested"], ["evaluated", "Evaluated"], ["all", "All"],
+  ["all", "All statuses"], ["submitted", "Awaiting evaluation"], ["rework_requested", "Rework requested"], ["evaluated", "Evaluated"],
 ];
+const VERSION_OPTIONS: [string, string][] = [["all", "All versions"], ["latest", "Latest version only"]];
+
+/** Keeps each trainee's versions together (first-seen order, versions in the chosen sort direction) so v1 and v2 read as one history. */
+function groupByTrainee(rows: Submission[], oldestFirst: boolean): Submission[] {
+  const groups = new Map<string, Submission[]>();
+  for (const s of rows) {
+    const key = `${s.trainee.id}:${s.allocation_id}`;
+    const g = groups.get(key);
+    if (g) g.push(s);
+    else groups.set(key, [s]);
+  }
+  return [...groups.values()].flatMap((g) => g.sort((a, b) => (oldestFirst ? a.version - b.version : b.version - a.version)));
+}
 
 const columns: Column<Submission>[] = [
   {
@@ -58,12 +71,13 @@ export function SubmissionsPage() {
   const navigate = useNavigate();
   const { get, set, page } = useParamState();
   const cycleState = useCycleState();
-  const statusParam = get("status", "submitted");
-  const status = STATUS_OPTIONS.some(([v]) => v === statusParam) ? statusParam : "submitted";
+  const statusParam = get("status", "all");
+  const status = STATUS_OPTIONS.some(([v]) => v === statusParam) ? statusParam : "all";
+  const versions = get("versions") === "latest" ? "latest" : "all";
   const projectId = get("project_id");
   const sort = get("sort") === "submitted_at" ? "submitted_at" : "-submitted_at";
   const query = {
-    sort, page, page_size: 20,
+    sort, page, page_size: 50, latest_only: versions === "latest",
     ...compact({ status: status === "all" ? undefined : (status as Status), project_id: projectId }),
   };
   const subs = useQuery({
@@ -72,7 +86,7 @@ export function SubmissionsPage() {
     enabled: cycleState.visible,
     placeholderData: keepPreviousData,
   });
-  const isDefault = status === "submitted" && !projectId;
+  const isDefault = status === "all" && versions === "all" && !projectId;
   const total = subs.data?.meta.total;
 
   let body;
@@ -82,15 +96,15 @@ export function SubmissionsPage() {
   else if (subs.error) body = <ErrorState error={subs.error} onRetry={() => void subs.refetch()} />;
   else if (!subs.data?.data.length) {
     body = isDefault ? (
-      <EmptyState icon={<CheckCircle />} title="Nothing is waiting for evaluation." description="New submissions on your projects will appear here." />
+      <EmptyState icon={<CheckCircle />} title="No submissions yet." description="Every version trainees submit on your projects will appear here." />
     ) : (
       <EmptyState icon={<MagnifyingGlass />} title="No submissions match these filters."
-        action={<Button variant="secondary" onClick={() => set({ status: null, project_id: null })}>Clear filters</Button>} />
+        action={<Button variant="secondary" onClick={() => set({ status: null, project_id: null, versions: null })}>Clear filters</Button>} />
     );
   } else {
     body = (
       <>
-        <DataTable rows={subs.data.data} columns={columns} rowKey={(s) => s.id} caption="Submissions"
+        <DataTable rows={groupByTrainee(subs.data.data, sort === "submitted_at")} columns={columns} rowKey={(s) => s.id} caption="Submissions"
           onRowClick={(s) => navigate(`/supervisor/submissions/${s.id}`)} />
         <Pagination meta={subs.data.meta} onPageChange={(n) => set({ page: String(n) }, false)} />
       </>
@@ -103,11 +117,14 @@ export function SubmissionsPage() {
     <>
       <PageHeader
         title="Evaluations"
-        description="Latest version of each trainee's submission on your projects. Oldest waiting work should be evaluated first."
+        description="Every version each trainee submitted on your projects, grouped per trainee. Evaluate the oldest waiting work first."
       />
-      <FilterBar className="sm:grid-cols-3">
-        <Select aria-label="Status" value={status} onChange={(e) => set({ status: e.target.value === "submitted" ? null : e.target.value })}>
+      <FilterBar className="sm:grid-cols-2 lg:grid-cols-4">
+        <Select aria-label="Status" value={status} onChange={(e) => set({ status: e.target.value === "all" ? null : e.target.value })}>
           {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select>
+        <Select aria-label="Versions" value={versions} onChange={(e) => set({ versions: e.target.value === "all" ? null : e.target.value })}>
+          {VERSION_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </Select>
         <ProjectFilter id="sub-project" value={projectId} onChange={(v) => set({ project_id: v })} />
         <Select aria-label="Sort" value={sort} onChange={(e) => set({ sort: e.target.value === "-submitted_at" ? null : e.target.value })}>
@@ -117,7 +134,7 @@ export function SubmissionsPage() {
       </FilterBar>
       {cycleState.visible && total != null && total > 0 && (
         <p className="mb-3 text-sm text-muted" aria-live="polite">
-          <span className="font-semibold text-text tabular-nums">{total}</span> {total === 1 ? "submission" : "submissions"} · {statusLabel}
+          <span className="font-semibold text-text tabular-nums">{total}</span> {total === 1 ? "submission" : "submissions"} · {statusLabel} · {versions === "all" ? "all versions" : "latest version only"}
         </p>
       )}
       {body}

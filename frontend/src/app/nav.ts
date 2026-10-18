@@ -1,4 +1,4 @@
-import { ChartBar, ClipboardText, FolderSimple, House, type Icon, SquaresFour, TrendUp, UploadSimple, UserCircle, UserPlus } from "@phosphor-icons/react";
+import { ChartBar, ClipboardText, FolderSimple, House, type Icon, SquaresFour, TrendUp, UploadSimple, UserCircle, UserPlus, UsersThree } from "@phosphor-icons/react";
 
 import type { UserRole } from "@/api/types";
 
@@ -23,6 +23,7 @@ export const NAV: Record<UserRole, NavItem[]> = {
     { label: "Overview", to: "/admin", end: true, icon: SquaresFour },
     { label: "Projects", to: "/admin/projects", icon: FolderSimple },
     { label: "Allocation & Progress", to: "/admin/tracking", icon: ChartBar },
+    { label: "Trainees", to: "/admin/trainees", icon: UsersThree }, // ADR-031
     { label: "Staff & Invitations", to: "/admin/staff", icon: UserPlus },
   ],
 };

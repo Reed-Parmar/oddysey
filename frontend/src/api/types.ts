@@ -25,6 +25,7 @@ export type TrackingSummary = S["TrackingSummary"];
 export type Invitation = S["InvitationRow"];
 export type ImportResult = S["ImportResult"];
 export type StaffImportResult = S["StaffImportResult"];
+export type TraineeAccountImportResult = S["TraineeAccountImportResult"];
 export type Overview = S["Overview"];
 export type Automation = S["AutomationStats"];
 export type ArchivePreview = S["ArchivePreview"];

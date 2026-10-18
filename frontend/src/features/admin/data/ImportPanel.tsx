@@ -12,7 +12,7 @@ import { formatBytes } from "@/lib/format";
 
 import { TargetCycleField } from "./common";
 
-export type ImportEndpoint = "/admin/imports/trainees" | "/admin/imports/projects";
+export type ImportEndpoint = "/admin/imports/trainees" | "/admin/imports/projects" | "/admin/imports/trainee-accounts";
 export type ImportProblem = { row: number | null; column: string; message: string };
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -195,13 +195,17 @@ function ImportSteps({ stage }: { stage: 0 | 1 | 2 }) {
 
 type Envelope = { data: ImportResult };
 
-export function ImportDialog({ open, onClose, endpoint, cycleId, cycles, noun, onApplied, notes }: {
+export function ImportDialog({ open, onClose, endpoint, cycleId, cycles, noun, onApplied, notes, description, details }: {
   open: boolean; onClose: () => void; endpoint: ImportEndpoint; cycleId: string; noun: string;
   /** Several active cycles and no cycle filter chosen: let the admin pick the target (defaults to `cycleId`). */
   cycles?: Cycle[];
   onApplied: (r: ImportResult) => void;
   /** Column notes shown above the file picker (e.g. which legacy columns are ignored). */
   notes?: ReactNode;
+  /** Dialog description (defaults to the by-code wording of IMP-01/02). */
+  description?: string;
+  /** Extra per-row detail under the dry-run preview (IMP-04 row results). */
+  details?: (r: ImportResult) => ReactNode;
 }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -263,7 +267,7 @@ export function ImportDialog({ open, onClose, endpoint, cycleId, cycles, noun, o
 
   return (
     <Dialog open={open} onClose={busy ? () => {} : close} title={`Import ${noun}`} size="lg"
-      description="Upload the sheet, check the dry-run preview, then apply. Re-importing updates existing records by code.">
+      description={description ?? "Upload the sheet, check the dry-run preview, then apply. Re-importing updates existing records by code."}>
       <div className="flex flex-col gap-5">
         <ImportSteps stage={stage} />
         {notes && <Alert variant="info" icon={<Info />}>{notes}</Alert>}
@@ -291,6 +295,7 @@ export function ImportDialog({ open, onClose, endpoint, cycleId, cycles, noun, o
         {preview && applyProblems.length === 0 && (
           <section aria-label="Dry-run preview" className="rounded-xl border border-border p-4">
             <ImportPreview result={preview} noun={noun} applying={apply.isPending} onApply={() => apply.mutate()} />
+            {details && preview.errors.length === 0 && <div className="mt-4">{details(preview)}</div>}
           </section>
         )}
       </div>

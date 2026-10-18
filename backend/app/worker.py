@@ -32,10 +32,19 @@ def schedule_tick(db: Session, now: datetime | None = None) -> None:
     """Periodic triggers. Safe to call often: every enqueue is deduplicated."""
     s = get_settings()
     now = now or datetime.now(UTC)
+    period = max(1, s.allocation_interval_minutes) * 60
+    bucket = int(now.timestamp() // period)
+    bucket_start = datetime.fromtimestamp(bucket * period, UTC)
     for cycle in db.scalars(select(M.Cycle).where(M.Cycle.status != CycleStatus.archived)):
-        bucket = int(now.timestamp() // (s.allocation_interval_minutes * 60))
         key = f"allocate:{cycle.id}:schedule:{bucket}"
-        if db.scalar(select(M.Job.id).where(M.Job.dedupe_key == key).limit(1)) is None:
+        # One scheduled run per cycle per bucket. Filtering on kind + created_at uses jobs_kind_created_idx, so the
+        # lookup stays cheap as finished jobs accumulate (ADR-029: 1-minute buckets).
+        seen = db.scalar(
+            select(M.Job.id)
+            .where(M.Job.kind == "allocate_cycle", M.Job.created_at >= bucket_start, M.Job.dedupe_key == key)
+            .limit(1)
+        )
+        if seen is None:
             jobs.enqueue(db, "allocate_cycle", {"cycle_id": str(cycle.id)}, dedupe_key=key, trigger="schedule")
         if cycle.auto_archive_enabled and cycle.archive_at is not None and cycle.archive_at <= now:
             jobs.enqueue(
@@ -70,6 +79,14 @@ def schedule_tick(db: Session, now: datetime | None = None) -> None:
         jobs.enqueue(
             db, "send_notification", {"notification_id": str(nid)}, dedupe_key=f"notify:{nid}", trigger="sweep"
         )
+    # ADR-029: a 1-minute schedule writes ~1440 job rows per cycle per day; drop finished scheduled allocation
+    # runs after a day (the admin Overview only reads the latest one and 24 h counts).
+    db.execute(
+        text(
+            """DELETE FROM app.jobs WHERE kind = 'allocate_cycle' AND trigger = 'schedule' AND status = 'done'
+                AND created_at < now() - interval '1 day'"""
+        )
+    )
     db.commit()
 
 

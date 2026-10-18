@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     ai_concurrency: int = 4
     run_inline: bool = False  # tests: jobs are drained synchronously after each request
     # ADR-017 automation
-    allocation_interval_minutes: int = 15
+    allocation_interval_minutes: int = 1  # ADR-029: every minute (cheap no-change skip in allocate_cycle)
     # ADR-027 ILP optimiser: "ilp" balances project/supervisor load; "greedy" = each trainee's best project
     allocation_engine: str = "ilp"
     allocation_fair_share_slack: float = 1.25
@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     originality_medium_at: float = 15.0
     originality_high_at: float = 40.0
     originality_rework_at: float = 50.0  # ADR-026: overlap % (after exclusions) that sends the work back for rework
+    # ADR-031: admin-created trainee accounts. The shared initial password is a documented demo trade-off; it is never
+    # returned, logged or audited. Set your own value in the deployment environment.
+    trainee_default_password: str = "Reedham03"
+    trainee_login_email_domain: str = "trainee.spa.local"  # must equal the SPA's VITE_TRAINEE_LOGIN_DOMAIN
+
+    @field_validator("trainee_default_password")
+    @classmethod
+    def _password_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("TRAINEE_DEFAULT_PASSWORD must be at least 8 characters")
+        return v
 
     @field_validator("database_url")
     @classmethod

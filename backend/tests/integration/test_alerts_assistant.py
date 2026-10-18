@@ -1,10 +1,12 @@
-"""ADR-019 Autopilot alerts (ALR-01) and ADR-020 Project Assistant (AST-01): scoping, no PII, fallback."""
+"""ADR-019 Autopilot alerts (ALR-01) and ADR-020/ADR-030 Project Assistant (AST-01): student-only, own project only,
+no PII, fallback."""
 
 import json
 
 import pytest
 
 from app.modules import assistant as assistant_module
+from spa_ai import assistant
 from spa_ai.llm import AIError, FakeAIClient
 from tests.conftest import owner_sql
 from tests.helpers import active_allocations, link_student, ok, setup_dataset
@@ -81,12 +83,17 @@ def test_assistant_rule_fallback_answers_from_own_project(client, scenario):
     r = ok(ask(client, student, "When is my deadline?"))
     assert r["mode"] == "rules" and r["intent"] == "deadline" and r["sources"] == ["deadline"]
     assert "deadline" in r["answer"].lower()
+    # every answer carries 2-3 deterministic follow-ups; none repeats the intent, and no feedback before a submission
+    assert 2 <= len(r["suggestions"]) <= 3 and all(len(q) <= 120 for q in r["suggestions"])
+    assert "When is the deadline?" not in r["suggestions"]
+    assert not any("feedback" in q.lower() for q in r["suggestions"])
     r = ok(ask(client, student, "Give me a summary of my project"))
     assert r["intent"] == "summary" and alloc["project"]["title"] in r["answer"]
     r = ok(ask(client, student, "Why was this project allocated to me?"))
     assert r["sources"] == ["allocation"] and "Match score" in r["answer"]
     r = ok(ask(client, student, "What is the capital of France?"))
     assert r["sources"] == [] and "outside what I can help with" in r["answer"]
+    assert r["suggestions"]
     # only a usage count is audited, never the question
     rows = owner_sql("SELECT metadata::text FROM app.audit_events WHERE action = 'assistant.asked'")
     assert len(rows) == 4 and all("France" not in m and "deadline" not in m for (m,) in rows)
@@ -94,10 +101,20 @@ def test_assistant_rule_fallback_answers_from_own_project(client, scenario):
 
 def test_assistant_prompt_has_no_pii_and_sources_are_validated(client, scenario, monkeypatch):
     student, priya = scenario["student"], scenario["priya"]
-    fake = FakeAIClient({"answerable": True, "answer": "Wire the panel first.", "sources": ["guide", "secret_db"]})
+    fake = FakeAIClient(
+        {
+            "answerable": True,
+            "answer": "Wire the panel first.",
+            "sources": ["guide", "secret_db"],
+            "suggestions": ["Which cable size should I use?", f"What did {priya['full_name']} submit?", 7],
+        }
+    )
     monkeypatch.setattr(assistant_module, "ai_client_factory", lambda: fake)
     r = ok(ask(client, student, "How do I start?", history=[{"role": "user", "content": "hi"}]))
+    suggestions = r.pop("suggestions")
     assert r == {"answer": "Wire the panel first.", "sources": ["guide"], "mode": "ai", "intent": None}
+    assert suggestions[0] == "Which cable size should I use?" and len(suggestions) <= 3
+    assert not any(priya["full_name"].lower() in q.lower() for q in suggestions)
     system, user = fake.calls[0]
     for pii in (priya["full_name"], priya["trainee_code"], "priya@example.org"):
         assert pii.lower() not in (system + user).lower()
@@ -116,19 +133,40 @@ def test_assistant_prompt_has_no_pii_and_sources_are_validated(client, scenario,
     assert ok(ask(client, student, "When is the deadline?"))["mode"] == "rules"
 
 
-def test_assistant_scoping_for_staff(client, scenario):
+def test_assistant_is_student_only(client, scenario):
+    """ADR-030: supervisors (even the project's own) and admins get 403; a student cannot point it elsewhere."""
     alloc = scenario["allocs"]["TRN-EL-002"]
     own, other = supervisor_of(scenario, alloc)
-    r = ok(ask(client, own, "Summarise this project", allocation_id=alloc["id"]))
-    assert r["intent"] == "summary"
-    assert ask(client, other, "Summarise this project", allocation_id=alloc["id"]).status_code == 404
-    assert ask(client, own, "Summarise this project").status_code == 404
-    assert ask(client, scenario["admin"], "Summarise", allocation_id=alloc["id"]).status_code == 403
+    for headers in (own, other, scenario["admin"]):
+        for extra in ({"allocation_id": alloc["id"]}, {}):
+            r = ask(client, headers, "Summarise this project", **extra)
+            assert r.status_code == 403 and r.json()["error"]["code"] == "FORBIDDEN"
+    # staff calls are refused before anything is audited
+    assert owner_sql("SELECT count(*) FROM app.audit_events WHERE action = 'assistant.asked'")[0][0] == 0
     # a student cannot point the assistant at someone else's allocation: allocation_id is ignored
     others = [a for code, a in scenario["allocs"].items() if code != "TRN-EL-002"]
     if others:
         r = ok(ask(client, scenario["student"], "Summarise my project", allocation_id=others[0]["id"]))
         assert alloc["project"]["title"] in r["answer"]
+
+
+def test_off_topic_question_is_declined(client, scenario, monkeypatch):
+    """ADR-030: a general-knowledge answer from the model never reaches the trainee."""
+    fake = FakeAIClient(
+        {
+            "kind": "general",
+            "answer": "Hydraulics transmits force through an incompressible fluid.",
+            "sources": [],
+            "suggestions": ["What is Pascal's law?"],
+        }
+    )
+    monkeypatch.setattr(assistant_module, "ai_client_factory", lambda: fake)
+    r = ok(ask(client, scenario["student"], "how does hydraulics work in general"))
+    assert r["answer"] == assistant.DECLINE and r["sources"] == [] and r["mode"] == "ai"
+    assert "fluid" not in r["answer"] and "What is Pascal's law?" not in r["suggestions"]
+    assert 2 <= len(r["suggestions"]) <= 3
+    system, _ = fake.calls[0]
+    assert "Answer ONLY from the context" in system and '"project"|"decline"' in system
 
 
 def test_assistant_is_rate_limited(client, scenario, monkeypatch):
@@ -137,3 +175,36 @@ def test_assistant_is_rate_limited(client, scenario, monkeypatch):
         ok(ask(client, scenario["student"], "When is the deadline?"))
     r = ask(client, scenario["student"], "When is the deadline?")
     assert r.status_code == 429 and r.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_student_bundle_never_contains_originality(client, scenario):
+    """ADR-028: the plagiarism result is staff-only, so the (student-only) assistant must never see it."""
+    from app.db import models as M
+    from app.db.session import get_sessionmaker
+    from app.modules.assistant import build_sections
+
+    alloc_id = scenario["allocs"]["TRN-EL-002"]["id"]
+    with get_sessionmaker()() as db:
+        a = db.get(M.Allocation, alloc_id)
+        sub = M.Submission(
+            allocation_id=a.id,
+            cycle_id=a.cycle_id,
+            version=1,
+            submitted_by=a.trainee.user_id,
+            report_url="https://example.org/r.pdf",
+        )
+        db.add(sub)
+        db.flush()
+        db.add(
+            M.ReportAnalysis(
+                submission_id=sub.id,
+                pipeline_version="t",
+                originality={"overlap_pct": 42, "attention_band": "high"},
+                evaluation={"total": 70, "grade": "B"},
+            )
+        )
+        db.flush()
+        sections = build_sections(db, a)
+        db.rollback()
+    assert "Automated report score: 70" in sections["feedback"]
+    assert "Originality" not in sections["feedback"] and "42" not in sections["feedback"]

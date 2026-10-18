@@ -7,10 +7,10 @@ allocation cannot both succeed.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,8 +19,16 @@ from app.automation.notify import notify_user
 from app.core.config import get_settings
 from app.core.errors import AppError, conflict, not_found
 from app.db import models as M
-from app.db.enums import AllocationSource, AllocationStatus, CycleStatus, ProjectProcessing, ProjectStatus
+from app.db.enums import (
+    AllocationSource,
+    AllocationStatus,
+    CycleStatus,
+    JobStatus,
+    ProjectProcessing,
+    ProjectStatus,
+)
 from app.domain import lock_cycle, now_utc, person_key, project_input, trainee_input
+from spa_ai.feedback import explain_feedback, parse_reason, rank_with_feedback, score_rank
 from spa_ai.optimizer import Balance, optimise
 from spa_ai.scoring import (
     MODE_FULL,
@@ -171,11 +179,75 @@ def _has_active(db: Session, trainee_id: uuid.UUID) -> bool:
 ALLOCATE_CHUNK = 500  # trainees locked and inserted per batch
 
 
+FULL_RUN_MINUTES = 15  # ADR-029: a scheduled run re-scores everything at least this often, even if unchanged
+
+_FINGERPRINT_SQL = text(
+    """SELECT
+      (SELECT count(*) FROM app.trainees t WHERE t.cycle_id = :c AND NOT EXISTS (
+          SELECT 1 FROM app.allocations a WHERE a.trainee_id = t.id AND a.status = 'active')) AS unassigned,
+      (SELECT count(*) FROM app.projects p WHERE p.cycle_id = :c AND p.status = 'published'
+          AND p.processing_status = 'ready' AND p.supervisor_id IS NOT NULL) AS ready,
+      (SELECT max(updated_at) FROM app.trainees WHERE cycle_id = :c) AS trainees_at,
+      (SELECT count(*) FROM app.trainee_skills ts JOIN app.trainees t ON t.id = ts.trainee_id
+          WHERE t.cycle_id = :c) AS trainee_skills,
+      (SELECT max(updated_at) FROM app.projects WHERE cycle_id = :c) AS projects_at,
+      (SELECT count(*) FROM app.allocations WHERE cycle_id = :c) AS allocations,
+      (SELECT count(*) FROM app.allocation_rejections WHERE cycle_id = :c) AS rejections"""
+)
+
+
+def _fingerprint(db: Session, cycle_id: uuid.UUID) -> dict[str, Any]:
+    """Cheap (one round trip) summary of everything that can change an allocation outcome."""
+    row = db.execute(_FINGERPRINT_SQL, {"c": cycle_id}).mappings().one()
+    return {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()}
+
+
+def _previous_result(db: Session, cycle_id: uuid.UUID) -> dict[str, Any] | None:
+    return db.scalar(
+        select(M.Job.result)
+        .where(
+            M.Job.kind == "allocate_cycle",
+            M.Job.status == JobStatus.done,
+            M.Job.created_at > now_utc() - timedelta(minutes=FULL_RUN_MINUTES * 2),
+            M.Job.payload["cycle_id"].astext == str(cycle_id),
+        )
+        .order_by(M.Job.created_at.desc())
+        .limit(1)
+    )
+
+
+def _quick_skip(db: Session, cycle: M.Cycle, trigger: str) -> dict[str, Any] | None:
+    """ADR-029: return early (a few cheap queries) when nobody is waiting, or, for a scheduled run, when nothing
+    changed since the previous run. Event-triggered runs (import, onboarding, rejection, project ready, manual)
+    only skip when nobody is waiting, and a full scheduled run still happens at least every FULL_RUN_MINUTES."""
+    fp = _fingerprint(db, cycle.id)
+    base = {"allocated": 0, "replacements": 0, "ready_projects": fp["ready"], "fingerprint": fp}
+    if fp["unassigned"] == 0:  # nothing to allocate and no trainee for a pending replacement
+        return {**base, "waiting": {}, "skipped": "no unassigned trainees"}
+    if trigger != "schedule":
+        return None
+    prev = _previous_result(db, cycle.id)
+    if not prev or prev.get("fingerprint") != fp or not prev.get("full_run_at"):
+        return None
+    if datetime.fromisoformat(prev["full_run_at"]) < now_utc() - timedelta(minutes=FULL_RUN_MINUTES):
+        return None
+    return {
+        **base,
+        "waiting": prev.get("waiting") or {},
+        "skipped": "unchanged since the last run",
+        "full_run_at": prev["full_run_at"],
+    }
+
+
 @jobs.handler("allocate_cycle")
 def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     cycle = lock_cycle(db, uuid.UUID(payload["cycle_id"]))  # FOR SHARE: blocks a concurrent archive
     if not allocation_open(cycle):
         return {"skipped": "allocation window closed"}
+    trigger = payload.get("trigger", "schedule")
+    skip = _quick_skip(db, cycle, trigger)
+    if skip is not None:
+        return skip
     # Promised replacements first, so ordinary allocation cannot consume their candidates.
     replaced = process_pending_replacements(db, cycle)
     projects = ready_projects(db, cycle.id)
@@ -183,7 +255,6 @@ def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     pinputs = {p.id: project_input(p) for p in projects}
     trainees = unassigned_trainees(db, cycle.id)
     excluded = exclusions(db, {person_key(t) for t in trainees})
-    trigger = payload.get("trigger", "schedule")
     waiting: dict[str, int] = {}
     options: dict[str, list[PairScore]] = {}
     by_trainee: dict[str, M.Trainee] = {}
@@ -198,18 +269,140 @@ def allocate_cycle(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             continue
         options[str(t.id)] = [ps for ps in scores if ps.eligible]
         by_trainee[str(t.id)] = t
+    guided = _reason_guided(db, cycle, options, by_trainee, pinputs)
     plan, summary = _plan(db, cycle, projects, options, by_trainee)
+    plan = [(by_trainee[k], ps, why) for k, (ps, why, _) in guided.items()] + plan
     allocated = 0
     for i in range(0, len(plan), ALLOCATE_CHUNK):
         allocated += _allocate_batch(db, cycle, plan[i : i + ALLOCATE_CHUNK], by_id, trigger)
+    _record_reason_fit(db, guided)
     db.commit()
     return {
         "allocated": allocated,
         "replacements": replaced,
         "waiting": waiting,
         "ready_projects": len(projects),
+        "reason_guided": len(guided),
         "optimiser": summary,
+        # After this run's own changes, so an unchanged next scheduled run can skip cheaply (ADR-029).
+        "fingerprint": _fingerprint(db, cycle.id),
+        "full_run_at": now_utc().isoformat(),
     }
+
+
+# ---------------------------------------------------------------- rejection reason -> next project (ADR-029)
+
+
+def _latest_rejections(db: Session, cycle_id: uuid.UUID, trainee_ids: list[str]) -> dict[str, M.AllocationRejection]:
+    """trainee id -> their latest rejection in this cycle, only while the rejected allocation is still their latest
+    allocation (the reason is about the project they are waiting to replace)."""
+    if not trainee_ids:
+        return {}
+    ids = [uuid.UUID(t) for t in trainee_ids]
+    rejections = db.scalars(
+        select(M.AllocationRejection)
+        .where(M.AllocationRejection.cycle_id == cycle_id, M.AllocationRejection.trainee_id.in_(ids))
+        .order_by(M.AllocationRejection.created_at.desc(), M.AllocationRejection.id.desc())
+    ).all()
+    if not rejections:
+        return {}
+    latest: dict[uuid.UUID, uuid.UUID] = {}
+    for tid, aid in db.execute(
+        select(M.Allocation.trainee_id, M.Allocation.id)
+        .where(M.Allocation.trainee_id.in_({r.trainee_id for r in rejections}))
+        .order_by(M.Allocation.trainee_id, M.Allocation.created_at.desc(), M.Allocation.id.desc())
+    ):
+        latest.setdefault(tid, aid)
+    out: dict[str, M.AllocationRejection] = {}
+    for r in rejections:
+        key = str(r.trainee_id)
+        if key not in out and latest.get(r.trainee_id) == r.allocation_id:
+            out[key] = r
+    return out
+
+
+def _reason_guided(
+    db: Session,
+    cycle: M.Cycle,
+    options: dict[str, list[PairScore]],
+    by_trainee: dict[str, M.Trainee],
+    pinputs: dict[uuid.UUID, ProjectInput],
+) -> dict[str, tuple[PairScore, str, dict[str, Any]]]:
+    """A trainee who rejected a project with a usable reason gets their next project chosen by reason fit, then by
+    the unchanged rule score, among their eligible, non-excluded options only (the gates and exclusions already
+    ran; Σ factor points = score). They are removed from `options`, so the optimiser plans everyone else.
+    The reason is never logged or sent to a model."""
+    rejections = _latest_rejections(db, cycle.id, [k for k in options if k in by_trainee])
+    if not rejections:
+        return {}
+    by_pid = {str(pid): pi for pid, pi in pinputs.items()}
+    out: dict[str, tuple[PairScore, str, dict[str, Any]]] = {}
+    for key, r in rejections.items():
+        signal = parse_reason(r.reason)
+        if signal.empty:
+            continue
+        rejected = pinputs.get(r.project_id)
+        if rejected is None:
+            rp = db.get(M.Project, r.project_id)
+            rejected = project_input(rp) if rp is not None else None
+        ranked = rank_with_feedback(options[key], by_pid, signal, rejected)
+        if not ranked:
+            continue
+        chosen = ranked[0]
+        ps = chosen.score
+        rank = score_rank(chosen, ranked)
+        mode = MODE_LABEL.get(ps.mode, ps.mode)
+        why = (
+            explain_feedback(r.reason, chosen, ranked, signal)
+            + " "
+            + (
+                explain(ps, len(ranked), "Allocated")
+                if rank == 1
+                else f"Allocated using {mode}: match score {ps.score:g}/100, your #{rank} of {len(ranked)} eligible "
+                "projects by score; your reason ranked it first."
+            )
+        )[:1000]
+        snapshot = {
+            "used": True,
+            "wanted": sorted(signal.wanted),
+            "unwanted": sorted(signal.unwanted),
+            "rule": "Eligible projects ranked by reason fit (+2 per wanted topic word, -2 per unwanted topic word, "
+            "-1 per title/category word shared with the rejected project, at most -3), then by match score. "
+            "The match score and its factors are unchanged.",
+            "selected_project_id": ps.project_id,
+            "selected_project_code": ps.project_code,
+            "selected_score": ps.score,
+            "explanation": why,
+            "candidates": [
+                {
+                    "project_id": o.score.project_id,
+                    "project_code": o.score.project_code,
+                    "score": o.score.score,
+                    "fit": o.fit.to_dict(),
+                }
+                for o in ranked
+            ],
+        }
+        out[key] = (ps, why, {"rejection_id": r.id, "snapshot": snapshot})
+        del options[key]
+    return out
+
+
+def _record_reason_fit(db: Session, guided: dict[str, tuple[PairScore, str, dict[str, Any]]]) -> None:
+    """Store the reason-fit snapshot on the rejection (ALLOC-09 `replacement.reason_fit`) once allocated."""
+    for key, (ps, _, info) in guided.items():
+        got = db.scalar(
+            select(M.Allocation.id).where(
+                M.Allocation.trainee_id == uuid.UUID(key),
+                M.Allocation.status == AllocationStatus.active,
+                M.Allocation.project_id == uuid.UUID(ps.project_id),
+            )
+        )
+        if got is None:
+            continue
+        r = db.get(M.AllocationRejection, info["rejection_id"])
+        if r is not None:
+            r.replacement_details = {**(r.replacement_details or {}), "reason_fit": info["snapshot"]}
 
 
 def _plan(
@@ -507,9 +700,10 @@ def replace_one(db: Session, cycle: M.Cycle, rejection_id: uuid.UUID) -> dict[st
         }
         return {"status": "cancelled"}
     project = db.get(M.Project, r.project_id)
+    keep = {k: v for k, v in (r.replacement_details or {}).items() if k == "reason_fit"}  # ADR-029
     if project is None or project not in ready_projects(db, cycle.id):
         r.replacement_status = "waiting_for_eligible_trainee"
-        r.replacement_details = {"reason": "The project is not currently ready for allocation."}
+        r.replacement_details = {**keep, "reason": "The project is not currently ready for allocation."}
         return {"status": r.replacement_status}
     pi = project_input(project)
     canonical = project.canonical_id or project.id
@@ -526,6 +720,7 @@ def replace_one(db: Session, cycle: M.Cycle, rejection_id: uuid.UUID) -> dict[st
         for s in ineligible
     ]
     details: dict[str, Any] = {
+        **keep,
         "ranking_mode": mode,
         "ranking_note": (
             "All candidates had verified assessments, so the full 35/30/20/15 score was used."

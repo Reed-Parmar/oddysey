@@ -142,6 +142,17 @@ def patch_me(body: MePatch, user: CurrentUser, db: DB) -> Envelope[UserOut]:
     return Envelope(data=user_out(user))
 
 
+@router.post("/me/password-changed", tags=["me"])
+def password_changed(user: CurrentUser, db: DB) -> Envelope[UserOut]:
+    """ME-03 (ADR-031): the client changed its password with Supabase `updateUser`; clear the change-password notice."""
+    if user.must_change_password:
+        user.must_change_password = False
+        audit.record(db, user.id, "user.password_changed", "user", user.id, {})
+        db.commit()
+        db.refresh(user)
+    return Envelope(data=user_out(user))
+
+
 @router.get("/trades", tags=["reference"])
 def list_trades(_: AnyRole, db: DB) -> ListEnvelope[NamedRef]:
     return ListEnvelope(data=[named(t) for t in db.scalars(select(M.Trade).order_by(M.Trade.name))])

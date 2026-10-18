@@ -1,12 +1,15 @@
 """Per-version report analysis (ADR-017): text snapshot → originality → automated report evaluation.
 
 Deterministic originality always runs when text is available, even if AI evaluation is unavailable or
-fails; partial results are kept and the status says which stages completed. AI failures are retried
-(`retrying`) and end as `failed`, never as zero marks. The academic outcome (evaluated /
-rework_requested) is applied only to the LATEST version and only while it is still `submitted`.
+fails. ADR-029: a model failure (rate/token limit, timeout, invalid JSON) is a soft failure: the evaluation
+falls back to the deterministic rule-based rubric (`source: "rule"`) in the same run, with no retry loop, so
+an analysis never ends `failed` because of the model. The academic outcome (evaluated / rework_requested) is
+applied only to the LATEST version, only while it is still `submitted`, and only from a usable analysis
+(completed / review_required); rework comes only from a real low AI score or a real originality decision.
 """
 
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -42,11 +45,25 @@ SEMANTIC_NOT_ASSESSED = {
     "reason": "No validated semantic-similarity provider is configured, so paraphrase/concept similarity "
     "was not assessed.",
 }
+# ADR-028: the only originality wording a trainee ever receives (no percentages, no sources).
+ORIGINALITY_REWORK_REASON = (
+    "Your report overlaps too much with other sources. Please rewrite it in your own words and resubmit."
+)
 AI_WRITING_NOT_AVAILABLE = {
     "status": "not_available",
     "reason": "AI-writing assessment not available: no validated detector is configured. The project LLM is never "
     "asked to guess authorship, and fluent writing or overlap alone does not indicate AI generation.",
 }
+
+_VIDEO_HOSTS = re.compile(
+    r"^https?://(?:[a-z0-9-]+\.)*(?:youtube\.com|youtu\.be|vimeo\.com|instagram\.com|facebook\.com|fb\.watch|"
+    r"tiktok\.com|dailymotion\.com)(?:[:/?#]|$)",
+    re.IGNORECASE,
+)
+VIDEO_LINK_REASON = (
+    "The report link points to a video or social media page, not a report document. Videos are welcome as "
+    "supporting evidence, but the report itself must be a PDF or DOCX file (or a link to one)."
+)
 
 # Tests replace this factory with one returning a FakeAIClient.
 ai_client_factory: Callable[[], AIClient | None] = default_ai_client
@@ -196,7 +213,9 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         db.commit()
         problem = None
         doc = None
-        if sub.report_url:
+        if sub.report_url and _VIDEO_HOSTS.match(sub.report_url):
+            problem = VIDEO_LINK_REASON  # never fetched: a video page has no report text
+        elif sub.report_url:
             try:
                 data, mime = fetch.report_fetcher(sub.report_url)
                 a.binary_hash = binary_hash(data)
@@ -253,13 +272,17 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         deliverables=list(gen.get("deliverables") or []),
         steps=[f"{s.get('title', '')}: {s.get('detail', '')}" for s in gen.get("steps") or []],
     )
-    ev = evaluate_report(_doc(a), ctx, REPORT_RUBRIC, ai_client_factory())
-    if ev["status"] == "failed" and a.attempts < MAX_EVAL_ATTEMPTS:
-        a.status = sub.analysis_status = AnalysisStatus.retrying
-        a.status_reason = f"Automated evaluation failed ({ev.get('status_reason')}); retrying."
-        a.evaluation = ev
-        db.commit()
-        raise jobs.RetryLater("evaluation failed", 60 * a.attempts)
+    try:
+        client = ai_client_factory()
+    except Exception:  # noqa: BLE001 - a misconfigured client must not fail the analysis
+        log.warning("AI client unavailable for report evaluation submission_id=%s", sid)
+        client = None
+    ev = evaluate_report(_doc(a), ctx, REPORT_RUBRIC, client)
+    if ev.get("source") == "rule":
+        # Soft failure (ADR-029): logged without report text, prompts or personal data.
+        log.warning(
+            "report evaluation used the rule fallback submission_id=%s cause=%s", sid, ev.get("fallback_reason")
+        )
     a.evaluation = {**ev, "report_hash": a.input_hash, "evaluator": "automated", "attempts": a.attempts}
     status, reason = {
         "completed": (AnalysisStatus.completed, None),
@@ -272,8 +295,15 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             AnalysisStatus.review_required,
             "AI evaluation is not configured; a supervisor review is needed.",
         ),
-        "failed": (AnalysisStatus.failed, "Automated evaluation failed after retries; a supervisor review is needed."),
+        # Not expected since ADR-029 (model failures fall back to rules); kept as a safe, non-academic outcome.
+        "failed": (
+            AnalysisStatus.review_required,
+            "Automated evaluation was not possible; a supervisor review is needed.",
+        ),
     }[ev["status"]]
+    # ADR-029: an evaluation stage that produced no usable result never leads to rework (insufficient text,
+    # failure); without AI ("unavailable") the deterministic originality decision still applies.
+    usable = ev["status"] in ("completed", "review_required", "unavailable")
 
     # 4. persist + outcome (only on the latest version, only while still submitted, cycle not archived)
     cycle = lock_cycle(db, sub.cycle_id)
@@ -296,7 +326,8 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     copied = bool(dup.get("binary_other_person") or dup.get("normalized_other_person"))
     threshold = get_settings().originality_rework_at
     if (
-        (copied or (pct is not None and pct >= threshold))
+        usable  # ADR-029: never send work back from an analysis that did not complete
+        and (copied or (pct is not None and pct >= threshold))
         and sub.version == latest_version
         and sub.status == SubmissionStatus.submitted
     ):
@@ -324,6 +355,7 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     if (
         applied is None
         and ev.get("total") is not None
+        and ev.get("outcome") in ("evaluated", "rework_requested")
         and status == AnalysisStatus.completed
         and sub.version == latest_version
         and sub.status == SubmissionStatus.submitted
@@ -339,19 +371,14 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             {"actor": "system", "outcome": applied, "total": ev["total"], "rubric": ev.get("rubric_version")},
         )
     if applied == "rework_originality":
-        why = (
-            "Your file is a copy of another person's submission."
-            if copied
-            else f"{pct:.1f}% of your report matches other submissions (the limit is {threshold:.0f}%)."
-        )
+        # ADR-028: the trainee never sees overlap figures or sources; staff have the detailed report.
         _notify(
             db,
             sub,
             trainee,
             project,
-            f"Version {sub.version}: plagiarism too high, redo required",
-            f"{why} Redo the allotted work and write your report again in your own words, then submit a new version. "
-            "Your detailed plagiarism report shows exactly which words matched.",
+            f"Version {sub.version}: please revise for originality",
+            f"{ORIGINALITY_REWORK_REASON} Open My Project to submit a new version.",
         )
     elif applied == "evaluated":
         _notify(
@@ -380,28 +407,30 @@ def analyse_submission(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             f"Version {sub.version} is awaiting review",
             "Your report was received and checked; a supervisor will review it.",
         )
-    if a.originality and trainee.user is not None:
-        # ADR-026: the detailed report; with EMAIL_BACKEND=smtp it is emailed with the PDF attached (built when sent).
-        notify_user(
-            db,
-            trainee.user,
-            "originality.report",
-            f"Your plagiarism report: {project.project_code} version {sub.version}",
-            "Your Plagiarism & Originality Report is ready. It lists every matched passage and highlights the matched "
-            "words in your report. Open Submissions to read it or download the PDF.",
-            "/student/submissions",
-            f"originality.report:{a.id}",
-        )
     if project.supervisor is not None:
-        notify_user(
-            db,
-            project.supervisor,
-            "submission.analysed",
-            f"Report analysed: {project.project_code} v{sub.version}",
-            "A submitted report has a new Plagiarism & Originality Analysis and automated evaluation.",
-            f"/supervisor/submissions/{sub.id}",
-            f"submission.analysed.sup:{a.id}",
-        )
+        if a.originality:
+            # ADR-026 as amended by ADR-028: the detailed report goes to the project's supervisor only; with
+            # EMAIL_BACKEND=smtp it is emailed with the PDF attached (built when sent).
+            notify_user(
+                db,
+                project.supervisor,
+                "originality.report",
+                f"Report analysed: {project.project_code} v{sub.version} (plagiarism report)",
+                "A submitted report has a new automated evaluation and a Plagiarism & Originality Report. It lists "
+                "every matched passage and highlights the matched words.",
+                f"/supervisor/submissions/{sub.id}",
+                f"originality.report:{a.id}",
+            )
+        else:
+            notify_user(
+                db,
+                project.supervisor,
+                "submission.analysed",
+                f"Report analysed: {project.project_code} v{sub.version}",
+                "A submitted report has a new automated evaluation.",
+                f"/supervisor/submissions/{sub.id}",
+                f"submission.analysed.sup:{a.id}",
+            )
     db.commit()
     del alloc
     return {"status": status.value, "outcome": applied}

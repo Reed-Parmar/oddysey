@@ -34,6 +34,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { INVITE_KEY, supabase } from "@/auth/supabase";
 import { Avatar, FormError, FormField, LoadingState, PageHeader, useToast } from "@/components/shared";
 import { Alert, Button, Card, Input, buttonStyles } from "@/components/ui";
+import { loginEmail, normalisePhone } from "@/lib/phone";
 
 function PublicHeader() {
   return (
@@ -225,7 +226,14 @@ export function Landing() {
   );
 }
 
-const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
+// ADR-031: trainees created by the programme team log in with their phone number (converted to their login email).
+const loginSchema = z.object({
+  email: z.string().trim().refine(
+    (v) => (v.includes("@") ? z.string().email().safeParse(v).success : normalisePhone(v) !== null),
+    "Enter a valid email or 10-digit mobile number",
+  ),
+  password: z.string().min(1, "Enter your password"),
+});
 
 export function Login() {
   const { state } = useAuth();
@@ -238,8 +246,8 @@ export function Login() {
 
   const onSubmit = form.handleSubmit(async ({ email, password }) => {
     setError(undefined);
-    const { error: e } = await supabase.auth.signInWithPassword({ email, password });
-    if (e) setError(e.message === "Email not confirmed" ? "Please confirm your email address before logging in." : "Email or password is incorrect.");
+    const { error: e } = await supabase.auth.signInWithPassword({ email: loginEmail(email) ?? email, password });
+    if (e) setError(e.message === "Email not confirmed" ? "Please confirm your email address before logging in." : "Email/phone or password is incorrect.");
   });
 
   return (
@@ -253,8 +261,8 @@ export function Login() {
         {reason === "disabled" && !notice && <Alert variant="danger">Your account has been disabled. Contact your coordinator.</Alert>}
         {state.status === "error" && <Alert variant="danger">{state.message}</Alert>}
         {error && <Alert variant="danger">{error}</Alert>}
-        <FormField label="Email" htmlFor="email" error={form.formState.errors.email?.message}>
-          <Input id="email" type="email" autoComplete="email" inputMode="email" aria-invalid={!!form.formState.errors.email} {...form.register("email")} />
+        <FormField label="Email or phone number" htmlFor="email" error={form.formState.errors.email?.message}>
+          <Input id="email" type="text" autoComplete="username" aria-invalid={!!form.formState.errors.email} {...form.register("email")} />
         </FormField>
         <FormField label="Password" htmlFor="password" error={form.formState.errors.password?.message}>
           <PasswordInput id="password" autoComplete="current-password" aria-invalid={!!form.formState.errors.password} {...form.register("password")} />
@@ -384,7 +392,53 @@ export function Account() {
             </div>
           </form>
         </Card>
+        <ChangePasswordCard mustChange={user.must_change_password} onChanged={refreshUser} />
       </div>
     </div>
+  );
+}
+
+const passwordSchema = z
+  .object({ password: z.string().min(8, "At least 8 characters"), confirm: z.string() })
+  .refine((v) => v.password === v.confirm, { path: ["confirm"], message: "Passwords do not match" });
+
+/** ADR-031: accounts created by the programme team start with a shared password and must change it. */
+function ChangePasswordCard({ mustChange, onChanged }: { mustChange: boolean; onChanged: () => Promise<void> | void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const form = useForm<z.infer<typeof passwordSchema>>({ resolver: zodResolver(passwordSchema) });
+  const m = useMutation({
+    mutationFn: async (v: z.infer<typeof passwordSchema>) => {
+      const { error } = await supabase.auth.updateUser({ password: v.password });
+      if (error) throw new Error(error.message || "Could not change the password. Try a different one.");
+      return call(api.POST("/api/v1/me/password-changed"));
+    },
+    onSuccess: async () => {
+      toast.success("Password changed");
+      form.reset({ password: "", confirm: "" });
+      await qc.invalidateQueries({ queryKey: qk.me() });
+      await onChanged();
+    },
+  });
+  return (
+    <Card title="Change password">
+      <form className="flex flex-col gap-4" onSubmit={form.handleSubmit((v) => m.mutate(v))} noValidate>
+        {mustChange && (
+          <Alert variant="warning">Your account was created by the programme team with a default password. Please change your password now.</Alert>
+        )}
+        <FormError error={m.error} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="New password" htmlFor="new_password" error={form.formState.errors.password?.message} hint="At least 8 characters" required>
+            <PasswordInput id="new_password" autoComplete="new-password" {...form.register("password")} />
+          </FormField>
+          <FormField label="Confirm new password" htmlFor="confirm_password" error={form.formState.errors.confirm?.message} required>
+            <PasswordInput id="confirm_password" autoComplete="new-password" {...form.register("confirm")} />
+          </FormField>
+        </div>
+        <div className="flex justify-end">
+          <Button type="submit" loading={m.isPending}>Change password</Button>
+        </div>
+      </form>
+    </Card>
   );
 }

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import Select, func, select, update
 
 from app import audit, jobs
-from app.automation.analysis import new_analysis_for_file
+from app.automation.analysis import ORIGINALITY_REWORK_REASON, new_analysis_for_file
 from app.core.config import get_settings
 from app.core.deps import DB, AdminOrSupervisor, AnyRole, Student, Supervisor
 from app.core.errors import AppError, conflict, invalid_state, not_found
@@ -387,6 +387,8 @@ class AnalysisOut(BaseModel):
     review_state: str
     reviews: list[ReviewOut]
     viewer_can_review: bool
+    # ADR-028: generic, student-safe reason while an automatic originality rework is in force (no figures, no sources)
+    rework_reason: str | None = None
 
 
 def _can_review(viewer: M.User, sub: M.Submission) -> bool:
@@ -441,11 +443,24 @@ def _is_uuid(v: object) -> bool:
         return False
 
 
+def originality_rework_reason(sub: M.Submission, a: M.ReportAnalysis) -> str | None:
+    decision = (a.originality or {}).get("decision") or {}
+    if (
+        sub.status == SubmissionStatus.rework_requested
+        and decision.get("action") == "auto_rework"
+        and not decision.get("lifted_at")
+    ):
+        return ORIGINALITY_REWORK_REASON
+    return None
+
+
 def analysis_view(db: DB, sub: M.Submission, viewer: M.User) -> AnalysisOut:
+    """ADR-028: the Plagiarism & Originality Analysis is staff-only; a student gets the evaluation only."""
     a = latest_analysis(db, sub.id)
     if a is None:
         raise not_found("Analysis")
     criteria, amended = effective_evaluation(a)
+    staff = viewer.role != UserRole.student
     return AnalysisOut(
         id=a.id,
         submission_id=sub.id,
@@ -459,10 +474,12 @@ def analysis_view(db: DB, sub: M.Submission, viewer: M.User) -> AnalysisOut:
         parser=a.parser,
         started_at=a.started_at.isoformat() if a.started_at else None,
         finished_at=a.finished_at.isoformat() if a.finished_at else None,
-        corpus=a.corpus,
-        originality=_redact_sources(db, a.originality, viewer, sub.allocation.trainee.trainee_code.upper()),
-        semantic=a.semantic,
-        ai_writing=a.ai_writing,
+        corpus=a.corpus if staff else None,
+        originality=_redact_sources(db, a.originality, viewer, sub.allocation.trainee.trainee_code.upper())
+        if staff
+        else None,
+        semantic=a.semantic if staff else None,
+        ai_writing=a.ai_writing if staff else None,
         evaluation=a.evaluation,
         effective_criteria=criteria,
         amended=amended,
@@ -479,6 +496,7 @@ def analysis_view(db: DB, sub: M.Submission, viewer: M.User) -> AnalysisOut:
             for r in a.reviews
         ],
         viewer_can_review=_can_review(viewer, sub),
+        rework_reason=originality_rework_reason(sub, a),
     )
 
 
@@ -575,6 +593,30 @@ def review_analysis(
                 **(a.originality or {}),
                 "decision": {**decision, "lifted_at": now_utc().isoformat(), "lifted_by_role": viewer.role.value},
             }
+        ev = a.evaluation or {}
+        if a.status == AnalysisStatus.completed and ev.get("total") is not None and ev.get("outcome") == "evaluated":
+            # ADR-028: a usable automated evaluation finalises the version once the rework is lifted
+            db.execute(update(M.Submission).where(M.Submission.id == sub.id).values(status=SubmissionStatus.evaluated))
+            audit.record(
+                db,
+                None,
+                "submission.auto_evaluated",
+                "submission",
+                sub.id,
+                {"actor": "system", "outcome": "evaluated", "total": ev["total"], "trigger": "lift_rework"},
+            )
+            if sub.allocation.trainee.user is not None:
+                from app.automation.notify import notify_user
+
+                notify_user(
+                    db,
+                    sub.allocation.trainee.user,
+                    "submission.analysis",
+                    f"Version {sub.version} evaluated: grade {ev.get('grade')}",
+                    "Your report was evaluated. Open My Project for the scores, evidence and improvement steps.",
+                    "/student/project",
+                    f"lift.evaluated:{a.id}:{len(a.reviews)}",
+                )
     db.add(
         M.AnalysisReview(
             analysis_id=a.id,
@@ -628,7 +670,8 @@ def export_analysis(submission_id: uuid.UUID, viewer: AnyRole, db: DB) -> HTMLRe
     sub = get_visible_submission(db, submission_id, viewer)
     v = analysis_view(db, sub, viewer)
     return HTMLResponse(
-        render_report_html(sub, v), headers={"Content-Disposition": f'inline; filename="originality-{sub.id}.html"'}
+        render_report_html(sub, v, staff=viewer.role != UserRole.student),
+        headers={"Content-Disposition": f'inline; filename="originality-{sub.id}.html"'},
     )
 
 

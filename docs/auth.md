@@ -37,6 +37,14 @@ Provisioning is idempotent. A failed first attempt self-heals on the next login.
 - Provision with a token by an already-provisioned user → `409 INVITATION_NOT_APPLICABLE`. An admin links or changes roles instead.
 - **Public registration can never create a supervisor or admin, and never links an existing trainee record.**
 
+### 2.2a Admin-created trainee accounts (ADR-031, demo flow)
+`POST /api/v1/admin/imports/trainee-accounts` (admin only) creates, per row, a confirmed Supabase user through the Admin API
+(secret key, server-side) with login email `91XXXXXXXXXX@{TRAINEE_LOGIN_EMAIL_DOMAIN}` and password
+`TRAINEE_DEFAULT_PASSWORD`, then `app.users` (`role = 'student'`, `must_change_password = true`) and `trainees.user_id`.
+The role is still set only by the server. The shared initial password is a documented trade-off (ADR-031): it is never
+returned, logged or audited, and the trainee is asked to change it (`/account`, then ME-03). The login page converts a
+phone number to the derived email before `signInWithPassword`; errors stay generic ("Email/phone or password is incorrect").
+
 ### 2.3 First admin
 `uv run python -m scripts.create_admin --email <email> --name "<name>"` (password prompted, never an argument). It creates the Supabase user via the Admin API and upserts `app.users` with `role='admin'`.
 

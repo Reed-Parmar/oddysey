@@ -1,5 +1,8 @@
 """Project processing (ADR-017): document text → generated metadata + guide → supervisor → ready.
 
+Without a document (or with an empty document text) the title + problem-statement description are the source
+(ADR-028); with neither, the project waits in `awaiting_document`.
+
 Explicit values always win: trades, skills, difficulty and minimums set by an admin or an import are
 never overwritten by generation; generation only fills what is missing. The AI call happens outside
 row locks; results are applied only if the document hash is unchanged.
@@ -31,6 +34,11 @@ ai_client_factory: Callable[[], AIClient | None] = default_ai_client
 
 def has_document(p: M.Project) -> bool:
     return bool(p.document_path or p.problem_doc_url)
+
+
+def has_source(p: M.Project) -> bool:
+    """ADR-028: a project can be processed from its document or, without one, from its title + description."""
+    return has_document(p) or bool((p.description or "").strip())
 
 
 def explicit_metadata(p: M.Project) -> bool:
@@ -115,8 +123,11 @@ def _apply(db: Session, p: M.Project, meta: dict[str, Any]) -> None:
 
 
 def readiness(p: M.Project) -> tuple[ProjectProcessing, str | None]:
-    if not has_document(p):
-        return ProjectProcessing.awaiting_document, "Upload the project document (PDF or DOCX)."
+    if not has_source(p):
+        return (
+            ProjectProcessing.awaiting_document,
+            "Upload the project document (PDF or DOCX) or add a problem-statement description.",
+        )
     missing = []
     if not p.all_trades:
         missing.append("target trades")
@@ -194,7 +205,9 @@ def process_project(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     p = db.get(M.Project, pid)
     if p is None:
         return {"skipped": "unknown project"}
-    if p.processing_status == ProjectProcessing.awaiting_document and not has_document(p):
+    if not has_source(p):  # neither a document nor a description: wait (unchanged behaviour)
+        p.processing_status, p.processing_error = readiness(p)
+        db.commit()
         return {"status": "awaiting_document"}
     doc_hash = p.document_hash
     meta = None
@@ -235,11 +248,11 @@ def process_projects(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     process_project job (generation must not run while rows are locked)."""
     ids = [uuid.UUID(x) for x in payload["project_ids"]]
     found = list(db.scalars(select(M.Project).where(M.Project.id.in_(ids))).unique())
-    single = [p.id for p in found if has_document(p) and needs_generation(p)]
+    single = [p.id for p in found if has_source(p) and needs_generation(p)]
     jobs.enqueue_many(
         db, "process_project", [({"project_id": str(i)}, f"project:{i}") for i in single], trigger="batch"
     )
-    batch = [p for p in found if has_document(p) and not needs_generation(p)]
+    batch = [p for p in found if has_source(p) and not needs_generation(p)]
     counts: dict[str, int] = {}
     for cycle_id in sorted({p.cycle_id for p in batch}, key=str):
         cycle = lock_cycle(db, cycle_id)

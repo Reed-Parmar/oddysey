@@ -62,19 +62,25 @@ def notify_user(
 def _attachments(db: Session, n: M.Notification) -> list[tuple[str, bytes]]:
     """Attachments built at send time from stored records (never stored in the outbox, never logged).
 
-    `originality.report` (ADR-026): the trainee's own redacted Plagiarism & Originality Report PDF; the analysis id is
-    in the dedupe key `originality.report:<analysis_id>`.
+    `originality.report` (ADR-026, amended by ADR-028): the Plagiarism & Originality Report PDF for the project's
+    supervisor (staff-only; never sent to the trainee); the analysis id is in the dedupe key
+    `originality.report:<analysis_id>`.
     """
     if n.kind != "originality.report" or not (n.dedupe_key or "").startswith("originality.report:"):
         return []
+    from app.core.errors import AppError
+    from app.db.enums import UserRole
     from app.modules.originality_report import build_report, render_pdf
 
     a = db.get(M.ReportAnalysis, uuid.UUID(n.dedupe_key.split(":", 1)[1]))  # type: ignore[union-attr]
     sub = db.get(M.Submission, a.submission_id) if a is not None else None
-    viewer = sub.allocation.trainee.user if sub is not None else None
-    if sub is None or viewer is None:
+    viewer = db.get(M.User, n.user_id) if n.user_id is not None else None
+    if sub is None or viewer is None or viewer.role == UserRole.student:
         return []
-    return [(f"plagiarism-report-v{sub.version}.pdf", render_pdf(build_report(db, sub, viewer)))]
+    try:
+        return [(f"plagiarism-report-v{sub.version}.pdf", render_pdf(build_report(db, sub, viewer)))]
+    except AppError:  # the analysis has no originality result
+        return []
 
 
 def _send_smtp(db: Session, n: M.Notification) -> None:

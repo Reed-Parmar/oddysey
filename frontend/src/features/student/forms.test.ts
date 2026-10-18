@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { Cycle, HistoryEntry, Resume, Submission, TraineeMe } from "@/api/types";
+import type { Cycle, HistoryEntry, Submission, TraineeMe } from "@/api/types";
 
 import {
-  REPORT_REQUIRED, buildSubmissionFormData, canReject, emptySubmission, initialMarks, lastRejected, markError, mergeSkills,
+  REPORT_REQUIRED, REWORK_GENERIC_TEXT, REWORK_ORIGINALITY_TEXT, buildSubmissionFormData, canReject, emptySubmission, lastRejected, mergeSkills,
   nextStep, normaliseSkills, onboardingBody, onboardingMissing, onboardingSchema, onboardingValues, profileBody,
-  profileSchema, rejectReasonError, reportedScoresBody, reportedValue, resumeFileError, resumeUploadMessage, skillAddError,
-  submissionSchema, submitBlockedReason,
+  profileSchema, rejectReasonError, resumeFileError, resumeUploadMessage, skillAddError,
+  reworkMessage, submissionSchema, submitBlockedReason,
 } from "./forms";
 
 const issues = (v: Partial<typeof emptySubmission>) => {
@@ -115,34 +115,6 @@ describe("onboarding helpers", () => {
   });
 });
 
-describe("resume-reported marks", () => {
-  const resume = {
-    id: "r1",
-    extracted: { assessment_marks: [
-      { field: "theory", value: 72, excerpt: "Theory 72", status: "found", unit: "percent" },
-      { field: "practical", value: null, excerpt: null, status: "not_found", unit: "percent" },
-    ] },
-  } as unknown as Resume;
-
-  it("starts from the saved confirmation for the same resume, else from the resume", () => {
-    expect(initialMarks(resume, null)).toEqual({ theory: "72", practical: "", safety: "" });
-    const saved = { resume_id: "r1", theory: { value: 70 }, safety: { value: 88 } };
-    expect(initialMarks(resume, saved)).toEqual({ theory: "70", practical: "", safety: "88" });
-    expect(initialMarks(resume, { ...saved, resume_id: "old" })).toEqual({ theory: "72", practical: "", safety: "" });
-    expect(reportedValue(saved, "practical")).toBeNull();
-  });
-
-  it("validates 0-100 and builds the PATCH body", () => {
-    expect(markError("")).toBeNull();
-    expect(markError("100")).toBeNull();
-    expect(markError("101")).toMatch(/0 to 100/);
-    expect(markError("abc")).toMatch(/0 to 100/);
-    expect(reportedScoresBody("r1", { theory: "72.5", practical: "", safety: "0" })).toEqual({
-      reported_scores: { resume_id: "r1", theory: 72.5, practical: null, safety: 0 },
-    });
-  });
-});
-
 describe("rejection helpers", () => {
   const cycle = { status: "published" } as Cycle;
   const me = { allocation: { id: "a", status: "active" } } as unknown as TraineeMe;
@@ -221,5 +193,18 @@ describe("resume helpers", () => {
     const full = Array.from({ length: 20 }, (_, i) => `S${i}`);
     expect(mergeSkills(full, ["S1"])).toHaveLength(20);
     expect(mergeSkills(full, ["New"])).toBeNull();
+  });
+});
+
+describe("reworkMessage", () => {
+  it("uses the supervisor feedback when present", () => {
+    expect(reworkMessage("  Add wiring photos.  ")).toBe("Add wiring photos.");
+  });
+  it("falls back to generic text when the reason is unknown", () => {
+    expect(reworkMessage(null)).toBe(REWORK_GENERIC_TEXT);
+    expect(reworkMessage("   ")).toBe(REWORK_GENERIC_TEXT);
+  });
+  it("never reveals originality findings, only a fixed message", () => {
+    expect(reworkMessage("Overlap 72% with source X", "originality")).toBe(REWORK_ORIGINALITY_TEXT);
   });
 });

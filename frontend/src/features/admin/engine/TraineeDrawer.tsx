@@ -1,14 +1,15 @@
-/** Trainee details drawer for /admin/tracking: profile, allocation history (admin-only replacement data), resume, latest submission. */
-import { ArrowRight, ClockCounterClockwise, Info } from "@phosphor-icons/react";
+/** Trainee details drawer for /admin/tracking: profile, allocation history (admin-only replacement data) and every submission version. */
+import { CaretRight, ClockCounterClockwise, Files, Info } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { api, call } from "@/api/client";
 import { qk } from "@/api/queryKeys";
-import type { HistoryEntry, ProgressRow } from "@/api/types";
-import { EmptyState, ErrorState, LoadingState, StatusBadge } from "@/components/shared";
+import type { HistoryEntry, ProgressRow, Submission } from "@/api/types";
+import { DateTime, EmptyState, ErrorState, LoadingState, StatusBadge } from "@/components/shared";
 import { Alert, Card, Dialog } from "@/components/ui";
-import { MatchExplanation, TraineeProfileView, TraineeResumeCard } from "@/features/shared/views";
+import { MatchExplanation, ReportScore, TraineeProfileView } from "@/features/shared/views";
+import { formatScore } from "@/lib/format";
 import { label } from "@/lib/statusLabels";
 
 import { formatIst } from "../data/common";
@@ -38,15 +39,15 @@ function DrawerBody({ row }: { row: ProgressRow }) {
     queryKey: qk.allocationHistory.trainee(id),
     queryFn: () => call(api.GET("/api/v1/admin/trainees/{trainee_id}/allocation-history", { params: { path: { trainee_id: id } } })),
   });
+  const subsParams = { cycle_id: row.cycle.id, trainee_id: id, latest_only: false, sort: "-submitted_at", page_size: 100 };
+  const subs = useQuery({
+    queryKey: qk.submissions.list(subsParams),
+    queryFn: () => call(api.GET("/api/v1/submissions", { params: { query: subsParams } })),
+  });
   const entries = history.data?.data ?? [];
+  const versions = subs.data?.data ?? [];
   return (
     <div className="flex flex-col gap-5">
-      {row.latest_submission && (
-        <Link to={`/admin/submissions/${row.latest_submission.id}`}
-          className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm font-semibold text-primary shadow-card hover:bg-surface-2">
-          Open latest submission (version {row.latest_submission.version}) <ArrowRight aria-hidden size={14} />
-        </Link>
-      )}
       {trainee.isLoading ? <LoadingState /> : trainee.error ? <ErrorState error={trainee.error} onRetry={() => void trainee.refetch()} /> : trainee.data ? (
         <TraineeProfileView trainee={trainee.data.data} showSensitive />
       ) : null}
@@ -59,8 +60,51 @@ function DrawerBody({ row }: { row: ProgressRow }) {
           </ol>
         )}
       </Card>
-      <TraineeResumeCard traineeId={id} canDownload />
+      <Card title="Submissions" icon={<Files />} description="Every version the trainee has submitted, newest first. Open one for the full analysis and review.">
+        {subs.isLoading ? <LoadingState /> : subs.error ? <ErrorState error={subs.error} onRetry={() => void subs.refetch()} /> : !versions.length ? (
+          <EmptyState title="No submissions yet" description={row.project ? "The trainee has not submitted a report for this project." : "Submissions appear once a project is allocated and the trainee submits."} />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {versions.map((s, i) => <SubmissionItem key={s.id} s={s} latest={i === 0} />)}
+          </ul>
+        )}
+      </Card>
     </div>
+  );
+}
+
+function SubmissionItem({ s, latest }: { s: Submission; latest: boolean }) {
+  return (
+    <li>
+      <Link to={`/admin/submissions/${s.id}`}
+        className="group flex flex-wrap items-start justify-between gap-x-4 gap-y-2 rounded-xl border border-border p-3 hover:border-border-strong hover:bg-surface-2">
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-x-2 text-sm font-semibold text-text group-hover:text-primary">
+            Version {s.version}
+            {latest && <span className="rounded-full bg-primary px-1.5 py-px text-[0.62rem] font-semibold tracking-wide text-primary-fg uppercase">Latest</span>}
+          </span>
+          <span className="block text-xs text-muted">{s.project.project_code} · submitted <DateTime value={s.submitted_at} /></span>
+          <span className="mt-1.5 flex flex-wrap gap-1.5">
+            <StatusBadge kind="submission" value={s.status} />
+            <StatusBadge kind="analysis" value={s.analysis_status} />
+            {s.is_late && <StatusBadge kind="late" value="late" />}
+          </span>
+        </span>
+        <span className="flex items-center gap-3 text-sm">
+          <span className="flex flex-col items-end gap-0.5">
+            <span className="flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs text-muted">Report</span><ReportScore summary={s.report_evaluation} /></span>
+            {s.evaluation?.total_score != null && (
+              <span className="flex flex-wrap items-center justify-end gap-1.5">
+                <span className="text-xs text-muted">Verified</span>
+                <span className="font-semibold tabular-nums">{formatScore(s.evaluation.total_score)} / 100</span>
+                {s.evaluation.grade && <StatusBadge kind="grade" value={s.evaluation.grade} />}
+              </span>
+            )}
+          </span>
+          <CaretRight aria-hidden size={14} className="shrink-0 text-subtle group-hover:text-primary" />
+        </span>
+      </Link>
+    </li>
   );
 }
 

@@ -44,7 +44,7 @@ services:
       - key: RUN_WORKER_IN_API
         value: "true"
       - key: ALLOCATION_INTERVAL_MINUTES
-        value: "15"
+        value: "1"
       - key: ALLOCATION_ENGINE
         value: ilp
       - key: OPENBLAS_NUM_THREADS

@@ -23,7 +23,7 @@ from app.core.responses import (
     paginate,
 )
 from app.db import models as M
-from app.db.enums import AssessmentStatus, UserRole
+from app.db.enums import AllocationStatus, AssessmentStatus, UserRole
 from app.domain import (
     VISIBLE_ALLOC,
     active_allocation,
@@ -262,15 +262,27 @@ def list_trainees(
             )
             stmt = stmt.where(open_inv if has_open_invitation else ~open_inv)
     if (pattern := clean_q(q)) is not None:
-        stmt = stmt.where(
-            or_(
-                M.Trainee.full_name.ilike(pattern, escape="\\"),
-                M.Trainee.trainee_code.ilike(pattern, escape="\\"),
-                M.Trainee.centre_name.ilike(pattern, escape="\\"),
-            )
-        )
+        conditions = [
+            M.Trainee.full_name.ilike(pattern, escape="\\"),
+            M.Trainee.trainee_code.ilike(pattern, escape="\\"),
+            M.Trainee.centre_name.ilike(pattern, escape="\\"),
+        ]
+        digits = "".join(ch for ch in (q or "") if ch.isdigit())
+        if viewer.role == UserRole.admin and len(digits) >= 3:  # ADR-031: phone search (admins only see phones)
+            conditions.append(M.Trainee.phone.contains(digits[-10:]))
+        stmt = stmt.where(or_(*conditions))
     rows, meta = paginate(db, stmt.order_by(SORTS[sort], M.Trainee.trainee_code), params)
-    return PageEnvelope(data=[trainee_out(t, viewer) for t in rows], meta=meta)
+    current: dict[uuid.UUID, M.Allocation] = {}
+    if viewer.role == UserRole.admin and rows:  # ADR-031: current project for the admin Trainees page
+        current = {
+            a.trainee_id: a
+            for a in db.scalars(
+                select(M.Allocation).where(
+                    M.Allocation.trainee_id.in_([t.id for t in rows]), M.Allocation.status == AllocationStatus.active
+                )
+            ).unique()
+        }
+    return PageEnvelope(data=[trainee_out(t, viewer, current.get(t.id)) for t in rows], meta=meta)
 
 
 @router.get("/trainees/{trainee_id}")

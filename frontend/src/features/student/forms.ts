@@ -1,7 +1,7 @@
 /** Client-side form rules for the student module (UX only; the server is authoritative, student.md §9.1). */
 import { z } from "zod";
 
-import type { Cycle, HistoryEntry, OnboardingData, Resume, Submission, TraineeMe } from "@/api/types";
+import type { Cycle, HistoryEntry, OnboardingData, Submission, TraineeMe } from "@/api/types";
 
 // ---------------------------------------------------------------- resume (RES-01, ADR-015)
 
@@ -177,47 +177,6 @@ export const ONBOARDING_SECTIONS: { key: string; label: string; fields: Onboardi
   { key: "skills", label: "Skills and interests", fields: ["skills", "career_interest"] },
 ];
 
-// ---------------------------------------------------------------- resume-reported marks (ADR-017)
-
-export const MARK_FIELDS = [
-  ["theory", "Theory"],
-  ["practical", "Practical"],
-  ["safety", "Safety compliance"],
-] as const;
-export type MarkField = (typeof MARK_FIELDS)[number][0];
-export type MarkValues = Record<MarkField, string>;
-
-export function markError(v: string): string | null {
-  const s = v.trim();
-  if (!s) return null;
-  const n = Number(s);
-  if (!Number.isFinite(n) || n < 0 || n > 100) return "Enter a number from 0 to 100";
-  return null;
-}
-
-/** Reads one saved, unverified mark from `me.reported_scores` (an untyped dict on the wire). */
-export function reportedValue(saved: TraineeMe["reported_scores"], field: MarkField): number | null {
-  const entry = saved?.[field] as { value?: unknown } | undefined;
-  return typeof entry?.value === "number" ? entry.value : null;
-}
-
-/** Initial values: the trainee's saved confirmation for this resume, else the numbers found in it. */
-export function initialMarks(resume: Resume, saved: TraineeMe["reported_scores"]): MarkValues {
-  const sameResume = !!saved && saved.resume_id === resume.id;
-  const found = new Map((resume.extracted?.assessment_marks ?? []).map((m) => [m.field, m.value]));
-  const out = { theory: "", practical: "", safety: "" } as MarkValues;
-  for (const [f] of MARK_FIELDS) {
-    const v = (sameResume ? reportedValue(saved, f) : null) ?? found.get(f) ?? null;
-    out[f] = v == null ? "" : String(v);
-  }
-  return out;
-}
-
-export function reportedScoresBody(resumeId: string, v: MarkValues) {
-  const n = (s: string) => (s.trim() === "" ? null : Number(s));
-  return { reported_scores: { resume_id: resumeId, theory: n(v.theory), practical: n(v.practical), safety: n(v.safety) } };
-}
-
 // ---------------------------------------------------------------- rejection (ADR-017)
 
 export const REJECT_MIN = 10;
@@ -306,6 +265,17 @@ export function buildSubmissionFormData(v: SubmissionValues): FormData {
   }
   if (v.file) fd.append("file", v.file);
   return fd;
+}
+
+/** Rework banner text (students never see originality findings or the SUB-09 decision text). */
+export const REWORK_GENERIC_TEXT =
+  "The automated report evaluation or your supervisor asked for changes. Read the automated evaluation below, then submit a new version.";
+export const REWORK_ORIGINALITY_TEXT = "Your report needs revising for originality. Please rewrite it in your own words and resubmit.";
+
+/** `reason` is the student-safe rework reason when the API provides one ("originality" → fixed generic text). */
+export function reworkMessage(feedback: string | null | undefined, reason?: string | null): string {
+  if (reason === "originality") return REWORK_ORIGINALITY_TEXT;
+  return feedback?.trim() || REWORK_GENERIC_TEXT;
 }
 
 /** Why the submit form is unavailable, or null when it is allowed (mirrors server guards; UX only). */
