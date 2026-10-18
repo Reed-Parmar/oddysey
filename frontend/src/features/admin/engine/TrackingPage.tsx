@@ -133,7 +133,8 @@ export function TrackingPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Allocation & Progress" eyebrow="Programme team"
-        description="Every trainee in the active cycles (or the cycle you pick): their automatically allocated project, match details, submissions and evaluation. Select a trainee for full details." />
+        description="Every trainee in the active cycles (or the cycle you pick): their automatically allocated project, match details, submissions and evaluation. Select a trainee for full details."
+        actions={<LinkButton variant="primary" to={scope.id ? `/admin/trainees?cycle=${encodeURIComponent(scope.id)}` : "/admin/trainees"}>Upload or manage trainees</LinkButton>} />
       {archived && <ReadOnlyBanner />}
       {scope.isLoading ? <LoadingState /> : scope.error ? <ErrorState error={scope.error} /> : !scope.ready ? (
         <EmptyState icon={<Target />} title="No active cycle" description="Create a cycle on the Overview page first."

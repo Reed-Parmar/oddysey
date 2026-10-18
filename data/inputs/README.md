@@ -3,6 +3,35 @@
 Sample files you can upload during a demo. Every person, e-mail (`@example.com`) and phone number (`90000000xx`) is fictional.
 Skills and project titles match `data/sample_catalog/project_catalog_demo.csv`. Import that catalogue first so the projects exist.
 
+## Sneha Kulkarni (seeded COPA trainee)
+
+Sneha's samples use the supplied workbook profile: `TRN-CP-007`, COPA, Tata STRIVE SDC - Thane,
+theory 95%, practical 96%, safety 99%, and IT Helpdesk & Software QA interest.
+Her resume adds illustrative training details and fictional contact information.
+The reports target the workbook project `PRJ-CP-401`, **CSR Center Student & inventory Management Web Portal**,
+which is separate from the demo catalogue above. Confirm her actual allocation before uploading a report.
+
+- `resumes/resume_copa_sneha_kulkarni.pdf`: resume with Python, Web Design, Excel Automation and SQLite skills.
+- `submissions/sneha_kulkarni_csr_portal_v1.pdf`: deliberately incomplete first draft for the rework demo.
+- `submissions/sneha_kulkarni_csr_portal_v2.pdf`: improved report with procedure, safety, test results, logbook and costs.
+- `sneha_kulkarni_trainee_account.csv`: one-row bulk account import with fictional phone `9000000055`.
+
+For the existing seeded account, sign in as `sneha@spa-demo.org` using the seed password and upload the PDFs.
+Use the account CSV only in a fresh demo cycle where Sneha does not already exist: account imports match by
+phone, not by name or trainee code, so it would create a separate phone-login record for an email-seeded trainee.
+The report's tests and results are fictional examples, not evidence of a deployed portal.
+
+## Bulk trainee upload (admin)
+
+Open **Admin → Trainees** (`/admin/trainees`), download **CSV template**, then choose **Upload trainees**.
+Select an active cycle, upload CSV/XLSX, check the dry-run preview and apply it. Create an active cycle
+on Overview first if none exists; archived cycles cannot accept uploads. Allocation & Progress and the
+Overview onboarding stage also link to trainee management.
+
+The page, navigation and API are tracked in Git. A fresh clone still needs the frontend dependencies installed
+and a running frontend build from this checkout. If the Trainees menu is absent, check that the running or
+deployed frontend uses this revision; database seeding cannot add a missing frontend menu.
+
 ## Resumes (`resumes/`)
 
 Upload these as a student on the Profile page ("Update resume"), or during self-onboarding. Then save the suggested skills.

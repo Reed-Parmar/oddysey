@@ -23,6 +23,35 @@ SUBMISSIONS = HERE / "submissions"
 
 RESUME_DATA = [
     {
+        "file": "resume_copa_sneha_kulkarni.pdf",
+        "name": "Sneha Kulkarni",
+        "trade": "COPA",
+        "email": "sneha.kulkarni@example.com",
+        "phone": "+91 9000000055",
+        "city": "Thane, Maharashtra",
+        "objective": (
+            "COPA trainee interested in IT Helpdesk & Software QA. I want to build reliable web tools "
+            "for training centres and use Python and Excel automation to reduce repetitive office work."
+        ),
+        "education": [
+            "COPA (Computer Operator and Programming Assistant), Tata STRIVE SDC - Thane - 2026",
+            "Demo assessment: Trade Theory 95%, Workshop Practical 96%, Safety Compliance 99%",
+        ],
+        "skills": [
+            "Python scripting and CSV processing",
+            "Web Design with HTML/CSS and accessible forms",
+            "SQLite Database: tables, queries and parameterised SQL",
+            "Excel Automation: formulas, validation and reporting",
+            "Software QA: test cases, defect reports and regression checks",
+        ],
+        "training": [
+            "Built a practice student register using Python, HTML/CSS and SQLite with input validation.",
+            "Automated an Excel stock summary and reconciled totals against source records.",
+            "Wrote test cases for duplicate records, missing fields and invalid stock quantities.",
+        ],
+        "interest": "IT Helpdesk & Software QA; student and inventory management tools for CSR centres.",
+    },
+    {
         "file": "resume_electrician_ravi_kumar.pdf",
         "name": "Ravi Kumar Patel",
         "trade": "Electrician",
@@ -211,6 +240,81 @@ def make_resume(r: dict) -> Path:
 # ---------------------------------------------------------------- report submissions
 
 SUBMISSION_DATA = [
+    {
+        "file": "sneha_kulkarni_csr_portal_v1.pdf",
+        "project": "CSR Center Student & inventory Management Web Portal",
+        "trainee": "Sneha Kulkarni (COPA, TRN-CP-007)",
+        "version": "Version 1 - first draft",
+        "sections": [
+            ("Aim", ["To make a web portal for student records and inventory at the CSR centre."]),
+            ("Work done", [
+                "I made student and inventory forms using Python, HTML/CSS and SQLite. "
+                "I added a few sample records and displayed them in tables. The pages open in the browser.",
+            ]),
+            ("Conclusion", ["The basic portal works. More testing and documentation are needed."]),
+        ],
+    },
+    {
+        "file": "sneha_kulkarni_csr_portal_v2.pdf",
+        "project": "CSR Center Student & inventory Management Web Portal",
+        "trainee": "Sneha Kulkarni (COPA, TRN-CP-007)",
+        "version": "Version 2 - resubmission after rework",
+        "sections": [
+            ("Aim and Scope", [
+                "Build a local demonstration portal for CSR centre staff to maintain student records, "
+                "record inventory receipts and issues, and export stock summaries. Project reference: PRJ-CP-401. "
+                "All records and results in this report are fictional demo evidence.",
+            ]),
+            ("Materials and Tools", [
+                "One training-centre computer, Python 3, HTML/CSS, SQLite, a browser and a code editor. "
+                "Used Python csv and sqlite3 modules for exports and storage; no paid software was required.",
+            ]),
+            ("Design and Procedure", [
+                "1. Defined student fields (code, name, trade, centre) and item fields (code, name, unit). "
+                "Stored receipts and issues as transactions with quantity, date and reason.",
+                "2. Created SQLite tables with unique student/item codes and foreign keys. "
+                "Used parameterised SQL and a transaction for each stock issue.",
+                "3. Built labelled HTML/CSS forms, search results and validation messages. "
+                "Rejected blank required fields, duplicate codes and non-positive quantities.",
+                "4. Calculated available stock from receipts minus issues. Blocked an issue exceeding "
+                "available stock and exported the stock summary as CSV for Excel.",
+                "5. Added staff sign-in, checked access on protected pages, and documented a "
+                "database backup and restore exercise using synthetic records only.",
+            ]),
+            ("Safety and Data Protection", [
+                "Used fictional names and contact details; kept the SQLite file outside the public directory. "
+                "Stored password hashes, kept credentials out of the report, and signed out on shared computers.",
+                "Limited write access to authorised staff. Kept a backup before changes and used "
+                "safe posture and regular screen breaks during computer work.",
+            ]),
+            ("Test Cases and Observations", [
+                "Demo test set: 20 fictional students, 15 inventory items and 30 stock transactions. "
+                "Ran 12 checks: 4 student validation, 4 stock validation, 2 access and 2 export/restore checks.",
+                "First pass: 10/12 checks passed. Fixed acceptance of a negative issue quantity and a "
+                "missing duplicate-code message. Re-ran all 12 checks: 12/12 passed in the demo scenario.",
+                "Stock reconciliation example: opening quantity 10 keyboards + receipt 5 - issue 3 = "
+                "12 available. An attempted issue of 13 was rejected and the balance stayed at 12.",
+                "Restored the backup into a separate database and checked all 20 student records and "
+                "15 item balances against the original. CSV row counts and stock totals matched.",
+            ]),
+            ("Results and Limitations", [
+                "Delivered working student forms, inventory transactions, stock CSV export, a test checklist "
+                "and a short staff guide in this fictional exercise. The prototype was tested locally; "
+                "multi-user load, production hosting and independent security review remain future work.",
+            ]),
+            ("Logbook and Bill of Materials", [
+                "24 hours over 4 days: requirements and schema 4 h; forms and database 8 h; "
+                "validation and testing 8 h; documentation and handover 4 h.",
+                "BOM: existing centre computer and internet, Python, SQLite and editor: "
+                "Rs. 0 additional procurement. Hardware and connectivity were provided by the centre.",
+            ]),
+            ("Conclusion", [
+                "The exercise connected Python, Web Design and Excel Automation with Software QA. "
+                "Validation and stock reconciliation made the demonstration more reliable. "
+                "Next steps are role-based access review and testing simultaneous stock updates.",
+            ]),
+        ],
+    },
     {
         "file": "solar_street_light_v1.pdf",
         "project": "Solar Street Light Maintenance Drive for a Rural School",

@@ -62,14 +62,14 @@ export function buildLifecycle(o: Overview, automation: Automation | undefined, 
     statusLabel: trainees ? `${trainees} enrolled` : "No trainees yet",
     metric: trainees,
     metricLabel: "trainees",
-    summary: "Trainees are imported by the programme team (XLSX/CSV) or register themselves. A trainee record can exist before the trainee has a login; accounts link through trainee invitations or self-onboarding.",
+    summary: "Open Trainees to download the CSV template and bulk upload trainees with their phone login accounts. Trainees can also register themselves or link an existing record through an invitation.",
     details: t ? [
       { label: "Imported", value: Math.max(0, trainees - t.self_registered) },
       { label: "Self-registered", value: t.self_registered },
       { label: "Linked accounts", value: t.linked_accounts },
       { label: "Pending invitations", value: o.users.pending_invitations },
     ] : [],
-    link: { to: "/admin/tracking", label: "Open trainees" },
+    link: { to: "/admin/trainees", label: "Upload or manage trainees" },
   };
 
   // 2. Profile verification
