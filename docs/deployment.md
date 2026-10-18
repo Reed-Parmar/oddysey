@@ -69,9 +69,10 @@ Config validation: the API refuses to boot if a required variable is missing (py
 8. Create the first admin: `uv run python -m scripts.create_admin --email <admin email> --name "<name>"`.
 
 ### 3.2 Render (`spa-api`)
-- New Web Service → repo → **Root directory** `backend` → Runtime Python. Render clones the whole repo, so the uv path dependency on `../ai` (ADR-014) resolves at build time.
-- **Build:** `pip install uv && uv sync --frozen --no-dev`
-- **Start:** `uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'`
+- New Web Service → repo → **Root directory** blank (repository root) → Runtime Python. Keep the repository root available because `backend` depends on the sibling `ai` package via `../ai` (ADR-014). Files outside a Render service's root directory are unavailable at build time and runtime.
+- **Build:** `pip install uv && cd backend && uv sync --frozen --no-dev`
+- **Start:** `cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'`
+- For an existing service, update all three settings above in the Render dashboard before redeploying. If logs show `cd: backend: No such file or directory`, check that Root Directory is blank; commands already run from the selected root.
   Migrations run automatically on every deploy. If `alembic upgrade` fails, the service doesn't start and the old instance keeps serving.
 - **Health check path:** `/api/v1/health`.
 - Env vars per §2. Auto-deploy from `main`.

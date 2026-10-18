@@ -7,9 +7,10 @@ services:
   - type: web
     name: spa-api
     runtime: python
-    rootDir: backend
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    # Keep the repository root available: backend depends on the sibling ai package.
+    rootDir: .
+    buildCommand: pip install uv && cd backend && uv sync --frozen --no-dev
+    startCommand: cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /api/v1/health
     autoDeploy: true
     envVars:

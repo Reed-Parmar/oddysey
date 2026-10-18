@@ -1,6 +1,8 @@
 # backend — FastAPI API
 
-Render root dir. Depends on `../ai` (`spa_ai`) through a uv path source (ADR-014).
+API source directory. Depends on `../ai` (`spa_ai`) through a uv path source (ADR-014).
+On Render, leave Root Directory blank (repository root) and prefix build/start commands with
+`cd backend &&` so the sibling `ai` package remains available.
 
 ```bash
 cd backend

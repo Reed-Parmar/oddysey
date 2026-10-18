@@ -16,11 +16,11 @@ import {
   CurrencyInr,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { API_BASE, api, authHeaders, call } from "@/api/client";
-import { errorMessage } from "@/api/errors";
+import { ApiError, errorMessage } from "@/api/errors";
 import { qk } from "@/api/queryKeys";
 import type { Allocation, Analysis, PageMeta, ProgressRow, Project, Resume, Submission, Trainee } from "@/api/types";
 import {
@@ -446,15 +446,27 @@ function Section({ title, children, note }: { title: string; children: ReactNode
 }
 
 export function useAnalysis(submissionId: string, poll: boolean) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: qk.submissions.analysis(submissionId),
     queryFn: () => call(api.GET("/api/v1/submissions/{submission_id}/analysis", { params: { path: { submission_id: submissionId } } })),
     refetchInterval: (q) => {
       const st = q.state.data?.data?.status;
-      return poll && (st === "queued" || st === "extracting" || st === "analysing" || st === "retrying") ? 4000 : false;
+      const waiting = q.state.error instanceof ApiError && q.state.error.status === 404;
+      return poll && (waiting || st === "queued" || st === "extracting" || st === "analysing" || st === "retrying") ? 4000 : false;
     },
     retry: (n, e) => !(e instanceof Error && "status" in e && (e as { status: number }).status === 404) && n < 2,
   });
+  const status = query.data?.data.status;
+  useEffect(() => {
+    if (!poll || !status || ["queued", "extracting", "analysing", "retrying"].includes(status)) return;
+    // Analysis updates the submission outcome in the worker, outside the browser's mutations.
+    void qc.invalidateQueries({ queryKey: ["submissions", "list"] });
+    void qc.invalidateQueries({ queryKey: qk.submissions.detail(submissionId) });
+    void qc.invalidateQueries({ queryKey: qk.progress.all() });
+    void qc.invalidateQueries({ queryKey: qk.reports.all() });
+  }, [poll, qc, status, submissionId]);
+  return query;
 }
 
 /** Opens the printable HTML export (authenticated fetch → blob URL; the same persisted findings as the screen). */

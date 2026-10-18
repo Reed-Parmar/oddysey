@@ -20,6 +20,7 @@ export function useMySubmissionHistory(enabled = true) {
     queryKey: qk.submissions.list(HISTORY_PARAMS),
     queryFn: () => call(api.GET("/api/v1/submissions", { params: { query: HISTORY_PARAMS } })),
     enabled,
+    refetchInterval: (q) => q.state.data?.data.some((s) => s.status === "submitted") ? 4000 : false,
   });
 }
 

@@ -97,7 +97,7 @@ After an API change: `cd backend && uv run python -m scripts.export_openapi && c
 
 ## Deploy
 
-- **API (Render):** `render.yaml` blueprint, root dir `backend`; start command runs `alembic upgrade head` first.
+- **API (Render):** `render.yaml` blueprint, repository root (leave Root Directory blank in the dashboard); build/start commands enter `backend`, and the start command runs `alembic upgrade head` first.
   Set `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GROQ_API_KEY`,
   `CORS_ALLOWED_ORIGINS`, `FRONTEND_BASE_URL` (and optionally `SMTP_*` with `EMAIL_BACKEND=smtp`) in the dashboard.
   The worker runs inside the API (`RUN_WORKER_IN_API=true`); see deployment.md §3.5 for a separate worker.
